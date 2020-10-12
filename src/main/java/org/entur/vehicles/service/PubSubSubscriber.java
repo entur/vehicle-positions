@@ -19,6 +19,7 @@ import uk.org.siri.www.siri.SiriType;
 import uk.org.siri.www.siri.VehicleMonitoringDeliveryStructure;
 
 import javax.annotation.PostConstruct;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
@@ -50,14 +51,17 @@ public class PubSubSubscriber {
     topic = ProjectTopicName.of(projectName, topicName);
 
     try {
-        CredentialsProvider credentialsProvider = () -> GoogleCredentials.fromStream(new FileInputStream(credentialsPath))
+      File credentialsFile = new File(credentialsPath);
+      LOG.info("Credentials to be read from {}, exists: {}, can read: {}", credentialsFile.getAbsolutePath(), credentialsFile.exists(), credentialsFile.canRead());
+
+      CredentialsProvider credentialsProvider = () -> GoogleCredentials.fromStream(new FileInputStream(credentialsFile))
             .createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
 
-        LOG.info("Credentials read from path: {}", credentialsPath);
+      subscriptionAdminClient = SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().setCredentialsProvider(credentialsProvider).build());
 
-        subscriptionAdminClient = SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().setCredentialsProvider(credentialsProvider).build());
+      LOG.info("Credentials read from path: {}", credentialsPath);
 
-        //addShutdownHook();
+      //addShutdownHook();
 
     } catch (IOException e) {
       e.printStackTrace();
@@ -75,6 +79,10 @@ public class PubSubSubscriber {
 
   private void subscribe()
   {
+
+    if (subscriptionAdminClient == null) {
+      throw new NullPointerException("Unable to initialize application");
+    }
 
     LOG.info("Connecting to subscription {}", projectSubscriptionName);
 
