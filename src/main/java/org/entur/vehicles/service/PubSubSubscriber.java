@@ -86,10 +86,7 @@ public class PubSubSubscriber {
 
     LOG.info("Creating subscription {}", projectSubscriptionName);
 
-    Subscription subscription =subscriptionAdminClient.getSubscription(projectSubscriptionName);
-
-    if (subscription == null) {
-      subscription = subscriptionAdminClient.createSubscription(Subscription
+    Subscription subscription = subscriptionAdminClient.createSubscription(Subscription
           .newBuilder()
           .setTopic(topic.toString())
           .setName(projectSubscriptionName.toString())
@@ -101,7 +98,7 @@ public class PubSubSubscriber {
               // How long will the subscription exist when no longer in use - minimum 1 day
               .setTtl(Duration.newBuilder().setSeconds(86400).build()).build())
           .build());
-    }
+
     LOG.info("Created subscription {}", projectSubscriptionName);
 
 
