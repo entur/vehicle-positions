@@ -1,0 +1,53 @@
+#
+# Schemas must have at least a query root type
+#
+schema {
+    query: Query
+    subscription : Subscription
+}
+
+type Query {
+    getAll(serviceJourneyId: String
+           operator: String
+           codespaceId: String
+           mode: String
+           vehicleId: String
+           lineRef: String
+           boundingBox: BoundingBox) : [VehicleUpdate]
+}
+
+type Subscription {
+    vehicleUpdates(serviceJourneyId: String
+                   operator: String
+                   codespaceId: String
+                   mode: String
+                   vehicleId: String
+                   lineRef: String
+                   boundingBox: BoundingBox) : VehicleUpdate
+}
+type VehicleUpdate {
+    direction: String
+    serviceJourneyId: String
+    operator: String
+    codespaceId: String
+    mode: String
+    vehicleId: String
+    lineRef: String
+    lastUpdated: String
+    expiration: String
+    location: Location
+    speed: Float
+    heading: Float
+}
+
+type Location {
+    latitude: Float!
+    longitude: Float!
+}
+
+input BoundingBox {
+    minLat: Float!
+    minLon: Float!
+    maxLat: Float!
+    maxLon: Float!
+}
