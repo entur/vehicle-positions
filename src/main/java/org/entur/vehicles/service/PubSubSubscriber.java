@@ -61,7 +61,7 @@ public class PubSubSubscriber {
 
       LOG.info("Credentials read from path: {}", credentialsPath);
 
-      //addShutdownHook();
+      addShutdownHook();
 
     } catch (IOException e) {
       e.printStackTrace();
@@ -84,40 +84,33 @@ public class PubSubSubscriber {
       throw new NullPointerException("Unable to initialize application");
     }
 
-    LOG.info("Connecting to subscription {}", projectSubscriptionName);
+    LOG.info("Creating subscription {}", projectSubscriptionName);
 
-    subscriptionAdminClient.getSubscription(projectSubscriptionName);
+    Subscription subscription =subscriptionAdminClient.getSubscription(projectSubscriptionName);
 
-    LOG.info("Connected to subscription {}", projectSubscriptionName);
+    if (subscription == null) {
+      subscription = subscriptionAdminClient.createSubscription(Subscription
+          .newBuilder()
+          .setTopic(topic.toString())
+          .setName(projectSubscriptionName.toString())
+          .setPushConfig(PushConfig.getDefaultInstance())
+          .setMessageRetentionDuration(
+              // How long will an unprocessed message be kept - minimum 10 minutes
+              Duration.newBuilder().setSeconds(600).build())
+          .setExpirationPolicy(ExpirationPolicy.newBuilder()
+              // How long will the subscription exist when no longer in use - minimum 1 day
+              .setTtl(Duration.newBuilder().setSeconds(86400).build()).build())
+          .build());
+    }
+    LOG.info("Created subscription {}", projectSubscriptionName);
 
-
-//    LOG.info("Creating subscription {}", projectSubscriptionName);
-//
-//    Subscription subscription =subscriptionAdminClient.getSubscription(projectSubscriptionName);
-//
-//    if (subscription == null) {
-//      subscription = subscriptionAdminClient.createSubscription(Subscription
-//          .newBuilder()
-//          .setTopic(topic.toString())
-//          .setName(projectSubscriptionName.toString())
-//          .setPushConfig(PushConfig.getDefaultInstance())
-//          .setMessageRetentionDuration(
-//              // How long will an unprocessed message be kept - minimum 10 minutes
-//              Duration.newBuilder().setSeconds(600).build())
-//          .setExpirationPolicy(ExpirationPolicy.newBuilder()
-//              // How long will the subscription exist when no longer in use - minimum 1 day
-//              .setTtl(Duration.newBuilder().setSeconds(86400).build()).build())
-//          .build());
-//    }
-//    LOG.info("Created subscription {}", projectSubscriptionName);
-//
 
     final VehicleMonitoringReceiver receiver = new VehicleMonitoringReceiver();
 
     Subscriber subscriber = null;
     while (true) {
       try {
-        subscriber = Subscriber.newBuilder(projectSubscriptionName, receiver).build();
+        subscriber = Subscriber.newBuilder(subscription.getName(), receiver).build();
         subscriber.startAsync().awaitRunning();
 
         subscriber.awaitTerminated();
@@ -135,24 +128,25 @@ public class PubSubSubscriber {
     }
   }
 
-//  private void addShutdownHook() {
-//    try {
-//      Runtime.getRuntime().addShutdownHook(new Thread(this::teardown));
-//      LOG.info("Shutdown-hook to clean up Google Pubsub subscription has been added.");
-//    } catch (IllegalStateException e) {
-//      // Handling cornercase when instance is being shut down before it has been initialized
-//      LOG.info("Instance is already shutting down - cleaning up immediately.", e);
-//      teardown();
-//    }
-//  }
-//
-//  public void teardown() {
-//    if (subscriptionAdminClient != null) {
-//      LOG.info("Deleting subscription {}", projectSubscriptionName);
-//      subscriptionAdminClient.deleteSubscription(projectSubscriptionName);
-//      LOG.info("Subscription deleted {}", projectSubscriptionName);
-//    }
-//  }
+  private void addShutdownHook() {
+    try {
+      Runtime.getRuntime().addShutdownHook(new Thread(this::teardown));
+      LOG.info("Shutdown-hook to clean up Google Pubsub subscription has been added.");
+    } catch (IllegalStateException e) {
+      // Handling cornercase when instance is being shut down before it has been initialized
+      LOG.info("Instance is already shutting down - cleaning up immediately.", e);
+      teardown();
+    }
+  }
+
+  public void teardown() {
+    if (subscriptionAdminClient != null) {
+      LOG.info("Deleting subscription {}", projectSubscriptionName);
+      subscriptionAdminClient.deleteSubscription(projectSubscriptionName);
+      LOG.info("Subscription deleted {}", projectSubscriptionName);
+    }
+  }
+
   private class VehicleMonitoringReceiver implements MessageReceiver {
 
     @Override
