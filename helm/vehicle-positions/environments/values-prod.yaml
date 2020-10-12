@@ -1,0 +1,12 @@
+
+configMap:
+  projectId: neon-1287
+
+ingress:
+  enabled: true
+  vehicles:
+    loadBalancerIP: 35.205.233.237
+    domainName: .entur.io
+
+rbac:
+  enabled: true

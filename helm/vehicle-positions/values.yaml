@@ -1,0 +1,38 @@
+replicas: 1
+
+resources:
+  cpuLimit: '1'
+  memLimit: 1G
+  cpuRequest: '0.5'
+  memRequest: 500M
+
+rollingUpdate:
+  maxSurge: 1
+  maxUnavailable: 1
+
+
+secretMount:
+   name: vehicle-positions
+   mountPath: /etc/vehicle-positions/credentials.json
+   subPath: credentials.json
+   secretName: ror-vehicle-positions-sa-key
+   readOnly: true
+
+
+configMapMount:
+   name: vehicle-positions-config
+
+image:
+  identifier: ${artifact.metadata.image}
+  imagePullPolicy: Always
+
+service:
+  http:
+    externalPort: 80
+    internalPort: 8080
+  websocket:
+    externalPort: 8080
+    internalPort: 3000
+
+rbac:
+  enabled: false

@@ -1,0 +1,12 @@
+
+configMap:
+  projectId: radon-1287
+
+ingress:
+  enabled: true
+  vehicles:
+    loadBalancerIP: 130.211.80.129
+    domainName: .staging.entur.io
+
+rbac:
+  enabled: true
