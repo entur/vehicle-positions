@@ -37,7 +37,6 @@ public class VehicleUpdateRxPublisher {
         publisher = connectableObservable.toFlowable(BackpressureStrategy.BUFFER);
 
     }
-    List<VehicleUpdate> vehicleUpdates = new ArrayList<>();
 
     public void publishUpdate(VehicleUpdate vehicleUpdate) {
         emitter.onNext(vehicleUpdate);

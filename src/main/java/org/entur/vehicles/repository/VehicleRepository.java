@@ -6,8 +6,10 @@ import org.entur.vehicles.data.Location;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import uk.org.siri.www.siri.VehicleActivityStructure;
 
@@ -21,6 +23,7 @@ import java.util.Set;
 public class VehicleRepository {
 
   private static final Logger LOG = LoggerFactory.getLogger(VehicleRepository.class);
+  private final PrometheusMetricsService metricsService;
 
   Set<VehicleUpdate> vehicles = Sets.newConcurrentHashSet();
 
@@ -29,59 +32,77 @@ public class VehicleRepository {
   private long lastPurgeTimestamp = System.currentTimeMillis();
   private long minimumPurgeIntervalMillis = 5000;
 
-  public void addAll(List<VehicleActivityStructure> vehicleList) {
+  public VehicleRepository(@Autowired PrometheusMetricsService metricsService) {
+    this.metricsService = metricsService;
+  }
 
-        for (VehicleActivityStructure vehicleActivity : vehicleList) {
-          VehicleUpdate v = new VehicleUpdate();
+  public int addAll(List<VehicleActivityStructure> vehicleList) {
 
-          try {
-            final VehicleActivityStructure.MonitoredVehicleJourneyType journey = vehicleActivity
-                .getMonitoredVehicleJourney();
+    int addedCounter = 0;
+    for (VehicleActivityStructure vehicleActivity : vehicleList) {
+      VehicleUpdate v = new VehicleUpdate();
 
-            v.setLineRef(journey.getLineRef().getValue());
-            v.setCodespaceId(journey.getDataSource());
+      try {
+        final VehicleActivityStructure.MonitoredVehicleJourneyType journey = vehicleActivity.getMonitoredVehicleJourney();
 
-            if (journey.hasLocationRecordedAtTime()) {
-              v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
-            } else if (vehicleActivity.hasRecordedAtTime()) {
-              v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
-            } else {
-              v.setLastUpdated(ZonedDateTime.now());
-            }
-            v.setHeading(Float.valueOf(journey.getBearing()).doubleValue());
-            v.setSpeed(Float.valueOf(journey.getVelocity()).doubleValue());
-            v.setLocation(new Location(journey.getVehicleLocation().getLongitude(), journey.getVehicleLocation().getLatitude()));
+        v.setLineRef(journey.getLineRef().getValue());
+        v.setCodespaceId(journey.getDataSource());
 
-            if (journey.getVehicleModeCount() > 0) {
-              v.setMode(journey.getVehicleMode(0).name());
-            }
-            v.setServiceJourneyId(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef());
-
-            v.setDirection(journey.getDirectionRef().getValue());
-
-            v.setOccupancy(journey.getOccupancy().name());
-
-            if (vehicleActivity.hasValidUntilTime()) {
-              v.setExpiration(convert(vehicleActivity.getValidUntilTime()));
-            } else {
-              v.setExpiration(ZonedDateTime.now().plusMinutes(10));
-            }
-
-
-            if (journey.getVehicleRef() != null) {
-              String vehicleRef = journey.getVehicleRef().getValue();
-              v.setVehicleId(vehicleRef);
-
-              vehicles.add(v);
-
-              publisher.publishUpdate(v);
-
-            }
-
-          } catch (RuntimeException e) {
-            LOG.warn("Update ignored.", e);
-          }
+        if (journey.hasLocationRecordedAtTime()) {
+          v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
         }
+        else if (vehicleActivity.hasRecordedAtTime()) {
+          v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
+        }
+        else {
+          v.setLastUpdated(ZonedDateTime.now());
+        }
+        v.setHeading(Float.valueOf(journey.getBearing()).doubleValue());
+        v.setSpeed(Float.valueOf(journey.getVelocity()).doubleValue());
+        v.setLocation(new Location(journey.getVehicleLocation().getLongitude(),
+            journey.getVehicleLocation().getLatitude()
+        ));
+
+        if (journey.getVehicleModeCount() > 0) {
+          v.setMode(journey.getVehicleMode(0).name());
+        }
+        v.setServiceJourneyId(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef());
+
+        v.setDirection(journey.getDirectionRef().getValue());
+
+        v.setOccupancy(journey.getOccupancy().name());
+
+        if (vehicleActivity.hasValidUntilTime()) {
+          v.setExpiration(convert(vehicleActivity.getValidUntilTime()));
+        }
+        else {
+          v.setExpiration(ZonedDateTime.now().plusMinutes(10));
+        }
+
+        if (journey.getVehicleRef() != null) {
+          String vehicleRef = journey.getVehicleRef().getValue();
+          v.setVehicleId(vehicleRef);
+
+        }
+        vehicles.add(v);
+        publisher.publishUpdate(v);
+
+        metricsService.markUpdate(1, v.getCodespaceId());
+      }
+      catch (RuntimeException e) {
+        LOG.warn("Update ignored.", e);
+      }
+    }
+
+    return addedCounter;
+  }
+
+  private ZonedDateTime convert(Timestamp timestamp) {
+    ZonedDateTime time = ZonedDateTime.ofInstant(Instant.ofEpochSecond(timestamp.getSeconds()),
+        ZoneId.of("UTC")
+    );
+    time = time.plusNanos(timestamp.getNanos());
+    return time;
   }
 
   public Set<VehicleUpdate> getVehicles(VehicleUpdateFilter filter) {
@@ -89,7 +110,9 @@ public class VehicleRepository {
     long before = System.currentTimeMillis();
     if (before - lastPurgeTimestamp > minimumPurgeIntervalMillis) {
 
-      vehicles.removeIf(vehicleUpdate -> vehicleUpdate.getExpiration().isBefore(ZonedDateTime.now()));
+      vehicles.removeIf(vehicleUpdate -> vehicleUpdate
+          .getExpiration()
+          .isBefore(ZonedDateTime.now()));
       long purgeCompleted = System.currentTimeMillis();
 
       lastPurgeTimestamp = purgeCompleted;
@@ -104,11 +127,5 @@ public class VehicleRepository {
 
   public void addUpdateListener(VehicleUpdateRxPublisher publisher) {
     this.publisher = publisher;
-  }
-
-  private ZonedDateTime convert(Timestamp timestamp) {
-    ZonedDateTime time = ZonedDateTime.ofInstant(Instant.ofEpochSecond(timestamp.getSeconds()), ZoneId.of("UTC"));
-    time = time.plusNanos(timestamp.getNanos());
-    return time;
   }
 }
