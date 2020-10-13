@@ -93,8 +93,8 @@ spec:
       schedulerName: default-scheduler
       securityContext: {}
       {{- if .Values.rbac.enabled }}
-      serviceAccount: ror-vehicle-positions-sa
-      serviceAccountName: ror-vehicle-positions-sa
+      serviceAccount: vehicle-positions-service-account
+      serviceAccountName: vehicle-positions-service-account
       {{- end }}
       terminationGracePeriodSeconds: 30
       volumes:
