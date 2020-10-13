@@ -7,6 +7,7 @@ import com.google.cloud.pubsub.v1.MessageReceiver;
 import com.google.cloud.pubsub.v1.Subscriber;
 import com.google.cloud.pubsub.v1.SubscriptionAdminClient;
 import com.google.cloud.pubsub.v1.SubscriptionAdminSettings;
+import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -62,7 +63,8 @@ public class PubSubSubscriber {
       File credentialsFile = new File(credentialsPath);
       LOG.info("Credentials to be read from {}, exists: {}, can read: {}", credentialsFile.getAbsolutePath(), credentialsFile.exists(), credentialsFile.canRead());
 
-      CredentialsProvider credentialsProvider = () -> GoogleCredentials.fromStream(new FileInputStream(credentialsFile));
+      CredentialsProvider credentialsProvider = () -> GoogleCredentials.fromStream(new FileInputStream(credentialsFile))
+            .createScoped(Lists.newArrayList("https://www.googleapis.com/auth/pubsub"));
 
       subscriptionAdminClient = SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().setCredentialsProvider(credentialsProvider).build());
 
