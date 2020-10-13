@@ -2,12 +2,20 @@ package org.entur.vehicles.service;
 
 import com.google.api.gax.core.CredentialsProvider;
 import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.pubsub.v1.*;
-import com.google.common.collect.Lists;
+import com.google.cloud.pubsub.v1.AckReplyConsumer;
+import com.google.cloud.pubsub.v1.MessageReceiver;
+import com.google.cloud.pubsub.v1.Subscriber;
+import com.google.cloud.pubsub.v1.SubscriptionAdminClient;
+import com.google.cloud.pubsub.v1.SubscriptionAdminSettings;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.pubsub.v1.*;
+import com.google.pubsub.v1.ExpirationPolicy;
+import com.google.pubsub.v1.ProjectSubscriptionName;
+import com.google.pubsub.v1.ProjectTopicName;
+import com.google.pubsub.v1.PubsubMessage;
+import com.google.pubsub.v1.PushConfig;
+import com.google.pubsub.v1.Subscription;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,8 +62,7 @@ public class PubSubSubscriber {
       File credentialsFile = new File(credentialsPath);
       LOG.info("Credentials to be read from {}, exists: {}, can read: {}", credentialsFile.getAbsolutePath(), credentialsFile.exists(), credentialsFile.canRead());
 
-      CredentialsProvider credentialsProvider = () -> GoogleCredentials.fromStream(new FileInputStream(credentialsFile))
-            .createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
+      CredentialsProvider credentialsProvider = () -> GoogleCredentials.fromStream(new FileInputStream(credentialsFile));
 
       subscriptionAdminClient = SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().setCredentialsProvider(credentialsProvider).build());
 
