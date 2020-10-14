@@ -68,7 +68,7 @@ jobs:
           key: dep-cache-{{ checksum "pom.xml" }}
       # Cannot use -o because of snapshot dependencies.
       - run: mvn install -s /tools/m2/settings.xml
-      - run: *sonar-scan
+#      - run: *sonar-scan
       - run:
           name: Save test results
           command: |
