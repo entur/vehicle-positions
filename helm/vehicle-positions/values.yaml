@@ -5,6 +5,7 @@ resources:
   memLimit: 1G
   cpuRequest: '0.5'
   memRequest: 500M
+  xmx: 700M
 
 rollingUpdate:
   maxSurge: 1
