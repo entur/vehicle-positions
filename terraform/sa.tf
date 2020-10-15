@@ -8,7 +8,7 @@ resource "google_service_account" "service_account" {
 resource "google_project_iam_member" "project" {
   project = var.pubsub_project
   role    = var.sa_pubsub_role
-  member = "serviceAccount:${google_service_account.app_service_account.email}"
+  member = "serviceAccount:${google_service_account.service_account.email}"
 }
 
 resource "google_service_account_key" "service_account_key" {
