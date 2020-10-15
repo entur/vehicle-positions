@@ -64,7 +64,7 @@ public class PubSubSubscriber {
       LOG.info("Credentials to be read from {}, exists: {}, can read: {}", credentialsFile.getAbsolutePath(), credentialsFile.exists(), credentialsFile.canRead());
 
       CredentialsProvider credentialsProvider = () -> GoogleCredentials.fromStream(new FileInputStream(credentialsFile))
-            .createScoped(Lists.newArrayList("https://www.googleapis.com/auth/pubsub"));
+            .createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
 
       subscriptionAdminClient = SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().setCredentialsProvider(credentialsProvider).build());
 
