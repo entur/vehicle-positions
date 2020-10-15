@@ -19,7 +19,7 @@ spec:
   template:
     metadata:
       annotations:
-        prometheus.io/path: /scrape
+        prometheus.io/path: /actuator/prometheus
         prometheus.io/port: '{{ .Values.service.http.internalPort }}'
         prometheus.io/scrape: 'true'
       labels:
