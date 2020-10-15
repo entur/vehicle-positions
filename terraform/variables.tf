@@ -25,12 +25,7 @@ variable "labels" {
   }
 }
 
-variable "pubsub_topic" {
-  description = "Topic to consume messages from"
-  default = "protobuf.vehicle_monitoring"
-}
-
 variable "sa_pubsub_role" {
-  description = "IAM role for inboud anshar subscription"
+  description = "IAM role for pubsub subscription"
   default = "roles/pubsub.editor"
 }
