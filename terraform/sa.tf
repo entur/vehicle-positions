@@ -4,6 +4,13 @@ resource "google_service_account" "service_account" {
   project = var.gcp_project
 }
 
+# add service account as member to the pubsub
+resource "google_project_iam_member" "project" {
+  project = var.pubsub_project
+  role    = var.sa_pubsub_role
+  member = "serviceAccount:${google_service_account.app_service_account.email}"
+}
+
 resource "google_service_account_key" "service_account_key" {
   service_account_id = google_service_account.service_account.name
 }
