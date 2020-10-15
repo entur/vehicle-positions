@@ -1,7 +1,7 @@
 apiVersion: v1
 appVersion: "0.1.0"
 description: Vehicle positions
-name: vehicles-positions
+name: vehicle-positions
 version: 0.1.0
 keywords:
 - realtime
