@@ -116,13 +116,18 @@ public class PubSubSubscriber {
     Subscriber subscriber = null;
     while (true) {
       try {
+        LOG.info("Starting subscriber");
         subscriber = Subscriber.newBuilder(subscription.getName(), receiver).build();
+        LOG.info("Started subscriber");
         subscriber.startAsync().awaitRunning();
 
         subscriber.awaitTerminated();
       } catch (IllegalStateException e) {
-
+        
+        LOG.info("Subscriber failed - reconnecting", e);
+        
         if (subscriber != null) {
+          LOG.info("Stopping subscriber");
           subscriber.stopAsync();
         }
       }
