@@ -60,17 +60,34 @@ public class PubSubSubscriber {
     topic = ProjectTopicName.of(projectName, topicName);
 
     try {
-      File credentialsFile = new File(credentialsPath);
-      LOG.info("Credentials to be read from {}, exists: {}, can read: {}", credentialsFile.getAbsolutePath(), credentialsFile.exists(), credentialsFile.canRead());
 
-      CredentialsProvider credentialsProvider = () ->
-          GoogleCredentials.fromStream(new FileInputStream(credentialsFile))
-            .createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/pubsub"));
+      if (System.getenv("GOOGLE_APPLICATION_CREDENTIALS") != null &&
+          !System.getenv("GOOGLE_APPLICATION_CREDENTIALS").isEmpty()) {
+        LOG.info("Credentials to be read from ENV-variable: {}", System.getenv("GOOGLE_APPLICATION_CREDENTIALS"));
+        subscriptionAdminClient = SubscriptionAdminClient.create();
+      } else {
+        File credentialsFile = new File(credentialsPath);
+        LOG.info(
+            "Credentials to be read from {}, exists: {}, can read: {}",
+            credentialsFile.getAbsolutePath(),
+            credentialsFile.exists(),
+            credentialsFile.canRead()
+        );
 
-      subscriptionAdminClient = SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().setCredentialsProvider(credentialsProvider).build());
+        CredentialsProvider credentialsProvider = () -> GoogleCredentials
+            .fromStream(new FileInputStream(credentialsFile))
+            .createScoped(Lists.newArrayList(
+                "https://www.googleapis.com/auth/cloud-platform",
+                "https://www.googleapis.com/auth/pubsub"
+            ));
 
-      LOG.info("Credentials read from path: {}", credentialsPath);
+        subscriptionAdminClient = SubscriptionAdminClient.create(SubscriptionAdminSettings
+            .newBuilder()
+            .setCredentialsProvider(credentialsProvider)
+            .build());
 
+        LOG.info("Credentials read from path: {}", credentialsPath);
+      }
       addShutdownHook();
 
     } catch (IOException e) {

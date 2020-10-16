@@ -47,6 +47,8 @@ spec:
                   -Dfile.encoding=UTF-8
             - name: TZ
               value: Europe/Oslo
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /etc/vehicle-positions/credentials.json
           resources:
             limits:
               cpu: {{ .Values.resources.cpuLimit }}
