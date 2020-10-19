@@ -123,12 +123,7 @@
 
 <div class="container">
   <div class="row">
-    <div class="col-sm-1">
-      <img src="https://avatars1.githubusercontent.com/u/14289921?s=200&v=4"
-           class="img-thumbnail" alt="graphql-java" width="400" height="400">
-    </div>
-    <div class="col-sm-3">
-      <h3>Setup</h3>
+    <div class="col-sm-6">
       <form>
         <div class="form-group">
           <label for="inputUrl">GraphQL subscription-endpoint</label>
@@ -136,23 +131,14 @@
         </div>
         <div class="form-group">
           <label for="queryArea">Subscription-query</label>
-          <textarea class="form-control" id="queryArea" rows="15">
-subscription VehicleUpdates {
-  vehicleUpdates {
-    vehicleId
-    mode
-    location {
-      latitude
-      longitude
-    }
-  }
-}</textarea>
+          <textarea class="form-control" style="white-space: pre-wrap;" id="queryArea" rows="15"></textarea>
         </div>
         <button type="button" class="btn btn-primary" onclick="subscribeToVehicles()">Submit</button>
         <button type="button" class="btn btn-warning" onclick="closeSocket()">Stop</button>
       </form>
+      <div class="examples"></div>
     </div>
-    <div class="col-sm-8">
+    <div class="col-sm-6">
       <div class="vehicleUpdates">Pending subscription...</div>
       <div class="networking">📡</div>
     </div>
@@ -160,3 +146,43 @@ subscription VehicleUpdates {
 </div>
 </body>
 </html>
+
+
+<script>
+  var examples = []
+  examples[0] = "subscription VehicleUpdates {\n" +
+      "  vehicleUpdates {\n" +
+      "    vehicleId\n" +
+      "    mode\n" +
+      "    codespaceId\n" +
+      "    location {\n" +
+      "      latitude\n" +
+      "      longitude\n" +
+      "    }\n" +
+      "  }\n" +
+      "}"
+
+  examples[1] = "subscription VehicleUpdates {\n" +
+      "  vehicleUpdates(codespaceId:\"RUT\") {\n" +
+      "    vehicleId\n" +
+      "    mode\n" +
+      "    codespaceId\n" +
+      "    location {\n" +
+      "      latitude\n" +
+      "      longitude\n" +
+      "    }\n" +
+      "  }\n" +
+      "}"
+
+  var exampleStr = '';
+  Object.keys(examples).forEach(function (ex) {
+      exampleStr += '<pre onclick="useExample(examples['+ex+'])">' + examples[ex] + '</pre>';
+  });
+  $('.examples').html(exampleStr)
+
+  function useExample(query) {
+      document.getElementById("queryArea").innerHTML = query;
+  }
+
+  useExample(examples[0]);
+</script>
