@@ -11,10 +11,6 @@ spec:
       port: {{ .Values.service.http.externalPort }}
       protocol: TCP
       targetPort: {{ .Values.service.http.internalPort }}
-    - name: websocket
-      port: {{ .Values.service.websocket.externalPort }}
-      protocol: TCP
-      targetPort: {{ .Values.service.websocket.internalPort }}
   selector:
     app: {{ template "app.name" . }}
   sessionAffinity: None

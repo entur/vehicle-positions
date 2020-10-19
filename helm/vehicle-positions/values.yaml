@@ -31,9 +31,6 @@ service:
   http:
     externalPort: 80
     internalPort: 8080
-  websocket:
-    externalPort: 8080
-    internalPort: 3000
 
 rbac:
   enabled: false
