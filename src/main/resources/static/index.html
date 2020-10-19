@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>Subscriptions over Web Sockets</title>
+  <style>
+      body {
+          font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+          font-weight: 300;
+      }
+
+      .networking {
+          display: none;
+      }
+
+      .vehicleUpdates {
+          border: solid black 1px;
+          margin: 2px;
+          min-height: 200px
+      }
+
+      .vehicleWrapper {
+          display: block;
+          padding: 5px;
+          font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+          font-weight: 300;
+      }
+
+      .vehicleSymbol {
+          font-weight: 100;
+      }
+  </style>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+  <script>
+      var socket;
+      var VEHICLE_UPDATES = [];
+
+      function networkBlip() {
+
+          var $networking = $('.networking');
+          if (!$networking.is(":visible")) {
+              $networking.show(100, function () {
+                  var $that = $(this);
+                  setTimeout(function () {
+                      $that.hide();
+                  }, 500)
+              });
+          }
+      }
+
+      function closeSocket() {
+          if (socket != undefined) {
+              console.log("Closing connection");
+              socket.close();
+          }
+      }
+          function subscribeToVehicles() {
+
+          var websocketUrl = document.getElementById("inputUrl").value
+
+          if (socket != undefined) {
+              console.log("Closing connection");
+              socket.close();
+          }
+
+
+          console.log("Opening connection to " + websocketUrl);
+          socket = new WebSocket(websocketUrl);
+
+          networkBlip();
+
+          socket.onopen = function () {
+              networkBlip();
+              console.log("web socket opened");
+
+              var query = document.getElementById("queryArea").value
+
+              var graphqlMsg = {
+                  query: query,
+                  variables: {}
+              };
+
+              let data = JSON.stringify(graphqlMsg);
+
+              console.log(data);
+              socket.send(data);
+          };
+
+          socket.onmessage = function (event) {
+              networkBlip();
+
+              var data = event.data;
+              var msg = JSON.parse(data);
+
+              var vehicleId = msg.data.vehicleUpdates.vehicleId;
+              var vehiclesList = VEHICLE_UPDATES[vehicleId];
+
+              if (vehiclesList) {
+                  if (vehiclesList.length > 7) {
+                      vehiclesList.shift()
+                  }
+                  vehiclesList.push(msg.data.vehicleUpdates)
+              } else {
+                  VEHICLE_UPDATES[vehicleId] = [msg];
+              }
+
+              var htmlStr = '';
+              Object.keys(VEHICLE_UPDATES).forEach(function (vehicle) {
+                  htmlStr += '<div class="vehicleWrapper"><span class="vehicleSymbol"> ' + JSON.stringify(VEHICLE_UPDATES[vehicle]) + ' </span></div>';
+              });
+              $('.vehicleUpdates').html(htmlStr)
+          };
+      }
+
+      // window.addEventListener("load", subscribeToStocks);
+  </script>
+</head>
+<body>
+
+<div class="jumbotron text-center">
+  <h2>graphql-java Subscriptions</h2>
+</div>
+
+
+<div class="container">
+  <div class="row">
+    <div class="col-sm-1">
+      <img src="https://avatars1.githubusercontent.com/u/14289921?s=200&v=4"
+           class="img-thumbnail" alt="graphql-java" width="400" height="400">
+    </div>
+    <div class="col-sm-3">
+      <h3>Setup</h3>
+      <form>
+        <div class="form-group">
+          <label for="inputUrl">GraphQL subscription-endpoint</label>
+          <input type="url" class="form-control" id="inputUrl" value="wss://api.dev.entur.io/realtime/v1/vehicles/subscriptions">
+        </div>
+        <div class="form-group">
+          <label for="queryArea">Subscription-query</label>
+          <textarea class="form-control" id="queryArea" rows="15">
+subscription VehicleUpdates {
+  vehicleUpdates {
+    vehicleId
+    mode
+    location {
+      latitude
+      longitude
+    }
+  }
+}
+
+          </textarea>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="subscribeToVehicles()">Submit</button>
+        <button type="button" class="btn btn-warning" onclick="closeSocket()">Stop</button>
+      </form>
+    </div>
+    <div class="col-sm-8">
+      <div class="vehicleUpdates">Pending subscription...</div>
+      <div class="networking">📡</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
