@@ -3,6 +3,7 @@ package org.entur.vehicles.repository;
 import com.google.common.collect.Sets;
 import com.google.protobuf.Timestamp;
 import org.entur.vehicles.data.Location;
+import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
@@ -64,7 +65,7 @@ public class VehicleRepository {
         ));
 
         if (journey.getVehicleModeCount() > 0) {
-          v.setMode(journey.getVehicleMode(0).name());
+          v.setMode(VehicleModeEnumeration.fromValue(journey.getVehicleMode(0)));
         }
         v.setServiceJourneyId(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef());
 

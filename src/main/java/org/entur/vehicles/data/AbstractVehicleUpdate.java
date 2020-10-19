@@ -7,7 +7,7 @@ abstract class AbstractVehicleUpdate {
   protected String serviceJourneyId;
   protected String operator;
   protected String codespaceId;
-  protected String mode;
+  protected VehicleModeEnumeration mode;
   protected String vehicleId;
   protected String lineRef;
 
@@ -35,11 +35,11 @@ abstract class AbstractVehicleUpdate {
     this.codespaceId = codespaceId;
   }
 
-  public String getMode() {
+  public VehicleModeEnumeration getMode() {
     return mode;
   }
 
-  public void setMode(String mode) {
+  public void setMode(VehicleModeEnumeration mode) {
     this.mode = mode;
   }
 

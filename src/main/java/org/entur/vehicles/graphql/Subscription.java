@@ -2,6 +2,7 @@ package org.entur.vehicles.graphql;
 
 import graphql.kickstart.tools.GraphQLSubscriptionResolver;
 import org.entur.vehicles.data.BoundingBox;
+import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.reactivestreams.Publisher;
@@ -18,7 +19,7 @@ class Subscription implements GraphQLSubscriptionResolver {
     }
 
     Publisher<VehicleUpdate> vehicleUpdates(String serviceJourneyId, String operator,
-        String codespaceId, String mode, String vehicleId, String lineRef, BoundingBox boundingBox) {
+        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, BoundingBox boundingBox) {
       return vehicleUpdater.getPublisher(new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, boundingBox));
     }
 

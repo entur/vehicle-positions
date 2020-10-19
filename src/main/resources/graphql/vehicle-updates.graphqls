@@ -10,7 +10,7 @@ type Query {
     getAll(serviceJourneyId: String
            operator: String
            codespaceId: String
-           mode: String
+           mode: VehicleModeEnumeration
            vehicleId: String
            lineRef: String
            boundingBox: BoundingBox) : [VehicleUpdate]
@@ -20,17 +20,18 @@ type Subscription {
     vehicleUpdates(serviceJourneyId: String
                    operator: String
                    codespaceId: String
-                   mode: String
+                   mode: VehicleModeEnumeration
                    vehicleId: String
                    lineRef: String
                    boundingBox: BoundingBox) : VehicleUpdate
 }
+
 type VehicleUpdate {
     direction: String
     serviceJourneyId: String
     operator: String
     codespaceId: String
-    mode: String
+    mode: VehicleModeEnumeration
     vehicleId: String
     lineRef: String
     lastUpdated: String
@@ -50,4 +51,14 @@ input BoundingBox {
     minLon: Float!
     maxLat: Float!
     maxLon: Float!
+}
+
+enum VehicleModeEnumeration {
+    AIR
+    BUS
+    RAIL
+    TRAM
+    COACH
+    FERRY
+    METRO
 }
