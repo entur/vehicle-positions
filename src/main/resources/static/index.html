@@ -66,6 +66,8 @@
           if (socket != undefined) {
               console.log("Closing connection");
               socket.close();
+              VEHICLE_UPDATES = [];
+              $('.vehicleUpdates').html('')
           }
 
 
@@ -98,16 +100,8 @@
               var msg = JSON.parse(data);
 
               var vehicleId = msg.data.vehicleUpdates.vehicleId;
-              var vehiclesList = VEHICLE_UPDATES[vehicleId];
 
-              if (vehiclesList) {
-                  if (vehiclesList.length > 7) {
-                      vehiclesList.shift()
-                  }
-                  vehiclesList.push(msg.data.vehicleUpdates)
-              } else {
-                  VEHICLE_UPDATES[vehicleId] = [msg];
-              }
+              VEHICLE_UPDATES[vehicleId] = [msg];
 
               var htmlStr = '';
               Object.keys(VEHICLE_UPDATES).forEach(function (vehicle) {
@@ -152,9 +146,7 @@ subscription VehicleUpdates {
       longitude
     }
   }
-}
-
-          </textarea>
+}</textarea>
         </div>
         <button type="button" class="btn btn-primary" onclick="subscribeToVehicles()">Submit</button>
         <button type="button" class="btn btn-warning" onclick="closeSocket()">Stop</button>
