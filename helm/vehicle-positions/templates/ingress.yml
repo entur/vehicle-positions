@@ -16,12 +16,6 @@ spec:
       paths:
         - backend:
             serviceName: {{ template "app.name" . }}
-            servicePort: {{ .Values.service.http.externalPort }}
-  - host: vehicle-positions-websocket-v1{{ .Values.ingress.vehicles.domainName }}
-    http:
-      paths:
-        - backend:
-            serviceName: {{ template "app.name" . }}
-            servicePort: {{ .Values.service.websocket.externalPort }}
+            servicePort: {{ .Values.service.http.externalPort }
 
 {{- end }}
