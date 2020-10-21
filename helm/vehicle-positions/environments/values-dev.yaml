@@ -1,6 +1,6 @@
 
 configMap:
-  projectId: carbon-1287
+  projectId: entur-ror-dev
 
 ingress:
   enabled: true
