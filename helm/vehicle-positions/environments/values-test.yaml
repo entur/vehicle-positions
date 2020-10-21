@@ -1,6 +1,6 @@
 
 configMap:
-  projectId: radon-1287
+  projectId: entur-ror-test
 
 ingress:
   enabled: true

@@ -1,6 +1,6 @@
 
 configMap:
-  projectId: neon-1287
+  projectId: entur-ror-prod
 
 ingress:
   enabled: true
