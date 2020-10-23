@@ -1,10 +1,7 @@
 package org.entur.vehicles.graphql;
 
 import graphql.kickstart.tools.GraphQLQueryResolver;
-import org.entur.vehicles.data.BoundingBox;
-import org.entur.vehicles.data.VehicleModeEnumeration;
-import org.entur.vehicles.data.VehicleUpdate;
-import org.entur.vehicles.data.VehicleUpdateFilter;
+import org.entur.vehicles.data.*;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.springframework.stereotype.Component;
 
@@ -20,8 +17,16 @@ class Query implements GraphQLQueryResolver {
     }
 
     Set<VehicleUpdate> getAll(String serviceJourneyId, String operator,
-        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, BoundingBox boundingBox) {
-        return repository.getVehicles(new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, boundingBox));
+        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, BoundingBox boundingBox) {
+        return vehicles(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, boundingBox);
     }
 
+    Set<VehicleUpdate> vehicles(String serviceJourneyId, String operator,
+        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, BoundingBox boundingBox) {
+        return repository.getVehicles(new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, boundingBox));
+    }
+
+    Set<Line> lines(String codespace) {
+        return repository.getLines(codespace);
+    }
 }

@@ -9,7 +9,7 @@ abstract class AbstractVehicleUpdate {
   protected String codespaceId;
   protected VehicleModeEnumeration mode;
   protected String vehicleId;
-  protected String lineRef;
+  protected Line line;
 
   public String getServiceJourneyId() {
     return serviceJourneyId;
@@ -51,12 +51,12 @@ abstract class AbstractVehicleUpdate {
     this.vehicleId = vehicleId;
   }
 
-  public String getLineRef() {
-    return lineRef;
+  public Line getLine() {
+    return line;
   }
 
-  public void setLineRef(String lineRef) {
-    this.lineRef = lineRef;
+  public void setLine(Line line) {
+    this.line = line;
   }
 
   @Override
@@ -67,11 +67,13 @@ abstract class AbstractVehicleUpdate {
         operator,
         that.operator
     ) && Objects.equal(codespaceId, that.codespaceId) && Objects.equal(mode, that.mode)
-        && Objects.equal(vehicleId, that.vehicleId) && Objects.equal(lineRef, that.lineRef);
+        && Objects.equal(vehicleId, that.vehicleId) && Objects.equal(line, that.line);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef);
+    return Objects.hashCode(serviceJourneyId, operator, codespaceId, mode, vehicleId, line);
   }
+
+
 }

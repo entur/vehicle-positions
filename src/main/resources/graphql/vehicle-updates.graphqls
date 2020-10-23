@@ -13,7 +13,19 @@ type Query {
            mode: VehicleModeEnumeration
            vehicleId: String
            lineRef: String
+           lineName: String
+           boundingBox: BoundingBox) : [VehicleUpdate]  @deprecated(reason: "Use `vehicles`.")
+
+    vehicles(serviceJourneyId: String
+           operator: String
+           codespaceId: String
+           mode: VehicleModeEnumeration
+           vehicleId: String
+           lineRef: String
+           lineName: String
            boundingBox: BoundingBox) : [VehicleUpdate]
+
+    lines(codespaceId: String) : [Line]
 }
 
 type Subscription {
@@ -23,6 +35,7 @@ type Subscription {
                    mode: VehicleModeEnumeration
                    vehicleId: String
                    lineRef: String
+                   lineName: String
                    boundingBox: BoundingBox) : VehicleUpdate
 }
 
@@ -34,6 +47,7 @@ type VehicleUpdate {
     mode: VehicleModeEnumeration
     vehicleId: String
     lineRef: String
+    lineName: String
     lastUpdated: String
     expiration: String
     location: Location
@@ -44,6 +58,11 @@ type VehicleUpdate {
 type Location {
     latitude: Float!
     longitude: Float!
+}
+
+type Line {
+    lineRef: String
+    lineName: String
 }
 
 input BoundingBox {

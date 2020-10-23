@@ -14,6 +14,15 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private Double heading;
   private String occupancy;
 
+  public String getLineRef() {
+    return super.getLine().getLineRef();
+  }
+
+  public String getLineName() {
+    return super.getLine().getLineName();
+  }
+
+
   public Location getLocation() {
     return location;
   }

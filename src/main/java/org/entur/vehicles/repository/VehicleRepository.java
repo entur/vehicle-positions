@@ -2,10 +2,7 @@ package org.entur.vehicles.repository;
 
 import com.google.common.collect.Sets;
 import com.google.protobuf.Timestamp;
-import org.entur.vehicles.data.Location;
-import org.entur.vehicles.data.VehicleModeEnumeration;
-import org.entur.vehicles.data.VehicleUpdate;
-import org.entur.vehicles.data.VehicleUpdateFilter;
+import org.entur.vehicles.data.*;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
@@ -19,6 +16,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Repository
 public class VehicleRepository {
@@ -46,7 +44,8 @@ public class VehicleRepository {
       try {
         final VehicleActivityStructure.MonitoredVehicleJourneyType journey = vehicleActivity.getMonitoredVehicleJourney();
 
-        v.setLineRef(journey.getLineRef().getValue());
+        v.setLine(new Line(journey.getLineRef().getValue(), buildLineName(journey)));
+
         v.setCodespaceId(journey.getDataSource());
 
         if (journey.hasLocationRecordedAtTime()) {
@@ -98,6 +97,26 @@ public class VehicleRepository {
     return addedCounter;
   }
 
+  private String buildLineName(VehicleActivityStructure.MonitoredVehicleJourneyType journey) {
+
+    String originName;
+    String destinationName;
+
+    if (journey.getOriginNameCount() > 0) {
+      originName = journey.getOriginName(0).getValue();
+    } else {
+      originName = " - - - ";
+    }
+
+    if (journey.getDestinationNameCount() > 0) {
+      destinationName = journey.getDestinationName(0).getValue();
+    } else {
+      destinationName = " - - - ";
+    }
+
+    return originName + " => " + destinationName;
+  }
+
   private ZonedDateTime convert(Timestamp timestamp) {
     ZonedDateTime time = ZonedDateTime.ofInstant(Instant.ofEpochSecond(timestamp.getSeconds()),
         ZoneId.of("UTC")
@@ -129,4 +148,14 @@ public class VehicleRepository {
   public void addUpdateListener(VehicleUpdateRxPublisher publisher) {
     this.publisher = publisher;
   }
+
+  public Set<Line> getLines(String codespace) {
+    return vehicles
+            .stream()
+            .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespaceId().equals(codespace))
+            .map(vehicleUpdate -> vehicleUpdate.getLine())
+            .collect(Collectors.toSet());
+
+  }
+
 }

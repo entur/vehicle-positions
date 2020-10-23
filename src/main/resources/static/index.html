@@ -19,6 +19,10 @@
           min-height: 200px
       }
 
+      .counter {
+          font-weight: 300;
+      }
+
       .vehicleWrapper {
           display: block;
           padding: 5px;
@@ -39,6 +43,7 @@
   <script>
       var socket;
       var VEHICLE_UPDATES = [];
+      var updatesCounter = 0;
 
       function networkBlip() {
 
@@ -67,14 +72,16 @@
               console.log("Closing connection");
               socket.close();
               VEHICLE_UPDATES = [];
+              updatesCounter = 0
               $('.vehicleUpdates').html('')
+              $('.counter').html(0);
           }
 
 
           console.log("Opening connection to " + websocketUrl);
           socket = new WebSocket(websocketUrl);
 
-          networkBlip();
+              networkBlip();
 
           socket.onopen = function () {
               networkBlip();
@@ -108,6 +115,7 @@
                   htmlStr += '<div class="vehicleWrapper"><span class="vehicleSymbol"> ' + JSON.stringify(VEHICLE_UPDATES[vehicle]) + ' </span></div>';
               });
               $('.vehicleUpdates').html(htmlStr)
+              $('.counter').html(updatesCounter++);
           };
       }
 
@@ -139,6 +147,7 @@
       <div class="examples"></div>
     </div>
     <div class="col-sm-6">
+      <div>Updates: <span class="counter">0</span></div>
       <div class="vehicleUpdates">Pending subscription...</div>
       <div class="networking">📡</div>
     </div>
