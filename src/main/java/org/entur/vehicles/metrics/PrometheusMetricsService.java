@@ -16,26 +16,28 @@
 package org.entur.vehicles.metrics;
 
 import io.micrometer.core.instrument.ImmutableTag;
-import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Tag;
-import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class PrometheusMetricsService {
+    private static final Logger LOG = LoggerFactory.getLogger(PrometheusMetricsService.class);
 
     private static final String METRICS_PREFIX = "app.vehicles.";
     private static final String DATA_COUNTER_NAME = METRICS_PREFIX + "data";
     private static final String CODESPACE_TAG_NAME = "codespaceId";
     private final PrometheusMeterRegistry prometheusMeterRegistry;
+
+    private AtomicInteger counter = new AtomicInteger(0);
 
     public PrometheusMetricsService(@Autowired PrometheusMeterRegistry prometheusMeterRegistry) {
         this.prometheusMeterRegistry = prometheusMeterRegistry;
@@ -51,6 +53,9 @@ public class PrometheusMetricsService {
         counterTags.add(new ImmutableTag(CODESPACE_TAG_NAME, codespaceId));
 
         prometheusMeterRegistry.counter(DATA_COUNTER_NAME, counterTags).increment(count);
+        if (counter.addAndGet(count) % 100 == 0) {
+            LOG.info("Processed {} updates.", counter.get());
+        }
     }
 
 }

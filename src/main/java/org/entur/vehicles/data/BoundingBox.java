@@ -1,5 +1,7 @@
 package org.entur.vehicles.data;
 
+import java.util.StringJoiner;
+
 public class BoundingBox {
   private Double minLat, minLon, maxLat, maxLon;
 
@@ -55,5 +57,15 @@ public class BoundingBox {
 
   public void setMaxLon(Double maxLon) {
     this.maxLon = maxLon;
+  }
+
+  @Override
+  public String toString() {
+    return new StringJoiner(", ", BoundingBox.class.getSimpleName() + "[", "]")
+        .add("minLat=" + minLat)
+        .add("minLon=" + minLon)
+        .add("maxLat=" + maxLat)
+        .add("maxLon=" + maxLon)
+        .toString();
   }
 }

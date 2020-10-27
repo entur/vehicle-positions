@@ -13,9 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @Component
 public class VehicleUpdateRxPublisher {
 
@@ -42,10 +39,6 @@ public class VehicleUpdateRxPublisher {
         emitter.onNext(vehicleUpdate);
 
         publisher.publish();
-    }
-
-    public Flowable<VehicleUpdate> getPublisher() {
-        return publisher;
     }
 
     public Flowable<VehicleUpdate> getPublisher(VehicleUpdateFilter template) {

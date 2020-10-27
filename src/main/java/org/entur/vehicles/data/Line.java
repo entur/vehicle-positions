@@ -2,6 +2,8 @@ package org.entur.vehicles.data;
 
 import com.google.common.base.Objects;
 
+import java.util.StringJoiner;
+
 public class Line {
     private String lineRef;
     private String lineName;
@@ -39,5 +41,13 @@ public class Line {
     @Override
     public int hashCode() {
         return Objects.hashCode(lineRef, lineName);
+    }
+
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", Line.class.getSimpleName() + "[", "]")
+            .add("lineRef='" + lineRef + "'")
+            .add("lineName='" + lineName + "'")
+            .toString();
     }
 }

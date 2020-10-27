@@ -1,6 +1,8 @@
 package org.entur.vehicles.data;
 
 
+import java.util.StringJoiner;
+
 public class VehicleUpdateFilter extends AbstractVehicleUpdate {
 
   public VehicleUpdateFilter() { }
@@ -82,5 +84,18 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       return value.equals(template);
     }
     return true;
+  }
+
+  @Override
+  public String toString() {
+    return new StringJoiner(", ", VehicleUpdateFilter.class.getSimpleName() + "[", "]")
+        .add("codespaceId='" + codespaceId + "'")
+        .add("operator='" + operator + "'")
+        .add("line=" + line)
+        .add("serviceJourneyId='" + serviceJourneyId + "'")
+        .add("vehicleId='" + vehicleId + "'")
+        .add("boundingBox=" + boundingBox)
+        .add("mode=" + mode)
+        .toString();
   }
 }
