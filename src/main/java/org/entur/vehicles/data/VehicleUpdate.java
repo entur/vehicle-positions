@@ -12,6 +12,7 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private Location location;
   private Double speed;
   private Double heading;
+  private Long delay;
   private String occupancy;
 
   public String getLineRef() {
@@ -77,6 +78,14 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
 
   public void setOccupancy(String occupancy) {
     this.occupancy = occupancy;
+  }
+
+  public Long getDelay() {
+    return delay;
+  }
+
+  public void setDelay(Long delay) {
+    this.delay = delay;
   }
 
   @Override

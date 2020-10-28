@@ -72,6 +72,10 @@ public class VehicleRepository {
 
         v.setOccupancy(journey.getOccupancy().name());
 
+        if (journey.getDelay() != null) {
+          v.setDelay(journey.getDelay().getSeconds());
+        }
+
         if (vehicleActivity.hasValidUntilTime()) {
           v.setExpiration(convert(vehicleActivity.getValidUntilTime()));
         }

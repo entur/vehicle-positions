@@ -51,6 +51,9 @@ type VehicleUpdate {
     location: Location
     speed: Float
     heading: Float
+
+    # The current delay in seconds - negative delay means ahead of schedule
+    delay: Float
 }
 
 type Location {

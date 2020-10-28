@@ -53,7 +53,7 @@ public class PrometheusMetricsService {
         counterTags.add(new ImmutableTag(CODESPACE_TAG_NAME, codespaceId));
 
         prometheusMeterRegistry.counter(DATA_COUNTER_NAME, counterTags).increment(count);
-        if (counter.addAndGet(count) % 100 == 0) {
+        if (counter.addAndGet(count) % 1000 == 0) {
             LOG.info("Processed {} updates.", counter.get());
         }
     }
