@@ -65,6 +65,10 @@ public class VehicleRepository {
 
         if (journey.getVehicleModeCount() > 0) {
           v.setMode(VehicleModeEnumeration.fromValue(journey.getVehicleMode(0)));
+        } else {
+          if (journey.getOperatorRef() != null) {
+            v.setMode(resolveModeByOperator(journey.getOperatorRef().getValue()));
+          }
         }
         v.setServiceJourneyId(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef());
 
@@ -100,6 +104,16 @@ public class VehicleRepository {
 
     return addedCounter;
   }
+
+  private VehicleModeEnumeration resolveModeByOperator(String operator) {
+    switch (operator) {
+      case "Sporvognsdrift":
+        return VehicleModeEnumeration.TRAM;
+      case "Tide_sjø_AS":
+        return VehicleModeEnumeration.FERRY;
+    }
+    return VehicleModeEnumeration.BUS;
+   }
 
   private String buildLineName(VehicleActivityStructure.MonitoredVehicleJourneyType journey) {
 
