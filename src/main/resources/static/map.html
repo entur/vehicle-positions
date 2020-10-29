@@ -46,37 +46,39 @@
 
     let icon = {
         path: "M-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0",
-        scale: 1
+        scale: 1,
+        fillOpacity: 0.8,
+        strokeWeight: 0
     }
 
     const icons = [
         {
             path: icon.path,
             fillColor: '#FF0000',
-            fillOpacity: .8,
-            strokeWeight: 0,
+            fillOpacity: icon.fillOpacity,
+            strokeWeight: icon.strokeWeight,
             scale: icon.scale
         },
         {
 
             path: icon.path,
             fillColor: '#0000FF',
-            fillOpacity: .6,
-            strokeWeight: 0,
+            fillOpacity: icon.fillOpacity,
+            strokeWeight: icon.strokeWeight,
             scale: icon.scale
         },
         {
             path: icon.path,
             fillColor: '#00FF00',
-            fillOpacity: .6,
-            strokeWeight: 0,
+            fillOpacity: icon.fillOpacity,
+            strokeWeight: icon.strokeWeight,
             scale: icon.scale
         },
         {
             path: icon.path,
             fillColor: '#000000',
-            fillOpacity: .6,
-            strokeWeight: 0,
+            fillOpacity: icon.fillOpacity,
+            strokeWeight: icon.strokeWeight,
             scale: icon.scale
         }
     ];
