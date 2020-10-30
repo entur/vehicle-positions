@@ -30,6 +30,10 @@
                 <button type="button" class="btn btn-primary" onclick="subscribeToVehicles()">Submit</button>
                 <button type="button" class="btn btn-warning" onclick="closeSocket()">Stop</button>
                 </form>
+                <div>
+                Vehicles: <span id="vehiclesCounter">0</span><br />
+                Updates: <span id="updatesCounter">0</span>
+                </div>
             </div>
         <div class="col-sm-9">
             <div id="googleMap" style="width:800PX;height:800px;"></div>
@@ -43,6 +47,7 @@
     var markers = [];
 
     var vehicles = 0;
+    var updates = 0;
 
     let icon = {
         path: "M-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0",
@@ -160,10 +165,10 @@
                     vehicles--;
                 }
                 markers[vehicleId] = marker;
-                vehicles++;
+                document.getElementById("vehiclesCounter").innerText = vehicles++;
+                document.getElementById("updatesCounter").innerText = updates++;
             }
         };
-        document.getElementById("counter").innerHTML(vehicles);
     }
 </script>
 
