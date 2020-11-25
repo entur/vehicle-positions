@@ -31,8 +31,11 @@ public class VehicleRepository {
   private long lastPurgeTimestamp = System.currentTimeMillis();
   private long minimumPurgeIntervalMillis = 5000;
 
+  final ZoneId zone;
+
   public VehicleRepository(@Autowired PrometheusMetricsService metricsService) {
     this.metricsService = metricsService;
+    zone = ZonedDateTime.now().getZone();
   }
 
   public int addAll(List<VehicleActivityStructure> vehicleList) {
@@ -50,13 +53,15 @@ public class VehicleRepository {
 
         if (journey.hasLocationRecordedAtTime()) {
           v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
-        }
-        else if (vehicleActivity.hasRecordedAtTime()) {
-          v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
+        } else if (vehicleActivity.hasRecordedAtTime()) {
+          v.setLastUpdated(convert(vehicleActivity.getRecordedAtTime()));
         }
         else {
           v.setLastUpdated(ZonedDateTime.now());
         }
+
+        v.setMonitored(journey.getMonitored());
+
         v.setHeading(Float.valueOf(journey.getBearing()).doubleValue());
         v.setSpeed(Float.valueOf(journey.getVelocity()).doubleValue());
         v.setLocation(new Location(journey.getVehicleLocation().getLongitude(),
@@ -136,9 +141,10 @@ public class VehicleRepository {
   }
 
   private ZonedDateTime convert(Timestamp timestamp) {
-    ZonedDateTime time = ZonedDateTime.ofInstant(Instant.ofEpochSecond(timestamp.getSeconds()),
+    ZonedDateTime time = ZonedDateTime.ofInstant(
+        Instant.ofEpochSecond(timestamp.getSeconds()),
         ZoneId.of("UTC")
-    );
+    ).withZoneSameInstant(zone);
     time = time.plusNanos(timestamp.getNanos());
     return time;
   }

@@ -10,6 +10,7 @@ abstract class AbstractVehicleUpdate {
   protected VehicleModeEnumeration mode;
   protected String vehicleId;
   protected Line line;
+  protected Boolean monitored;
 
   public String getServiceJourneyId() {
     return serviceJourneyId;
@@ -76,4 +77,11 @@ abstract class AbstractVehicleUpdate {
   }
 
 
+  public void setMonitored(boolean monitored) {
+    this.monitored = monitored;
+  }
+
+  public Boolean isMonitored() {
+    return monitored;
+  }
 }

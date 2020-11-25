@@ -8,7 +8,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   public VehicleUpdateFilter() { }
   public VehicleUpdateFilter(
       String serviceJourneyId, String operator, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
-      String lineRef, String lineName, BoundingBox boundingBox
+      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
     this.serviceJourneyId = serviceJourneyId;
     this.operator = operator;
@@ -16,6 +16,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     this.mode = mode;
     this.vehicleId = vehicleId;
     this.line = new Line(lineRef, lineName);
+    this.monitored = monitored;
     this.boundingBox = boundingBox;
   }
 
@@ -55,6 +56,9 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     if (line != null) {
       isCompleteMatch = isCompleteMatch & matches(line.getLineRef(), vehicleUpdate.getLine().getLineRef());
       isCompleteMatch = isCompleteMatch & matches(line.getLineName(), vehicleUpdate.getLine().getLineName());
+    }
+    if (monitored != null) {
+      isCompleteMatch = isCompleteMatch & monitored.equals(vehicleUpdate.isMonitored());
     }
 
     return isCompleteMatch;

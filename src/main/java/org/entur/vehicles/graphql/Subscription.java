@@ -23,8 +23,8 @@ class Subscription implements GraphQLSubscriptionResolver {
     }
 
     Publisher<VehicleUpdate> vehicleUpdates(String serviceJourneyId, String operator,
-        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, BoundingBox boundingBox) {
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, boundingBox);
+        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
         LOG.info("Creating new subscription with filter: {}", filter);
         return vehicleUpdater.getPublisher(filter);
     }

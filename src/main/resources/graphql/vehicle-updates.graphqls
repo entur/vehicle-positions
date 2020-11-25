@@ -21,6 +21,7 @@ type Query {
            vehicleId: String
            lineRef: String
            lineName: String
+           monitored: Boolean
            boundingBox: BoundingBox) : [VehicleUpdate]
 
     lines(codespaceId: String) : [Line]
@@ -34,6 +35,7 @@ type Subscription {
                    vehicleId: String
                    lineRef: String
                    lineName: String
+                   monitored: Boolean
                    boundingBox: BoundingBox) : VehicleUpdate
 }
 
@@ -51,6 +53,8 @@ type VehicleUpdate {
     location: Location
     speed: Float
     heading: Float
+
+    monitored: Boolean
 
     # The current delay in seconds - negative delay means ahead of schedule
     delay: Float

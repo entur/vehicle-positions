@@ -21,12 +21,12 @@ class Query implements GraphQLQueryResolver {
 
     Set<VehicleUpdate> getAll(String serviceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, BoundingBox boundingBox) {
-        return getVehicles(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, boundingBox);
+        return getVehicles(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, Boolean.TRUE, boundingBox);
     }
 
     Set<VehicleUpdate> getVehicles(String serviceJourneyId, String operator,
-        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, BoundingBox boundingBox) {
-        final Set<VehicleUpdate> vehicles = repository.getVehicles(new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, boundingBox));
+        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
+        final Set<VehicleUpdate> vehicles = repository.getVehicles(new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox));
         LOG.info("Returning {} vehicles", vehicles.size());
         return vehicles;
     }
