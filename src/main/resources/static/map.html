@@ -114,7 +114,7 @@
 
     function subscribeToVehicles() {
 
-        var websocketUrl = "wss://api.dev.entur.io/realtime/v1/vehicles/subscriptions"
+        var websocketUrl = "wss://" + location.host + "/realtime/v1/vehicles/subscriptions"
 
         if (socket != undefined) {
             console.log("Closing connection");
