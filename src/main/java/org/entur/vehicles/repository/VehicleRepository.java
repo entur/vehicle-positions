@@ -182,4 +182,10 @@ public class VehicleRepository {
 
   }
 
+  public Set<Codespace> getCodespaces() {
+    return vehicles
+        .stream()
+        .map(vehicleUpdate -> new Codespace(vehicleUpdate.getCodespaceId()))
+        .collect(Collectors.toSet());
+  }
 }

@@ -36,4 +36,10 @@ class Query implements GraphQLQueryResolver {
         LOG.info("Returning {} lines", lines.size());
         return lines;
     }
+
+    Set<Codespace> codespaces() {
+        final Set<Codespace> codespaces = repository.getCodespaces();
+        LOG.info("Returning {} codespaces", codespaces.size());
+        return codespaces;
+    }
 }

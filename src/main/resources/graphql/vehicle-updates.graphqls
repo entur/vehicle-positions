@@ -25,6 +25,8 @@ type Query {
            boundingBox: BoundingBox) : [VehicleUpdate]
 
     lines(codespaceId: String) : [Line]
+
+    codespaces : [Codespace]
 }
 
 type Subscription {
@@ -68,6 +70,10 @@ type Location {
 type Line {
     lineRef: String
     lineName: String
+}
+
+type Codespace {
+    id: String!
 }
 
 input BoundingBox {
