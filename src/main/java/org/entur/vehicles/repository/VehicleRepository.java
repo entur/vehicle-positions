@@ -8,6 +8,7 @@ import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 import uk.org.siri.www.siri.VehicleActivityStructure;
 
@@ -32,6 +33,9 @@ public class VehicleRepository {
   private long minimumPurgeIntervalMillis = 5000;
 
   final ZoneId zone;
+
+  @Value("${vehicle.updates.max.validity.minutes:1440}") // Default one day
+  private long MAX_VALIDITY_TIME_MINUTES;
 
   public VehicleRepository(@Autowired PrometheusMetricsService metricsService) {
     this.metricsService = metricsService;
@@ -88,8 +92,8 @@ public class VehicleRepository {
         if (vehicleActivity.hasValidUntilTime()) {
           final ZonedDateTime expiration = convert(vehicleActivity.getValidUntilTime());
 
-          if (expiration.isAfter(ZonedDateTime.now().plusDays(1))) {
-            v.setExpiration(ZonedDateTime.now().plusDays(1));
+          if (expiration.isAfter(ZonedDateTime.now().plusMinutes(MAX_VALIDITY_TIME_MINUTES))) {
+            v.setExpiration(ZonedDateTime.now().plusMinutes(MAX_VALIDITY_TIME_MINUTES));
           } else {
             v.setExpiration(expiration);
           }
