@@ -86,9 +86,14 @@ public class VehicleRepository {
         }
 
         if (vehicleActivity.hasValidUntilTime()) {
-          v.setExpiration(convert(vehicleActivity.getValidUntilTime()));
-        }
-        else {
+          final ZonedDateTime expiration = convert(vehicleActivity.getValidUntilTime());
+
+          if (expiration.isAfter(ZonedDateTime.now().plusDays(1))) {
+            v.setExpiration(ZonedDateTime.now().plusDays(1));
+          } else {
+            v.setExpiration(expiration);
+          }
+        } else {
           v.setExpiration(ZonedDateTime.now().plusMinutes(10));
         }
 
@@ -166,7 +171,15 @@ public class VehicleRepository {
       }
     }
 
-    return Sets.filter(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
+    final long filteringStart = System.currentTimeMillis();
+    final Set<VehicleUpdate> vehicleUpdates = Sets.filter(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
+    final long filteringDone = System.currentTimeMillis();
+
+    if (filteringDone - filteringStart > 100) {
+      LOG.info("Filtering vehicles took {} ms", (filteringDone - filteringStart));
+    }
+
+    return vehicleUpdates;
   }
 
   public void addUpdateListener(VehicleUpdateRxPublisher publisher) {
