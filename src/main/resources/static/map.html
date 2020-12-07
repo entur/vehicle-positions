@@ -114,7 +114,8 @@
 
     function subscribeToVehicles() {
 
-        var websocketUrl = "wss://" + location.host + "/realtime/v1/vehicles/subscriptions"
+        var websocketUrl = "wss://api.dev.entur.io/realtime/v1/vehicles/subscriptions"
+        // var websocketUrl = "wss://" + location.host + "/realtime/v1/vehicles/subscriptions"
 
         if (socket != undefined) {
             console.log("Closing connection");
@@ -129,6 +130,11 @@
 
         console.log("Opening connection to " + websocketUrl);
         socket = new WebSocket(websocketUrl);
+
+        socket.onerror = function() {
+            console.log("Socket-error - reconnecting")
+            subscribeToVehicles();
+        }
 
         socket.onopen = function () {
             console.log("web socket opened");
@@ -167,14 +173,16 @@
                     vehicles--;
                 }
                 markers[vehicleId] = marker;
-                document.getElementById("vehiclesCounter").innerText = vehicles++;
-                document.getElementById("updatesCounter").innerText = updates++;
+                vehicles++;
+                updates++;
             }
+            document.getElementById("vehiclesCounter").innerText = vehicles;
+            document.getElementById("updatesCounter").innerText = updates;
         };
     }
 </script>
 
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAsmR8YcBxNlQ_oD8AUYVPXzO2S88uWkRY&callback=initMap"></script>
+<script src="https://maps.googleapis.com/maps/api/js?callback=initMap"></script>
 
 </body>
 </html>
