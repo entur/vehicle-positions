@@ -1,4 +1,6 @@
 
+scalar DateTime
+
 schema {
     query: Query
     subscription : Subscription
@@ -42,8 +44,8 @@ type VehicleUpdate {
     vehicleId: String
     lineRef: String
     lineName: String
-    lastUpdated: String
-    expiration: String
+    lastUpdated: DateTime
+    expiration: DateTime
     location: Location
     speed: Float
     heading: Float
