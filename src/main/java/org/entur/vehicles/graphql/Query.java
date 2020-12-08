@@ -22,11 +22,6 @@ class Query implements GraphQLQueryResolver {
         this.repository = repository;
     }
 
-    Collection<VehicleUpdate> getAll(String serviceJourneyId, String operator,
-        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, BoundingBox boundingBox) {
-        return getVehicles(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, Boolean.TRUE, boundingBox);
-    }
-
     Collection<VehicleUpdate> getVehicles(String serviceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
