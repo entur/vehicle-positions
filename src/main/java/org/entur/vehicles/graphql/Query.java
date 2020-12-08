@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 
@@ -21,17 +22,17 @@ class Query implements GraphQLQueryResolver {
         this.repository = repository;
     }
 
-    Set<VehicleUpdate> getAll(String serviceJourneyId, String operator,
+    Collection<VehicleUpdate> getAll(String serviceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, BoundingBox boundingBox) {
         return getVehicles(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, Boolean.TRUE, boundingBox);
     }
 
-    Set<VehicleUpdate> getVehicles(String serviceJourneyId, String operator,
+    Collection<VehicleUpdate> getVehicles(String serviceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
 
         LOG.info("Finding vehicles");
-        final Set<VehicleUpdate> vehicles = repository.getVehicles(new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox));
+        final Collection<VehicleUpdate> vehicles = repository.getVehicles(new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox));
         LOG.info("Returning {} vehicles", vehicles.size());
 
         MDC.remove("breadcrumbId");

@@ -64,11 +64,13 @@ abstract class AbstractVehicleUpdate {
   public boolean equals(Object o) {
     if (this == o) { return true; }
     AbstractVehicleUpdate that = (AbstractVehicleUpdate) o;
-    return Objects.equal(serviceJourneyId, that.serviceJourneyId) && Objects.equal(
-        operator,
-        that.operator
-    ) && Objects.equal(codespaceId, that.codespaceId) && Objects.equal(mode, that.mode)
-        && Objects.equal(vehicleId, that.vehicleId) && Objects.equal(line, that.line);
+    return
+        Objects.equal(serviceJourneyId, that.serviceJourneyId) &&
+        Objects.equal(operator, that.operator) &&
+        Objects.equal(codespaceId, that.codespaceId) &&
+        Objects.equal(mode, that.mode) &&
+        Objects.equal(vehicleId, that.vehicleId) &&
+        Objects.equal(line, that.line);
   }
 
   @Override

@@ -1,6 +1,7 @@
 package org.entur.vehicles.repository;
 
-import com.google.common.collect.Sets;
+import com.google.common.base.Objects;
+import com.google.common.collect.Maps;
 import com.google.protobuf.Timestamp;
 import org.entur.vehicles.data.*;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
@@ -15,7 +16,9 @@ import uk.org.siri.www.siri.VehicleActivityStructure;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -25,7 +28,7 @@ public class VehicleRepository {
   private static final Logger LOG = LoggerFactory.getLogger(VehicleRepository.class);
   private final PrometheusMetricsService metricsService;
 
-  Set<VehicleUpdate> vehicles = Sets.newConcurrentHashSet();
+  Map<VehicleKey, VehicleUpdate> vehicles = Maps.newConcurrentMap();
 
   private VehicleUpdateRxPublisher publisher;
 
@@ -106,7 +109,7 @@ public class VehicleRepository {
           v.setVehicleId(vehicleRef);
 
         }
-        vehicles.add(v);
+        vehicles.put(new VehicleKey(v.getCodespaceId(), v.getVehicleId()), v);
         publisher.publishUpdate(v);
 
         metricsService.markUpdate(1, v.getCodespaceId());
@@ -158,14 +161,20 @@ public class VehicleRepository {
     return time;
   }
 
-  public Set<VehicleUpdate> getVehicles(VehicleUpdateFilter filter) {
+  public Collection<VehicleUpdate> getVehicles(VehicleUpdateFilter filter) {
 
     long before = System.currentTimeMillis();
     if (before - lastPurgeTimestamp > minimumPurgeIntervalMillis) {
 
-      vehicles.removeIf(vehicleUpdate -> vehicleUpdate
+      int sizeBefore = vehicles.size();
+      final boolean vehicledRemoved = vehicles.entrySet().removeIf(vehicleUpdate -> vehicleUpdate.getValue()
           .getExpiration()
           .isBefore(ZonedDateTime.now()));
+
+      if (vehicledRemoved) {
+        LOG.info("Removed {} expired vehicles", sizeBefore-vehicles.size());
+      }
+
       long purgeCompleted = System.currentTimeMillis();
 
       lastPurgeTimestamp = purgeCompleted;
@@ -176,14 +185,14 @@ public class VehicleRepository {
     }
 
     final long filteringStart = System.currentTimeMillis();
-    final Set<VehicleUpdate> vehicleUpdates = Sets.filter(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
+    final Map<VehicleKey, VehicleUpdate> vehicleUpdates = Maps.filterValues(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
     final long filteringDone = System.currentTimeMillis();
 
     if (filteringDone - filteringStart > 100) {
       LOG.info("Filtering vehicles took {} ms", (filteringDone - filteringStart));
     }
 
-    return vehicleUpdates;
+    return vehicleUpdates.values();
   }
 
   public void addUpdateListener(VehicleUpdateRxPublisher publisher) {
@@ -191,7 +200,7 @@ public class VehicleRepository {
   }
 
   public Set<Line> getLines(String codespace) {
-    return vehicles
+    return vehicles.values()
             .stream()
             .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespaceId().equals(codespace))
             .map(vehicleUpdate -> vehicleUpdate.getLine())
@@ -200,9 +209,32 @@ public class VehicleRepository {
   }
 
   public Set<Codespace> getCodespaces() {
-    return vehicles
+    return vehicles.values()
         .stream()
         .map(vehicleUpdate -> new Codespace(vehicleUpdate.getCodespaceId()))
         .collect(Collectors.toSet());
+  }
+
+  static class VehicleKey {
+    String codespace, vehicleRef;
+
+    public VehicleKey(String codespace, String vehicleRef) {
+      this.codespace = codespace;
+      this.vehicleRef = vehicleRef;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (!(o instanceof VehicleKey)) return false;
+      VehicleKey that = (VehicleKey) o;
+      return Objects.equal(codespace, that.codespace) &&
+          Objects.equal(vehicleRef, that.vehicleRef);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(codespace, vehicleRef);
+    }
   }
 }
