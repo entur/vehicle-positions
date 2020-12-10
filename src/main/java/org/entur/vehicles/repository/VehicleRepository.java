@@ -54,6 +54,15 @@ public class VehicleRepository {
       try {
         final VehicleActivityStructure.MonitoredVehicleJourneyType journey = vehicleActivity.getMonitoredVehicleJourney();
 
+        if (!journey.hasVehicleLocation()) {
+          // No location set - ignoring
+          continue;
+        }
+
+        v.setLocation(new Location(journey.getVehicleLocation().getLongitude(),
+            journey.getVehicleLocation().getLatitude()
+        ));
+
         v.setLine(new Line(journey.getLineRef().getValue(), buildLineName(journey)));
 
         v.setCodespaceId(journey.getDataSource());
@@ -71,9 +80,6 @@ public class VehicleRepository {
 
         v.setHeading(Float.valueOf(journey.getBearing()).doubleValue());
         v.setSpeed(Float.valueOf(journey.getVelocity()).doubleValue());
-        v.setLocation(new Location(journey.getVehicleLocation().getLongitude(),
-            journey.getVehicleLocation().getLatitude()
-        ));
 
         if (journey.getVehicleModeCount() > 0) {
           v.setMode(VehicleModeEnumeration.fromValue(journey.getVehicleMode(0)));
