@@ -37,27 +37,26 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     if (boundingBox != null) {
       isCompleteMatch = isCompleteMatch & boundingBox.contains(vehicleUpdate.getLocation());
     }
-
-    if (serviceJourneyId != null) {
+    if (isCompleteMatch && serviceJourneyId != null) {
       isCompleteMatch = isCompleteMatch & matches(serviceJourneyId, vehicleUpdate.getServiceJourneyId());
     }
-    if (operator != null) {
+    if (isCompleteMatch && operator != null) {
       isCompleteMatch = isCompleteMatch & matches(operator, vehicleUpdate.getOperator());
     }
-    if (codespaceId != null) {
+    if (isCompleteMatch && codespaceId != null) {
       isCompleteMatch = isCompleteMatch & matches(codespaceId, vehicleUpdate.getCodespaceId());
     }
-    if (mode != null) {
+    if (isCompleteMatch && mode != null) {
       isCompleteMatch = isCompleteMatch & matches(mode, vehicleUpdate.getMode());
     }
-    if (vehicleId != null) {
+    if (isCompleteMatch && vehicleId != null) {
       isCompleteMatch = isCompleteMatch & matches(vehicleId, vehicleUpdate.getVehicleId());
     }
-    if (line != null) {
+    if (isCompleteMatch && line != null) {
       isCompleteMatch = isCompleteMatch & matches(line.getLineRef(), vehicleUpdate.getLine().getLineRef());
       isCompleteMatch = isCompleteMatch & matches(line.getLineName(), vehicleUpdate.getLine().getLineName());
     }
-    if (monitored != null) {
+    if (isCompleteMatch && monitored != null) {
       isCompleteMatch = isCompleteMatch & monitored.equals(vehicleUpdate.isMonitored());
     }
 
