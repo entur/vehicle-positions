@@ -48,7 +48,8 @@ type VehicleUpdate {
     expiration: DateTime
     location: Location
     speed: Float
-    heading: Float
+    heading: Float @deprecated
+    bearing: Float
 
     monitored: Boolean
 

@@ -78,7 +78,7 @@ public class VehicleRepository {
 
         v.setMonitored(journey.getMonitored());
 
-        v.setHeading(Float.valueOf(journey.getBearing()).doubleValue());
+        v.setBearing(Float.valueOf(journey.getBearing()).doubleValue());
         v.setSpeed(Float.valueOf(journey.getVelocity()).doubleValue());
 
         if (journey.getVehicleModeCount() > 0) {
@@ -194,7 +194,7 @@ public class VehicleRepository {
     final Map<VehicleKey, VehicleUpdate> vehicleUpdates = Maps.filterValues(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
     final long filteringDone = System.currentTimeMillis();
 
-    if (filteringDone - filteringStart > 100) {
+    if (filteringDone - filteringStart > 50) {
       LOG.info("Filtering vehicles took {} ms", (filteringDone - filteringStart));
     }
 

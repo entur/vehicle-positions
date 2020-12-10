@@ -11,7 +11,7 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private ZonedDateTime expiration;
   private Location location;
   private Double speed;
-  private Double heading;
+  private Double bearing;
   private Long delay;
   private String occupancy;
 
@@ -64,12 +64,17 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
     this.speed = speed;
   }
 
-  public Double getHeading() {
-    return heading;
+  public Double getBearing() {
+    return bearing;
   }
 
-  public void setHeading(Double heading) {
-    this.heading = heading;
+  public void setBearing(Double bearing) {
+    this.bearing = bearing;
+  }
+
+  @Deprecated
+  public Double getHeading() {
+    return bearing;
   }
 
   public String getOccupancy() {
