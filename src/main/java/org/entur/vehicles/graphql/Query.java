@@ -26,8 +26,9 @@ class Query implements GraphQLQueryResolver {
         String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
 
-        LOG.info("Finding vehicles");
-        final Collection<VehicleUpdate> vehicles = repository.getVehicles(new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox));
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
+        LOG.info("Requesting vehicles with filter: {}", filter);
+        final Collection<VehicleUpdate> vehicles = repository.getVehicles(filter);
         LOG.info("Returning {} vehicles", vehicles.size());
 
         MDC.remove("breadcrumbId");
