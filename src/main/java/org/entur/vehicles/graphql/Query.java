@@ -9,7 +9,7 @@ import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
-import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -34,18 +34,18 @@ class Query implements GraphQLQueryResolver {
         return vehicles;
     }
 
-    Set<Line> lines(String codespace) {
+    List<Line> lines(String codespace) {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
-        final Set<Line> lines = repository.getLines(codespace);
+        final List<Line> lines = repository.getLines(codespace);
         LOG.info("Returning {} lines", lines.size());
         MDC.remove("breadcrumbId");
         return lines;
     }
 
-    Set<Codespace> codespaces() {
+    List<Codespace> codespaces() {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
 
-        final Set<Codespace> codespaces = repository.getCodespaces();
+        final List<Codespace> codespaces = repository.getCodespaces();
         LOG.info("Returning {} codespaces", codespaces.size());
 
         MDC.remove("breadcrumbId");

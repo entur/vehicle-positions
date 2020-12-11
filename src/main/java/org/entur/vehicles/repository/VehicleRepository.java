@@ -17,9 +17,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Repository
@@ -205,20 +205,24 @@ public class VehicleRepository {
     this.publisher = publisher;
   }
 
-  public Set<Line> getLines(String codespace) {
+  public List<Line> getLines(String codespace) {
     return vehicles.values()
             .stream()
             .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespaceId().equals(codespace))
             .map(vehicleUpdate -> vehicleUpdate.getLine())
-            .collect(Collectors.toSet());
+            .distinct()
+            .sorted(Comparator.comparing(Line::getLineRef))
+            .collect(Collectors.toList());
 
   }
 
-  public Set<Codespace> getCodespaces() {
+  public List<Codespace> getCodespaces() {
     return vehicles.values()
         .stream()
         .map(vehicleUpdate -> new Codespace(vehicleUpdate.getCodespaceId()))
-        .collect(Collectors.toSet());
+        .distinct()
+        .sorted(Comparator.comparing(Codespace::getId))
+        .collect(Collectors.toList());
   }
 
   static class VehicleKey {
