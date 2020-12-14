@@ -37,6 +37,9 @@ public class PrometheusMetricsService {
     private static final String CODESPACE_TAG_NAME = "codespaceId";
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
+    private int lastLoggedCount;
+    private long lastLoggedCountTimeMillis = System.currentTimeMillis();
+
     private AtomicInteger counter = new AtomicInteger(0);
 
     public PrometheusMetricsService(@Autowired PrometheusMeterRegistry prometheusMeterRegistry) {
@@ -54,8 +57,27 @@ public class PrometheusMetricsService {
 
         prometheusMeterRegistry.counter(DATA_COUNTER_NAME, counterTags).increment(count);
         if (counter.addAndGet(count) % 1000 == 0) {
-            LOG.info("Processed {} updates.", counter.get());
+            final int currentCount = counter.get();
+
+            LOG.info("Processed {} updates. Current rate: {}/s", currentCount, calculateRate(currentCount));
+
         }
+    }
+
+    private long calculateRate(int currentCount) {
+        long now = System.currentTimeMillis();
+
+        final int updatesSinceLastTime = currentCount - lastLoggedCount;
+        final long elapsedSinceLastTime = now - lastLoggedCountTimeMillis;
+
+        final long elapsedTimeSeconds = elapsedSinceLastTime / 1000;
+
+        final long rate = updatesSinceLastTime / elapsedTimeSeconds;
+
+        lastLoggedCount = currentCount;
+        lastLoggedCountTimeMillis = now;
+
+        return rate;
     }
 
 }
