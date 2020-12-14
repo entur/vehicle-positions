@@ -88,6 +88,11 @@ public class VehicleRepository {
             v.setMode(resolveModeByOperator(journey.getOperatorRef().getValue()));
           }
         }
+
+        if (journey.getOperatorRef() != null) {
+          v.setOperator(journey.getOperatorRef().getValue());
+        }
+
         v.setServiceJourneyId(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef());
 
         v.setDirection(journey.getDirectionRef().getValue());
