@@ -56,10 +56,10 @@ class Query implements GraphQLQueryResolver {
         return codespaces;
     }
 
-    List<Operator> operators(String codespace) {
+    List<Operator> operators(String codespaceId) {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
 
-        final List<Operator> operators = repository.getOperators(codespace);
+        final List<Operator> operators = repository.getOperators(codespaceId);
         LOG.info("Returning {} operators", operators.size());
 
         MDC.remove("breadcrumbId");
