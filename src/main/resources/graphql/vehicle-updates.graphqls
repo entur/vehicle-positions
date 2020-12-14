@@ -22,9 +22,9 @@ type Query {
 
     codespaces : [Codespace]
 
-    serviceJourneys(line: String) : [ServiceJourney]
+    serviceJourneys(line: String!) : [ServiceJourney]
 
-    operators(codespace: String) : [Operator]
+    operators(codespace: String!) : [Operator]
 }
 
 type Subscription {
