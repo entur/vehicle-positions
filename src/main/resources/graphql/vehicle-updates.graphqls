@@ -9,7 +9,7 @@ schema {
 type Query {
 
     vehicles(serviceJourneyId: String
-           operator: String
+           operatorRef: String
            codespaceId: String
            mode: VehicleModeEnumeration
            vehicleId: String
@@ -29,7 +29,7 @@ type Query {
 
 type Subscription {
     vehicleUpdates(serviceJourneyId: String
-                   operator: String
+                   operatorRef: String
                    codespaceId: String
                    mode: VehicleModeEnumeration
                    vehicleId: String
@@ -42,7 +42,7 @@ type Subscription {
 type VehicleUpdate {
     direction: String
     serviceJourneyId: String
-    operator: String
+    operatorRef: String
     codespaceId: String
     mode: VehicleModeEnumeration
     vehicleId: String
@@ -72,15 +72,15 @@ type Line {
 }
 
 type Codespace {
-    id: String!
+    codespaceId: String!
 }
 
 type ServiceJourney {
-    id: String!
+    serviceJourneyId: String!
 }
 
 type Operator {
-    id: String!
+    operatorRef: String!
 }
 
 input BoundingBox {

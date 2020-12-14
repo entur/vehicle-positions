@@ -14,7 +14,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
     this.serviceJourneyId = serviceJourneyId;
-    this.operator = operator;
+    this.operatorRef = operator;
     this.codespaceId = codespaceId;
     this.mode = mode;
     this.vehicleId = vehicleId;
@@ -43,8 +43,8 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     if (isCompleteMatch && serviceJourneyId != null) {
       isCompleteMatch = isCompleteMatch & matches(serviceJourneyId, vehicleUpdate.getServiceJourneyId());
     }
-    if (isCompleteMatch && operator != null) {
-      isCompleteMatch = isCompleteMatch & matches(operator, vehicleUpdate.getOperator());
+    if (isCompleteMatch && operatorRef != null) {
+      isCompleteMatch = isCompleteMatch & matches(operatorRef, vehicleUpdate.getOperatorRef());
     }
     if (isCompleteMatch && codespaceId != null) {
       isCompleteMatch = isCompleteMatch & matches(codespaceId, vehicleUpdate.getCodespaceId());
@@ -96,7 +96,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   public String toString() {
     return new StringJoiner(", ", VehicleUpdateFilter.class.getSimpleName() + "[", "]")
         .add("codespaceId='" + codespaceId + "'")
-        .add("operator='" + operator + "'")
+        .add("operator='" + operatorRef + "'")
         .add("line=" + line)
         .add("serviceJourneyId='" + serviceJourneyId + "'")
         .add("vehicleId='" + vehicleId + "'")

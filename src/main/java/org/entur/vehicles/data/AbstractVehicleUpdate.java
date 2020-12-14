@@ -6,7 +6,7 @@ import org.entur.vehicles.data.model.Line;
 abstract class AbstractVehicleUpdate {
 
   protected String serviceJourneyId;
-  protected String operator;
+  protected String operatorRef;
   protected String codespaceId;
   protected VehicleModeEnumeration mode;
   protected String vehicleId;
@@ -21,12 +21,12 @@ abstract class AbstractVehicleUpdate {
     this.serviceJourneyId = serviceJourneyId;
   }
 
-  public String getOperator() {
-    return operator;
+  public String getOperatorRef() {
+    return operatorRef;
   }
 
-  public void setOperator(String operator) {
-    this.operator = operator;
+  public void setOperatorRef(String operatorRef) {
+    this.operatorRef = operatorRef;
   }
 
   public String getCodespaceId() {
@@ -67,7 +67,7 @@ abstract class AbstractVehicleUpdate {
     AbstractVehicleUpdate that = (AbstractVehicleUpdate) o;
     return
         Objects.equal(serviceJourneyId, that.serviceJourneyId) &&
-        Objects.equal(operator, that.operator) &&
+        Objects.equal(operatorRef, that.operatorRef) &&
         Objects.equal(codespaceId, that.codespaceId) &&
         Objects.equal(mode, that.mode) &&
         Objects.equal(vehicleId, that.vehicleId) &&
@@ -76,7 +76,7 @@ abstract class AbstractVehicleUpdate {
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(serviceJourneyId, operator, codespaceId, mode, vehicleId, line);
+    return Objects.hashCode(serviceJourneyId, operatorRef, codespaceId, mode, vehicleId, line);
   }
 
 

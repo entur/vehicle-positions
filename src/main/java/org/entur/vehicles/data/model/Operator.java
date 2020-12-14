@@ -5,4 +5,8 @@ public class Operator extends Identifier{
     public Operator(String id) {
         super(id);
     }
+
+    public String getOperatorRef() {
+        return super.getId();
+    }
 }

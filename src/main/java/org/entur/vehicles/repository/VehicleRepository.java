@@ -93,7 +93,7 @@ public class VehicleRepository {
         }
 
         if (journey.getOperatorRef() != null) {
-          v.setOperator(journey.getOperatorRef().getValue());
+          v.setOperatorRef(journey.getOperatorRef().getValue());
         }
 
         v.setServiceJourneyId(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef());
@@ -237,7 +237,7 @@ public class VehicleRepository {
     return vehicles.values()
         .stream()
         .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespaceId().equals(codespace))
-        .map(vehicleUpdate -> new Operator(vehicleUpdate.getOperator()))
+        .map(vehicleUpdate -> new Operator(vehicleUpdate.getOperatorRef()))
         .distinct()
         .sorted(Comparator.comparing(Operator::getId))
         .collect(Collectors.toList());
