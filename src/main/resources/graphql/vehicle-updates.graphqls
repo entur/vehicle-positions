@@ -21,6 +21,10 @@ type Query {
     lines(codespaceId: String) : [Line]
 
     codespaces : [Codespace]
+
+    serviceJourneys(line: String) : [ServiceJourney]
+
+    operators(codespace: String) : [Operator]
 }
 
 type Subscription {
@@ -68,6 +72,14 @@ type Line {
 }
 
 type Codespace {
+    id: String!
+}
+
+type ServiceJourney {
+    id: String!
+}
+
+type Operator {
     id: String!
 }
 

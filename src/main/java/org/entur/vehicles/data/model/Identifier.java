@@ -1,13 +1,13 @@
-package org.entur.vehicles.data;
+package org.entur.vehicles.data.model;
 
 import com.google.common.base.Objects;
 
 import java.util.StringJoiner;
 
-public class Codespace {
+class Identifier {
     private String id;
 
-    public Codespace(String id) {
+    protected Identifier(String id) {
         this.id = id;
     }
 
@@ -22,8 +22,8 @@ public class Codespace {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Codespace)) return false;
-        Codespace codespace = (Codespace) o;
+        if (!(o instanceof Identifier)) return false;
+        Identifier codespace = (Identifier) o;
         return Objects.equal(id, codespace.id);
     }
 
@@ -34,7 +34,7 @@ public class Codespace {
 
     @Override
     public String toString() {
-        return new StringJoiner(", ", Codespace.class.getSimpleName() + "[", "]")
+        return new StringJoiner(", ", this.getClass().getSimpleName() + "[", "]")
             .add("id='" + id + "'")
             .toString();
     }

@@ -1,6 +1,7 @@
 package org.entur.vehicles.data;
 
 import com.google.common.base.Objects;
+import org.entur.vehicles.data.model.Line;
 
 abstract class AbstractVehicleUpdate {
 

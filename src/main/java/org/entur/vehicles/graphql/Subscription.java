@@ -1,10 +1,10 @@
 package org.entur.vehicles.graphql;
 
 import graphql.kickstart.tools.GraphQLSubscriptionResolver;
-import org.entur.vehicles.data.BoundingBox;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
+import org.entur.vehicles.data.model.BoundingBox;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

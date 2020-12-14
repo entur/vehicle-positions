@@ -1,6 +1,9 @@
 package org.entur.vehicles.data;
 
 
+import org.entur.vehicles.data.model.BoundingBox;
+import org.entur.vehicles.data.model.Line;
+
 import java.util.StringJoiner;
 
 public class VehicleUpdateFilter extends AbstractVehicleUpdate {

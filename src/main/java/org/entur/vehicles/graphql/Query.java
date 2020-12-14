@@ -1,7 +1,10 @@
 package org.entur.vehicles.graphql;
 
 import graphql.kickstart.tools.GraphQLQueryResolver;
-import org.entur.vehicles.data.*;
+import org.entur.vehicles.data.VehicleModeEnumeration;
+import org.entur.vehicles.data.VehicleUpdate;
+import org.entur.vehicles.data.VehicleUpdateFilter;
+import org.entur.vehicles.data.model.*;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,5 +54,25 @@ class Query implements GraphQLQueryResolver {
 
         MDC.remove("breadcrumbId");
         return codespaces;
+    }
+
+    List<Operator> operators(String codespace) {
+        MDC.put("breadcrumbId", UUID.randomUUID().toString());
+
+        final List<Operator> operators = repository.getOperators(codespace);
+        LOG.info("Returning {} operators", operators.size());
+
+        MDC.remove("breadcrumbId");
+        return operators;
+    }
+
+    List<ServiceJourney> serviceJourneys(String lineRef) {
+        MDC.put("breadcrumbId", UUID.randomUUID().toString());
+
+        final List<ServiceJourney> serviceJourneys = repository.getServiceJourneys(lineRef);
+        LOG.info("Returning {} serviceJourneys", serviceJourneys.size());
+
+        MDC.remove("breadcrumbId");
+        return serviceJourneys;
     }
 }

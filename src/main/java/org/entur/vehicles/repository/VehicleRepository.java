@@ -3,7 +3,10 @@ package org.entur.vehicles.repository;
 import com.google.common.base.Objects;
 import com.google.common.collect.Maps;
 import com.google.protobuf.Timestamp;
-import org.entur.vehicles.data.*;
+import org.entur.vehicles.data.VehicleModeEnumeration;
+import org.entur.vehicles.data.VehicleUpdate;
+import org.entur.vehicles.data.VehicleUpdateFilter;
+import org.entur.vehicles.data.model.*;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
@@ -227,6 +230,26 @@ public class VehicleRepository {
         .map(vehicleUpdate -> new Codespace(vehicleUpdate.getCodespaceId()))
         .distinct()
         .sorted(Comparator.comparing(Codespace::getId))
+        .collect(Collectors.toList());
+  }
+
+  public List<Operator> getOperators(String codespace) {
+    return vehicles.values()
+        .stream()
+        .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespaceId().equals(codespace))
+        .map(vehicleUpdate -> new Operator(vehicleUpdate.getOperator()))
+        .distinct()
+        .sorted(Comparator.comparing(Operator::getId))
+        .collect(Collectors.toList());
+  }
+
+  public List<ServiceJourney> getServiceJourneys(String lineRef) {
+    return vehicles.values()
+        .stream()
+        .filter(vehicleUpdate -> lineRef == null || vehicleUpdate.getLineRef().equals(lineRef))
+        .map(vehicleUpdate -> new ServiceJourney(vehicleUpdate.getServiceJourneyId()))
+        .distinct()
+        .sorted(Comparator.comparing(ServiceJourney::getId))
         .collect(Collectors.toList());
   }
 

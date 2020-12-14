@@ -1,5 +1,6 @@
 package org.entur.vehicles.data;
 
+import org.entur.vehicles.data.model.Line;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

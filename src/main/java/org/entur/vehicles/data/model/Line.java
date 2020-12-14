@@ -1,4 +1,4 @@
-package org.entur.vehicles.data;
+package org.entur.vehicles.data.model;
 
 import com.google.common.base.Objects;
 
