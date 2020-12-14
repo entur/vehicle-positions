@@ -31,8 +31,9 @@ class Query implements GraphQLQueryResolver {
 
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
         LOG.info("Requesting vehicles with filter: {}", filter);
+        final long start = System.currentTimeMillis();
         final Collection<VehicleUpdate> vehicles = repository.getVehicles(filter);
-        LOG.info("Returning {} vehicles", vehicles.size());
+        LOG.info("Returning {} vehicles in {} ms", vehicles.size(), System.currentTimeMillis()-start);
 
         MDC.remove("breadcrumbId");
         return vehicles;
@@ -40,17 +41,19 @@ class Query implements GraphQLQueryResolver {
 
     List<Line> lines(String codespace) {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
+        final long start = System.currentTimeMillis();
         final List<Line> lines = repository.getLines(codespace);
-        LOG.info("Returning {} lines", lines.size());
+        LOG.info("Returning {} lines in {} ms", lines.size(), System.currentTimeMillis()-start);
         MDC.remove("breadcrumbId");
         return lines;
     }
 
     List<Codespace> codespaces() {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
+        final long start = System.currentTimeMillis();
 
         final List<Codespace> codespaces = repository.getCodespaces();
-        LOG.info("Returning {} codespaces", codespaces.size());
+        LOG.info("Returning {} codespaces in {} ms", codespaces.size(), System.currentTimeMillis()-start);
 
         MDC.remove("breadcrumbId");
         return codespaces;
@@ -58,9 +61,10 @@ class Query implements GraphQLQueryResolver {
 
     List<Operator> operators(String codespaceId) {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
+        final long start = System.currentTimeMillis();
 
         final List<Operator> operators = repository.getOperators(codespaceId);
-        LOG.info("Returning {} operators", operators.size());
+        LOG.info("Returning {} operators in {} ms", operators.size(), System.currentTimeMillis()-start);
 
         MDC.remove("breadcrumbId");
         return operators;
@@ -68,9 +72,10 @@ class Query implements GraphQLQueryResolver {
 
     List<ServiceJourney> serviceJourneys(String lineRef) {
         MDC.put("breadcrumbId", UUID.randomUUID().toString());
+        final long start = System.currentTimeMillis();
 
         final List<ServiceJourney> serviceJourneys = repository.getServiceJourneys(lineRef);
-        LOG.info("Returning {} serviceJourneys", serviceJourneys.size());
+        LOG.info("Returning {} serviceJourneys in {} ms", serviceJourneys.size(), System.currentTimeMillis()-start);
 
         MDC.remove("breadcrumbId");
         return serviceJourneys;
