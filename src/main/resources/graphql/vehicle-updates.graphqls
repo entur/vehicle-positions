@@ -22,7 +22,7 @@ type Query {
 
     codespaces : [Codespace]
 
-    serviceJourneys(lineRef: String) : [ServiceJourney]
+    serviceJourneys(lineRef: String!) : [ServiceJourney]
 
     operators(codespaceId: String!) : [Operator]
 }
