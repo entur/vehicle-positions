@@ -18,6 +18,7 @@ package org.entur.vehicles.metrics;
 import io.micrometer.core.instrument.ImmutableTag;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
+import org.entur.vehicles.data.model.Codespace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,9 +52,9 @@ public class PrometheusMetricsService {
         prometheusMeterRegistry.close();
     }
 
-    public void markUpdate(int count, String codespaceId) {
+    public void markUpdate(int count, Codespace codespace) {
         List<Tag> counterTags = new ArrayList<>();
-        counterTags.add(new ImmutableTag(CODESPACE_TAG_NAME, codespaceId));
+        counterTags.add(new ImmutableTag(CODESPACE_TAG_NAME, codespace.getCodespaceId()));
 
         prometheusMeterRegistry.counter(DATA_COUNTER_NAME, counterTags).increment(count);
         if (counter.addAndGet(count) % 1000 == 0) {

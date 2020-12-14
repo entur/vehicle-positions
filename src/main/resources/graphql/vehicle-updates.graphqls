@@ -41,13 +41,12 @@ type Subscription {
 
 type VehicleUpdate {
     direction: String
-    serviceJourneyId: String
-    operatorRef: String
-    codespaceId: String
+    serviceJourney: ServiceJourney
+    operator: Operator
+    codespace: Codespace
     mode: VehicleModeEnumeration
-    vehicleId: String
-    lineRef: String
-    lineName: String
+    vehicleRef: String
+    line: Line
     lastUpdated: DateTime
     expiration: DateTime
     location: Location

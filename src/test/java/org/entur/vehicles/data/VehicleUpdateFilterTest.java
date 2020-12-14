@@ -1,5 +1,6 @@
 package org.entur.vehicles.data;
 
+import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
 import org.junit.jupiter.api.Test;
 
@@ -10,8 +11,17 @@ class VehicleUpdateFilterTest {
 
   @Test
   void testEqualMatch() {
-    VehicleUpdateFilter filter = new VehicleUpdateFilter();
-    filter.setLine(new Line("TST:Line:123", "A - B"));
+    VehicleUpdateFilter filter = new VehicleUpdateFilter(
+        null,
+        null,
+        null,
+        null,
+        null,
+        "TST:Line:123",
+        null,
+        null,
+        null
+    );
 
     VehicleUpdate update = new VehicleUpdate();
     update.setLine(new Line("TST:Line:123", "A - B"));
@@ -24,8 +34,17 @@ class VehicleUpdateFilterTest {
 
   @Test
   void testContainsMatch() {
-    VehicleUpdateFilter filter = new VehicleUpdateFilter();
-    filter.setLine(new Line(".*123.*",null));
+    VehicleUpdateFilter filter = new VehicleUpdateFilter(
+        null,
+        null,
+        null,
+        null,
+        null,
+        ".*123.*",
+        null,
+        null,
+        null
+    );
 
     VehicleUpdate update = new VehicleUpdate();
     update.setLine(new Line("TST:Line:123", "A - B"));
@@ -38,17 +57,25 @@ class VehicleUpdateFilterTest {
 
   @Test
   void testMultipleCriteriaMatch() {
-    VehicleUpdateFilter filter = new VehicleUpdateFilter();
-    filter.setLine(new Line("TST:Line:123", null));
-    filter.setCodespaceId("TST");
+    VehicleUpdateFilter filter = new VehicleUpdateFilter(
+        null,
+        null,
+        "TST",
+        null,
+        null,
+        "TST:Line:123",
+        null,
+        null,
+        null
+    );
 
     VehicleUpdate update = new VehicleUpdate();
     update.setLine(new Line("TST:Line:123", "A - B"));
-    update.setCodespaceId("TST");
+    update.setCodespace(new Codespace("TST"));
 
     assertTrue(filter.isMatch(update));
 
-    update.setCodespaceId("ABC");
+    update.setCodespace(new Codespace("ABC"));
     assertFalse(filter.isMatch(update));
   }
 }

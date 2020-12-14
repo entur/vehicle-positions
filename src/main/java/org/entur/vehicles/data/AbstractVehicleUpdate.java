@@ -1,40 +1,43 @@
 package org.entur.vehicles.data;
 
 import com.google.common.base.Objects;
+import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.ServiceJourney;
 
 abstract class AbstractVehicleUpdate {
 
-  protected String serviceJourneyId;
-  protected String operatorRef;
-  protected String codespaceId;
+  protected ServiceJourney serviceJourney;
+  protected Operator operator;
+  protected Codespace codespace;
   protected VehicleModeEnumeration mode;
-  protected String vehicleId;
+  protected String vehicleRef;
   protected Line line;
   protected Boolean monitored;
 
-  public String getServiceJourneyId() {
-    return serviceJourneyId;
+  public ServiceJourney getServiceJourney() {
+    return serviceJourney;
   }
 
-  public void setServiceJourneyId(String serviceJourneyId) {
-    this.serviceJourneyId = serviceJourneyId;
+  public void setServiceJourney(ServiceJourney serviceJourney) {
+    this.serviceJourney = serviceJourney;
   }
 
-  public String getOperatorRef() {
-    return operatorRef;
+  public Operator getOperator() {
+    return operator;
   }
 
-  public void setOperatorRef(String operatorRef) {
-    this.operatorRef = operatorRef;
+  public void setOperator(Operator operator) {
+    this.operator = operator;
   }
 
-  public String getCodespaceId() {
-    return codespaceId;
+  public Codespace getCodespace() {
+    return codespace;
   }
 
-  public void setCodespaceId(String codespaceId) {
-    this.codespaceId = codespaceId;
+  public void setCodespace(Codespace codespace) {
+    this.codespace = codespace;
   }
 
   public VehicleModeEnumeration getMode() {
@@ -45,12 +48,12 @@ abstract class AbstractVehicleUpdate {
     this.mode = mode;
   }
 
-  public String getVehicleId() {
-    return vehicleId;
+  public String getVehicleRef() {
+    return vehicleRef;
   }
 
-  public void setVehicleId(String vehicleId) {
-    this.vehicleId = vehicleId;
+  public void setVehicleRef(String vehicleRef) {
+    this.vehicleRef = vehicleRef;
   }
 
   public Line getLine() {
@@ -66,17 +69,17 @@ abstract class AbstractVehicleUpdate {
     if (this == o) { return true; }
     AbstractVehicleUpdate that = (AbstractVehicleUpdate) o;
     return
-        Objects.equal(serviceJourneyId, that.serviceJourneyId) &&
-        Objects.equal(operatorRef, that.operatorRef) &&
-        Objects.equal(codespaceId, that.codespaceId) &&
+        Objects.equal(serviceJourney, that.serviceJourney) &&
+        Objects.equal(operator, that.operator) &&
+        Objects.equal(codespace, that.codespace) &&
         Objects.equal(mode, that.mode) &&
-        Objects.equal(vehicleId, that.vehicleId) &&
+        Objects.equal(vehicleRef, that.vehicleRef) &&
         Objects.equal(line, that.line);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(serviceJourneyId, operatorRef, codespaceId, mode, vehicleId, line);
+    return Objects.hashCode(serviceJourney, operator, codespace, mode, vehicleRef, line);
   }
 
 

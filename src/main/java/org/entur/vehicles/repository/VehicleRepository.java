@@ -68,7 +68,7 @@ public class VehicleRepository {
 
         v.setLine(new Line(journey.getLineRef().getValue(), buildLineName(journey)));
 
-        v.setCodespaceId(journey.getDataSource());
+        v.setCodespace(new Codespace(journey.getDataSource()));
 
         if (journey.hasLocationRecordedAtTime()) {
           v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
@@ -93,10 +93,10 @@ public class VehicleRepository {
         }
 
         if (journey.getOperatorRef() != null) {
-          v.setOperatorRef(journey.getOperatorRef().getValue());
+          v.setOperator(new Operator(journey.getOperatorRef().getValue()));
         }
 
-        v.setServiceJourneyId(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef());
+        v.setServiceJourney(new ServiceJourney(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef()));
 
         v.setDirection(journey.getDirectionRef().getValue());
 
@@ -120,13 +120,13 @@ public class VehicleRepository {
 
         if (journey.getVehicleRef() != null) {
           String vehicleRef = journey.getVehicleRef().getValue();
-          v.setVehicleId(vehicleRef);
+          v.setVehicleRef(vehicleRef);
 
         }
-        vehicles.put(new VehicleKey(v.getCodespaceId(), v.getVehicleId()), v);
+        vehicles.put(new VehicleKey(v.getCodespace(), v.getVehicleRef()), v);
         publisher.publishUpdate(v);
 
-        metricsService.markUpdate(1, v.getCodespaceId());
+        metricsService.markUpdate(1, v.getCodespace());
       }
       catch (RuntimeException e) {
         LOG.warn("Update ignored.", e);
@@ -216,7 +216,7 @@ public class VehicleRepository {
   public List<Line> getLines(String codespace) {
     return vehicles.values()
             .stream()
-            .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespaceId().equals(codespace))
+            .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespace().equals(codespace))
             .map(vehicleUpdate -> vehicleUpdate.getLine())
             .distinct()
             .sorted(Comparator.comparing(Line::getLineRef))
@@ -227,36 +227,37 @@ public class VehicleRepository {
   public List<Codespace> getCodespaces() {
     return vehicles.values()
         .stream()
-        .map(vehicleUpdate -> new Codespace(vehicleUpdate.getCodespaceId()))
+        .map(vehicleUpdate -> vehicleUpdate.getCodespace())
         .distinct()
-        .sorted(Comparator.comparing(Codespace::getId))
+        .sorted(Comparator.comparing(Codespace::getCodespaceId))
         .collect(Collectors.toList());
   }
 
   public List<Operator> getOperators(String codespace) {
     return vehicles.values()
         .stream()
-        .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespaceId().equals(codespace))
-        .map(vehicleUpdate -> new Operator(vehicleUpdate.getOperatorRef()))
+        .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespace().equals(codespace))
+        .map(vehicleUpdate -> vehicleUpdate.getOperator())
         .distinct()
-        .sorted(Comparator.comparing(Operator::getId))
+        .sorted(Comparator.comparing(Operator::getOperatorRef))
         .collect(Collectors.toList());
   }
 
   public List<ServiceJourney> getServiceJourneys(String lineRef) {
     return vehicles.values()
         .stream()
-        .filter(vehicleUpdate -> lineRef == null || vehicleUpdate.getLineRef().equals(lineRef))
-        .map(vehicleUpdate -> new ServiceJourney(vehicleUpdate.getServiceJourneyId()))
+        .filter(vehicleUpdate -> lineRef == null || vehicleUpdate.getLine().getLineRef().equals(lineRef))
+        .map(vehicleUpdate -> vehicleUpdate.getServiceJourney())
         .distinct()
-        .sorted(Comparator.comparing(ServiceJourney::getId))
+        .sorted(Comparator.comparing(ServiceJourney::getServiceJourneyId))
         .collect(Collectors.toList());
   }
 
   static class VehicleKey {
-    String codespace, vehicleRef;
+    Codespace codespace;
+    String vehicleRef;
 
-    public VehicleKey(String codespace, String vehicleRef) {
+    public VehicleKey(Codespace codespace, String vehicleRef) {
       this.codespace = codespace;
       this.vehicleRef = vehicleRef;
     }
