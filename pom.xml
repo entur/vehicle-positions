@@ -42,7 +42,7 @@
 		<dependency>
 			<groupId>org.entur</groupId>
 			<artifactId>siri-protobuf-mapper</artifactId>
-			<version>0.5</version>
+			<version>0.6</version>
 			<exclusions>
 				<exclusion>
 					<groupId>com.google.protobuf</groupId>
