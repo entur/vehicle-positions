@@ -4,21 +4,20 @@ import com.google.common.base.Objects;
 
 import java.util.StringJoiner;
 
-public class Line {
-    private String lineRef;
+public class Line extends Identifier {
     private String lineName;
 
     public Line(String lineRef, String lineName) {
-        this.lineRef = lineRef;
+        super(lineRef);
         this.lineName = lineName;
     }
 
     public String getLineRef() {
-        return lineRef;
+        return getId();
     }
 
     public void setLineRef(String lineRef) {
-        this.lineRef = lineRef;
+        setId(lineRef);
     }
 
     public String getLineName() {
@@ -34,20 +33,20 @@ public class Line {
         if (this == o) return true;
         if (!(o instanceof Line)) return false;
         Line line = (Line) o;
-        return Objects.equal(lineRef, line.lineRef) &&
+        return super.equals(o) &&
                 Objects.equal(lineName, line.lineName);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(lineRef, lineName);
+        return Objects.hashCode(getLineRef(), lineName);
     }
 
     @Override
     public String toString() {
         return new StringJoiner(", ", Line.class.getSimpleName() + "[", "]")
-            .add("lineRef='" + lineRef + "'")
-            .add("lineName='" + lineName + "'")
+            .add("lineRef='" + getLineRef() + "'")
+            .add("lineName='" + getLineName() + "'")
             .toString();
     }
 }

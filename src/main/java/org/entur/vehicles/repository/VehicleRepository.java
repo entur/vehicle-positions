@@ -216,7 +216,7 @@ public class VehicleRepository {
   public List<Line> getLines(String codespace) {
     return vehicles.values()
             .stream()
-            .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespace().equals(codespace))
+            .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespace().getCodespaceId().equals(codespace))
             .map(vehicleUpdate -> vehicleUpdate.getLine())
             .distinct()
             .sorted(Comparator.comparing(Line::getLineRef))
@@ -236,7 +236,7 @@ public class VehicleRepository {
   public List<Operator> getOperators(String codespace) {
     return vehicles.values()
         .stream()
-        .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespace().equals(codespace))
+        .filter(vehicleUpdate -> codespace == null || isMatch(vehicleUpdate.getCodespace(), codespace))
         .map(vehicleUpdate -> vehicleUpdate.getOperator())
         .distinct()
         .sorted(Comparator.comparing(Operator::getOperatorRef))
@@ -246,11 +246,16 @@ public class VehicleRepository {
   public List<ServiceJourney> getServiceJourneys(String lineRef) {
     return vehicles.values()
         .stream()
-        .filter(vehicleUpdate -> lineRef == null || vehicleUpdate.getLine().getLineRef().equals(lineRef))
+        .filter(vehicleUpdate -> lineRef == null || isMatch(vehicleUpdate.getLine(), lineRef))
         .map(vehicleUpdate -> vehicleUpdate.getServiceJourney())
         .distinct()
         .sorted(Comparator.comparing(ServiceJourney::getServiceJourneyId))
         .collect(Collectors.toList());
+  }
+
+  private boolean isMatch(Identifier obj, String ref){
+    if (obj == null) return false;
+    return obj.getId().matches(ref);
   }
 
   static class VehicleKey {

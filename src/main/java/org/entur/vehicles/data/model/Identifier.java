@@ -11,10 +11,12 @@ public class Identifier {
         this.id = id;
     }
 
-    protected String getId() {
+    public String getId() {
         return id;
     }
-
+    protected void setId(String id) {
+        this.id = id;
+    }
     public boolean matches(Identifier other) {
         return getId().matches(other.getId());
     }
