@@ -4,7 +4,7 @@ import com.google.common.base.Objects;
 
 import java.util.StringJoiner;
 
-public class Line extends Identifier {
+public class Line extends ObjectRef {
     private String lineName;
 
     public Line(String lineRef, String lineName) {
@@ -13,11 +13,11 @@ public class Line extends Identifier {
     }
 
     public String getLineRef() {
-        return getId();
+        return getRef();
     }
 
     public void setLineRef(String lineRef) {
-        setId(lineRef);
+        setRef(lineRef);
     }
 
     public String getLineName() {

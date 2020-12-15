@@ -86,8 +86,8 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     return isCompleteMatch;
   }
 
-  private boolean matches(Identifier identifiedObj, Identifier identifierObj_2) {
-    return identifiedObj.matches(identifierObj_2);
+  private boolean matches(ObjectRef identifiedObj, ObjectRef objectRef_2) {
+    return identifiedObj.matches(objectRef_2);
   }
 
   private boolean matches(String template, String value) {

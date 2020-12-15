@@ -253,9 +253,9 @@ public class VehicleRepository {
         .collect(Collectors.toList());
   }
 
-  private boolean isMatch(Identifier obj, String ref){
+  private boolean isMatch(ObjectRef obj, String ref){
     if (obj == null) return false;
-    return obj.getId().matches(ref);
+    return obj.getRef().matches(ref);
   }
 
   static class VehicleKey {
