@@ -10,7 +10,6 @@ import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -25,12 +24,7 @@ public class VehicleUpdateRxPublisher {
     private final Flowable<VehicleUpdate> publisher;
     private ObservableEmitter<VehicleUpdate> emitter;
 
-    private String uuid;
-
-    private int counter;
-
     public VehicleUpdateRxPublisher(@Autowired VehicleRepository vehicleRepository) {
-        MDC.put(Constants.TRACING_HEADER_NAME, uuid);
         Observable<VehicleUpdate> vehicleUpdateObservable = Observable.create(emitter -> {
             VehicleUpdateRxPublisher.this.emitter = emitter;
             vehicleRepository.addUpdateListener(VehicleUpdateRxPublisher.this);
@@ -40,19 +34,14 @@ public class VehicleUpdateRxPublisher {
         connectableObservable.connect();
 
         publisher = connectableObservable.toFlowable(BackpressureStrategy.BUFFER);
-        LOG.info("Created subscription");
-        MDC.remove(Constants.TRACING_HEADER_NAME);
+        LOG.info("Created VehicleUpdateRxPublisher");
     }
 
     public void publishUpdate(VehicleUpdate vehicleUpdate) {
-        MDC.put(Constants.TRACING_HEADER_NAME, uuid);
         emitter.onNext(vehicleUpdate);
-
-        MDC.remove(Constants.TRACING_HEADER_NAME);
     }
 
     public Flowable<List<VehicleUpdate>> getPublisher(VehicleUpdateFilter template, String uuid) {
-        this.uuid = uuid;
 
         return publisher.filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
                 .buffer(template.getBufferTimeMillis(), TimeUnit.MILLISECONDS, template.getBufferSize())
