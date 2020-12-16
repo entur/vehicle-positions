@@ -37,8 +37,10 @@ type Subscription {
                    lineName: String
                    monitored: Boolean
                    boundingBox: BoundingBox,
-                   # Number of updates buffered before data is pushed
+                   # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
                    bufferSize: Float
+                   # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
+                   bufferTime: Float
                    ) : [VehicleUpdate]
 }
 

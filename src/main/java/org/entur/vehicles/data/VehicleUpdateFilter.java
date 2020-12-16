@@ -15,10 +15,18 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   private BoundingBox boundingBox;
 
   private int bufferSize = 20;
+  private int bufferTimeMillis = 250;
 
   public VehicleUpdateFilter(
       String serviceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
-      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize
+      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
+  ) {
+    this(serviceJourneyId, operatorRef, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, null, null);
+  }
+
+  public VehicleUpdateFilter(
+      String serviceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
+      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
   ) {
     if (serviceJourneyId != null) {
       this.serviceJourney = new ServiceJourney(serviceJourneyId);
@@ -39,10 +47,17 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     if (bufferSize != null) {
       this.bufferSize = bufferSize;
     }
+    if (bufferTimeMillis != null) {
+      this.bufferTimeMillis = bufferTimeMillis;
+    }
   }
 
   public int getBufferSize() {
     return bufferSize;
+  }
+
+  public int getBufferTimeMillis() {
+    return bufferTimeMillis;
   }
 
   public BoundingBox getBoundingBox() {
@@ -141,6 +156,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
         .add("boundingBox=" + boundingBox)
         .add("mode=" + mode)
         .add("bufferSize=" + bufferSize)
+        .add("bufferTime=" + bufferTimeMillis)
         .toString();
   }
 }

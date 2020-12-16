@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class VehicleUpdateRxPublisher {
@@ -54,7 +55,7 @@ public class VehicleUpdateRxPublisher {
         this.uuid = uuid;
 
         return publisher.filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
-                .buffer(template.getBufferSize())
+                .buffer(template.getBufferTimeMillis(), TimeUnit.MILLISECONDS, template.getBufferSize())
                 ;
     }
 

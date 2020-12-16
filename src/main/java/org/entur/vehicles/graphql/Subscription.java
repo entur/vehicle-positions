@@ -29,10 +29,10 @@ class Subscription implements GraphQLSubscriptionResolver {
     }
 
     Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String operator,
-        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferTime) {
+        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
         final String uuid = UUID.randomUUID().toString();
         MDC.put(TRACING_HEADER_NAME, uuid);
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferTime);
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
         LOG.info("Creating new subscription with filter: {}", filter);
         MDC.remove(TRACING_HEADER_NAME);
         return vehicleUpdater.getPublisher(filter, uuid);
