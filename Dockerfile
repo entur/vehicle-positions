@@ -1,4 +1,4 @@
-FROM openjdk:11-jre
+FROM openjdk:11-jdk
 ADD target/vehicle-positions-*-SNAPSHOT.jar vehicle-positions.jar
 
 EXPOSE 8080 3000
