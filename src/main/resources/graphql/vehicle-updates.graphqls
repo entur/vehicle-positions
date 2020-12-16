@@ -36,7 +36,10 @@ type Subscription {
                    lineRef: String
                    lineName: String
                    monitored: Boolean
-                   boundingBox: BoundingBox) : VehicleUpdate
+                   boundingBox: BoundingBox,
+                   # Number of updates buffered before data is pushed
+                   bufferSize: Float
+                   ) : [VehicleUpdate]
 }
 
 type VehicleUpdate {

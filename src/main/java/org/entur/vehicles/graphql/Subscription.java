@@ -12,6 +12,7 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.entur.vehicles.graphql.Constants.TRACING_HEADER_NAME;
@@ -27,11 +28,11 @@ class Subscription implements GraphQLSubscriptionResolver {
         this.vehicleUpdater = vehicleUpdater;
     }
 
-    Publisher<VehicleUpdate> vehicleUpdates(String serviceJourneyId, String operator,
-        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
+    Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String operator,
+        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferTime) {
         final String uuid = UUID.randomUUID().toString();
         MDC.put(TRACING_HEADER_NAME, uuid);
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferTime);
         LOG.info("Creating new subscription with filter: {}", filter);
         MDC.remove(TRACING_HEADER_NAME);
         return vehicleUpdater.getPublisher(filter, uuid);

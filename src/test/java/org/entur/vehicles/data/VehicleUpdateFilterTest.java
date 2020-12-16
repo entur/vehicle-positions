@@ -20,6 +20,7 @@ class VehicleUpdateFilterTest {
         "TST:Line:123",
         null,
         null,
+        null,
         null
     );
 
@@ -43,6 +44,7 @@ class VehicleUpdateFilterTest {
         ".*123.*",
         null,
         null,
+        null,
         null
     );
 
@@ -64,6 +66,7 @@ class VehicleUpdateFilterTest {
         null,
         null,
         "TST:Line:123",
+        null,
         null,
         null,
         null

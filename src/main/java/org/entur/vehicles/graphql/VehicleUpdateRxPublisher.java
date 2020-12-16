@@ -14,6 +14,8 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Component
 public class VehicleUpdateRxPublisher {
 
@@ -44,19 +46,16 @@ public class VehicleUpdateRxPublisher {
     public void publishUpdate(VehicleUpdate vehicleUpdate) {
         MDC.put(Constants.TRACING_HEADER_NAME, uuid);
         emitter.onNext(vehicleUpdate);
-        if (counter++ % 1000 == 0) {
-            LOG.info("Published {} updates to subscription");
-        }
-        publisher.publish();
+
         MDC.remove(Constants.TRACING_HEADER_NAME);
     }
 
-    public Flowable<VehicleUpdate> getPublisher(VehicleUpdateFilter template, String uuid) {
+    public Flowable<List<VehicleUpdate>> getPublisher(VehicleUpdateFilter template, String uuid) {
         this.uuid = uuid;
-        if (template != null) {
-            return publisher.filter(vehicleUpdate -> template.isMatch(vehicleUpdate));
-        }
-        return publisher;
+
+        return publisher.filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
+                .buffer(template.getBufferSize())
+                ;
     }
 
 }

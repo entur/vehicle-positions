@@ -13,13 +13,11 @@
                 <form>
                     <div class="form-group">
                         <textarea class="form-control" style="white-space: pre-wrap;" id="queryArea" rows="15"> subscription VehicleUpdates {
-      vehicleUpdates {
-        vehicleId
-        mode
-        lastUpdated
-        lineName
-        delay
-        codespaceId
+      vehicleUpdates(bufferTime: 250)  {
+        vehicleRef
+        codespace {
+          codespaceId
+        }
         location {
           latitude
           longitude
@@ -114,8 +112,8 @@
 
     function subscribeToVehicles() {
 
-        var websocketUrl = "wss://api.dev.entur.io/realtime/v1/vehicles/subscriptions"
-        // var websocketUrl = "wss://" + location.host + "/realtime/v1/vehicles/subscriptions"
+        // var websocketUrl = "ws://localhost:8080/subscriptions"
+        var websocketUrl = "wss://" + location.host + "/realtime/v1/vehicles/subscriptions"
 
         if (socket != undefined) {
             console.log("Closing connection");
@@ -155,26 +153,32 @@
         socket.onmessage = function (event) {
 
             var data = event.data;
-            var msg = JSON.parse(data);
+            var updates = JSON.parse(data);
 
-            var vehicleId = msg.data.vehicleUpdates.vehicleId;
+            let vehicleUpdates = updates.data.vehicleUpdates;
 
-            var vehicle = msg.data.vehicleUpdates;
-            if (vehicle.location.latitude > 0) {
-                var marker = new google.maps.Marker({
-                    position: new google.maps.LatLng(vehicle.location.latitude, vehicle.location.longitude),
-                    icon: getIcon(vehicle.mode),
-                    map: map,
-                    title: vehicle.lineName + " (" + vehicleId + ")"
-                });
-                if (markers[vehicleId] != undefined) {
-                    //remove previous marker
-                    markers[vehicleId].setMap(null);
-                    vehicles--;
-                }
-                markers[vehicleId] = marker;
-                vehicles++;
-                updates++;
+            for (let i = 0; i < vehicleUpdates.length; i++) {
+
+              var vehicle = vehicleUpdates[i];
+
+              var vehicleId = vehicle.vehicleRef;
+
+              if (vehicle.location.latitude > 0) {
+                  var marker = new google.maps.Marker({
+                      position: new google.maps.LatLng(vehicle.location.latitude, vehicle.location.longitude),
+                      icon: getIcon(vehicle.mode),
+                      map: map,
+                      title: vehicle.lineName + " (" + vehicleId + ")"
+                  });
+                  if (markers[vehicleId] != undefined) {
+                      //remove previous marker
+                      markers[vehicleId].setMap(null);
+                      vehicles--;
+                  }
+                  markers[vehicleId] = marker;
+                  vehicles++;
+                  updates++;
+              }
             }
             document.getElementById("vehiclesCounter").innerText = vehicles;
             document.getElementById("updatesCounter").innerText = updates;

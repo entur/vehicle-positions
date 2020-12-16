@@ -1,15 +1,24 @@
 package org.entur.vehicles.data;
 
 
-import org.entur.vehicles.data.model.*;
+import org.entur.vehicles.data.model.BoundingBox;
+import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.ObjectRef;
+import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.ServiceJourney;
 
 import java.util.StringJoiner;
 
 public class VehicleUpdateFilter extends AbstractVehicleUpdate {
 
+  private BoundingBox boundingBox;
+
+  private int bufferSize = 20;
+
   public VehicleUpdateFilter(
       String serviceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
-      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
+      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize
   ) {
     if (serviceJourneyId != null) {
       this.serviceJourney = new ServiceJourney(serviceJourneyId);
@@ -27,9 +36,14 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     }
     this.monitored = monitored;
     this.boundingBox = boundingBox;
+    if (bufferSize != null) {
+      this.bufferSize = bufferSize;
+    }
   }
 
-  private BoundingBox boundingBox;
+  public int getBufferSize() {
+    return bufferSize;
+  }
 
   public BoundingBox getBoundingBox() {
     return boundingBox;
@@ -126,6 +140,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
         .add("vehicleId='" + vehicleRef + "'")
         .add("boundingBox=" + boundingBox)
         .add("mode=" + mode)
+        .add("bufferSize=" + bufferSize)
         .toString();
   }
 }

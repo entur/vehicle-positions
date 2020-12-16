@@ -37,7 +37,7 @@ class Query implements GraphQLQueryResolver {
 
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
 
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, null);
         LOG.info("Requesting vehicles with filter: {}", filter);
         final long start = System.currentTimeMillis();
         final Collection<VehicleUpdate> vehicles = repository.getVehicles(filter);
