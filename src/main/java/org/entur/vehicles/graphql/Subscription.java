@@ -8,8 +8,13 @@ import org.entur.vehicles.data.model.BoundingBox;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.util.UUID;
+
+import static org.entur.vehicles.graphql.Constants.TRACING_HEADER_NAME;
 
 @Component
 class Subscription implements GraphQLSubscriptionResolver {
@@ -24,9 +29,12 @@ class Subscription implements GraphQLSubscriptionResolver {
 
     Publisher<VehicleUpdate> vehicleUpdates(String serviceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
+        final String uuid = UUID.randomUUID().toString();
+        MDC.put(TRACING_HEADER_NAME, uuid);
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
         LOG.info("Creating new subscription with filter: {}", filter);
-        return vehicleUpdater.getPublisher(filter);
+        MDC.remove(TRACING_HEADER_NAME);
+        return vehicleUpdater.getPublisher(filter, uuid);
     }
 
 }
