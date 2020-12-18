@@ -53,7 +53,9 @@ type VehicleUpdate {
     vehicleRef: String
     line: Line
     lastUpdated: DateTime
+    lastUpdatedEpochSecond: Float
     expiration: DateTime
+    expirationEpochSecond: Float
     location: Location
     speed: Float
     heading: Float @deprecated

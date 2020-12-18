@@ -45,12 +45,20 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
     return lastUpdated;
   }
 
+  public long getLastUpdatedEpochSecond() {
+    return lastUpdated.toEpochSecond();
+  }
+
   public void setLastUpdated(ZonedDateTime lastUpdated) {
     this.lastUpdated = lastUpdated;
   }
 
   public ZonedDateTime getExpiration() {
     return expiration;
+  }
+
+  public long getExpirationEpochSecond() {
+    return expiration.toEpochSecond();
   }
 
   public void setExpiration(ZonedDateTime expiration) {
