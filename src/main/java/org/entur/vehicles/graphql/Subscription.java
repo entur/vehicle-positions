@@ -28,14 +28,19 @@ class Subscription implements GraphQLSubscriptionResolver {
         this.vehicleUpdater = vehicleUpdater;
     }
 
-    Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String operator,
-        String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
+    Publisher<List<VehicleUpdate>> vehicles(String serviceJourneyId, String operator,
+        String codespaceId, VehicleModeEnumeration mode, String vehicleRef, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
         final String uuid = UUID.randomUUID().toString();
         MDC.put(TRACING_HEADER_NAME, uuid);
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
         LOG.info("Creating new subscription with filter: {}", filter);
         MDC.remove(TRACING_HEADER_NAME);
         return vehicleUpdater.getPublisher(filter, uuid);
+    }
+
+    Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String operator,
+        String codespaceId, VehicleModeEnumeration mode, String vehicleRef, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
+        return vehicles(serviceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
     }
 
 }

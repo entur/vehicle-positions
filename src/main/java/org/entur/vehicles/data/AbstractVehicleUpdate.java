@@ -56,6 +56,20 @@ abstract class AbstractVehicleUpdate {
     this.vehicleRef = vehicleRef;
   }
 
+  /**
+   * @deprecated
+   */
+  public String getVehicleId() {
+    return getVehicleRef();
+  }
+
+  /**
+   * @deprecated
+   */
+  public void setVehicleId(String vehicleRef) {
+    setVehicleRef(vehicleRef);
+  }
+
   public Line getLine() {
     return line;
   }

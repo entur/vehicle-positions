@@ -41,6 +41,21 @@ type Subscription {
                    bufferSize: Float
                    # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
                    bufferTime: Float
+                   ) : [VehicleUpdate] @deprecated(reason: "Use 'vehicles'.")
+
+    vehicles(serviceJourneyId: String
+                   operatorRef: String
+                   codespaceId: String
+                   mode: VehicleModeEnumeration
+                   vehicleId: String
+                   lineRef: String
+                   lineName: String
+                   monitored: Boolean
+                   boundingBox: BoundingBox,
+                   # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
+                   bufferSize: Float
+                   # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
+                   bufferTime: Float
                    ) : [VehicleUpdate]
 }
 
@@ -50,7 +65,8 @@ type VehicleUpdate {
     operator: Operator
     codespace: Codespace
     mode: VehicleModeEnumeration
-    vehicleRef: String
+    vehicleId: String
+    vehicleRef: String @deprecated(reason: "Use 'vehicleId'.")
     line: Line
     lastUpdated: DateTime
     lastUpdatedEpochSecond: Float
@@ -58,7 +74,7 @@ type VehicleUpdate {
     expirationEpochSecond: Float
     location: Location
     speed: Float
-    heading: Float @deprecated
+    heading: Float @deprecated(reason: "Use 'bearing''.")
     bearing: Float
 
     monitored: Boolean
