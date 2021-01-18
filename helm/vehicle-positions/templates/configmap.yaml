@@ -14,3 +14,5 @@ data:
       entur.vehicle-positions.gcp.credentials.path={{ .Values.secretMount.mountPath }}
 
       graphql.servlet.actuator-metrics=true
+
+      graphiql.enabled={{ .Values.configMap.graphiqlEnabled }}

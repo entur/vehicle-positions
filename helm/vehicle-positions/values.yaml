@@ -12,6 +12,9 @@ rollingUpdate:
   maxUnavailable: 0
 
 
+configMap:
+  graphiqlEnabled: true
+
 secretMount:
    name: vehicle-positions
    mountPath: /etc/vehicle-positions/credentials.json
