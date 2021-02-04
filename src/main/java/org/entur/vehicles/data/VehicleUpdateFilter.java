@@ -14,8 +14,8 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
 
   private BoundingBox boundingBox;
 
-  private int bufferSize = 20;
-  private int bufferTimeMillis = 250;
+  private int bufferSize;
+  private int bufferTimeMillis;
 
   public VehicleUpdateFilter(
       String serviceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,

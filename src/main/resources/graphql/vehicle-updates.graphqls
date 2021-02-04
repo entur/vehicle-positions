@@ -38,9 +38,9 @@ type Subscription {
                    monitored: Boolean
                    boundingBox: BoundingBox,
                    # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
-                   bufferSize: Float
+                   bufferSize: Int = 20
                    # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
-                   bufferTime: Float
+                   bufferTime: Int = 250
                    ) : [VehicleUpdate] @deprecated(reason: "Use 'vehicles'.")
 
     vehicles(serviceJourneyId: String
@@ -53,9 +53,9 @@ type Subscription {
                    monitored: Boolean
                    boundingBox: BoundingBox,
                    # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
-                   bufferSize: Float
+                   bufferSize: Int = 20
                    # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
-                   bufferTime: Float
+                   bufferTime: Int = 250
                    ) : [VehicleUpdate]
 }
 
