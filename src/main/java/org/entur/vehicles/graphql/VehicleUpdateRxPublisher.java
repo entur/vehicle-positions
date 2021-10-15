@@ -33,7 +33,7 @@ public class VehicleUpdateRxPublisher {
         ConnectableObservable<VehicleUpdate> connectableObservable = vehicleUpdateObservable.share().publish();
         connectableObservable.connect();
 
-        publisher = connectableObservable.toFlowable(BackpressureStrategy.BUFFER);
+        publisher = connectableObservable.toFlowable(BackpressureStrategy.DROP);
         LOG.info("Created VehicleUpdateRxPublisher");
     }
 
@@ -43,9 +43,11 @@ public class VehicleUpdateRxPublisher {
 
     public Flowable<List<VehicleUpdate>> getPublisher(VehicleUpdateFilter template, String uuid) {
 
-        return publisher.filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
-                .buffer(template.getBufferTimeMillis(), TimeUnit.MILLISECONDS, template.getBufferSize())
-                ;
+        return publisher
+            .filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
+            .buffer(template.getBufferTimeMillis(), TimeUnit.MILLISECONDS, template.getBufferSize())
+            .onBackpressureDrop()
+        ;
     }
 
 }
