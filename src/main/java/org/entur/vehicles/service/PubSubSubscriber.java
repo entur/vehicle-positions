@@ -2,12 +2,21 @@ package org.entur.vehicles.service;
 
 import com.google.api.gax.core.CredentialsProvider;
 import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.pubsub.v1.*;
+import com.google.cloud.pubsub.v1.AckReplyConsumer;
+import com.google.cloud.pubsub.v1.MessageReceiver;
+import com.google.cloud.pubsub.v1.Subscriber;
+import com.google.cloud.pubsub.v1.SubscriptionAdminClient;
+import com.google.cloud.pubsub.v1.SubscriptionAdminSettings;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.pubsub.v1.*;
+import com.google.pubsub.v1.ExpirationPolicy;
+import com.google.pubsub.v1.ProjectSubscriptionName;
+import com.google.pubsub.v1.ProjectTopicName;
+import com.google.pubsub.v1.PubsubMessage;
+import com.google.pubsub.v1.PushConfig;
+import com.google.pubsub.v1.Subscription;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +32,9 @@ import javax.annotation.PreDestroy;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -40,16 +51,23 @@ public class PubSubSubscriber {
 
   private ProjectTopicName topic;
   private ProjectSubscriptionName projectSubscriptionName;
+  private Map<String, String> appLabels = new HashMap<>();
 
   public PubSubSubscriber(@Autowired VehicleRepository vehicleRepository,
       @Value("${entur.vehicle-positions.gcp.project.name}") String projectName,
       @Value("${entur.vehicle-positions.gcp.subscription.name}") String subscriptionName,
       @Value("${entur.vehicle-positions.gcp.topic.name}") String topicName,
-      @Value("${entur.vehicle-positions.gcp.credentials.path}") String credentialsPath) {
+      @Value("${entur.vehicle-positions.gcp.credentials.path}") String credentialsPath,
+      @Value("#{${entur.vehicle-positions.gcp.labels}}") Map<String, String> appLabels) {
     this.vehicleRepository = vehicleRepository;
 
     projectSubscriptionName = ProjectSubscriptionName.of(projectName, subscriptionName);
     topic = ProjectTopicName.of(projectName, topicName);
+    this.appLabels.putAll(appLabels);
+
+    if (System.getenv("HOSTNAME") != null) {
+      this.appLabels.put("pod", System.getenv("HOSTNAME"));
+    }
 
     try {
 
@@ -109,6 +127,7 @@ public class PubSubSubscriber {
           .newBuilder()
           .setTopic(topic.toString())
           .setName(projectSubscriptionName.toString())
+          .putAllLabels(appLabels)
           .setPushConfig(PushConfig.getDefaultInstance())
           .setMessageRetentionDuration(
               // How long will an unprocessed message be kept - minimum 10 minutes
@@ -119,7 +138,6 @@ public class PubSubSubscriber {
           .build());
 
     LOG.info("Created subscription {}", projectSubscriptionName);
-
 
     final VehicleMonitoringReceiver receiver = new VehicleMonitoringReceiver();
 
