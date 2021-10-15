@@ -1,11 +1,11 @@
 replicas: 1
 
 resources:
-  cpuLimit: '1'
-  memLimit: 1G
+  cpuLimit: '3'
+  memLimit: 2G
   cpuRequest: '0.5'
-  memRequest: 500M
-  xmx: 700M
+  memRequest: 1G
+  xmx: 1G
 
 rollingUpdate:
   maxSurge: 1
