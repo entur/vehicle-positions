@@ -16,7 +16,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<spring-boot.version>2.5.4</spring-boot.version>
+		<spring-boot.version>2.3.4.RELEASE</spring-boot.version>
 	</properties>
 
 	<dependencies>
@@ -33,12 +33,12 @@
 		<dependency>
 			<groupId>com.graphql-java-kickstart</groupId>
 			<artifactId>graphql-spring-boot-starter</artifactId>
-			<version>11.1.0</version>
+			<version>7.1.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.graphql-java-kickstart</groupId>
 			<artifactId>graphiql-spring-boot-starter</artifactId>
-			<version>11.1.0</version>
+			<version>7.1.0</version>
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
