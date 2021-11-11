@@ -43,8 +43,10 @@ spec:
           imagePullPolicy: {{ .Values.image.imagePullPolicy }}
           env:
             - name: JAVA_OPTIONS
-              value: -server -Xmx{{ .Values.resources.xmx }} -Dspring.config.additional-location=/etc/application-config/application.properties
-                  -Dfile.encoding=UTF-8
+              value: -server -Xmx{{ .Values.resources.xmx }} -XX:+UseParallelGC -XX:GCTimeRatio=4
+                -XX:AdaptiveSizePolicyWeight=90 -XX:MinHeapFreeRatio=20 -XX:MaxHeapFreeRatio=40
+                -Dspring.config.additional-location=/etc/application-config/application.properties
+                -Dfile.encoding=UTF-8
             - name: TZ
               value: Europe/Oslo
             - name: GOOGLE_APPLICATION_CREDENTIALS
