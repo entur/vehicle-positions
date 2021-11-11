@@ -1,3 +1,4 @@
+replicas: 2
 
 configMap:
   projectId: entur-ror-prod
