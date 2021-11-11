@@ -72,20 +72,22 @@ spec:
               protocol: TCP
           livenessProbe:
             failureThreshold: 3
-            httpGet:
-              path: /actuator/health
-              port: {{ .Values.service.http.internalPort }}
-              scheme: HTTP
+            exec:
+              command:
+                - sh
+                - -c
+                - curl --fail http://0.0.0.0:{{ .Values.service.http.internalPort }}/actuator/health
             initialDelaySeconds: 120
             periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 15
           readinessProbe:
             failureThreshold: 3
-            httpGet:
-              path: /actuator/health
-              port: {{ .Values.service.http.internalPort }}
-              scheme: HTTP
+            exec:
+              command:
+                - sh
+                - -c
+                - curl --fail http://0.0.0.0:{{ .Values.service.http.internalPort }}/actuator/health
             initialDelaySeconds: 20
             periodSeconds: 10
             successThreshold: 1
