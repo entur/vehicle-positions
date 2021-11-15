@@ -6,7 +6,12 @@ import com.google.protobuf.Timestamp;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
-import org.entur.vehicles.data.model.*;
+import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.Location;
+import org.entur.vehicles.data.model.ObjectRef;
+import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
@@ -31,12 +36,9 @@ public class VehicleRepository {
   private static final Logger LOG = LoggerFactory.getLogger(VehicleRepository.class);
   private final PrometheusMetricsService metricsService;
 
-  Map<VehicleKey, VehicleUpdate> vehicles = Maps.newConcurrentMap();
+  AutoPurgingMap vehicles = new AutoPurgingMap(5);
 
   private VehicleUpdateRxPublisher publisher;
-
-  private long lastPurgeTimestamp = System.currentTimeMillis();
-  private long minimumPurgeIntervalMillis = 5000;
 
   final ZoneId zone;
 
@@ -176,27 +178,6 @@ public class VehicleRepository {
   }
 
   public Collection<VehicleUpdate> getVehicles(VehicleUpdateFilter filter) {
-
-    long before = System.currentTimeMillis();
-    if (before - lastPurgeTimestamp > minimumPurgeIntervalMillis) {
-
-      int sizeBefore = vehicles.size();
-      final boolean vehicledRemoved = vehicles.entrySet().removeIf(vehicleUpdate -> vehicleUpdate.getValue()
-          .getExpiration()
-          .isBefore(ZonedDateTime.now()));
-
-      if (vehicledRemoved) {
-        LOG.info("Removed {} expired vehicles", sizeBefore-vehicles.size());
-      }
-
-      long purgeCompleted = System.currentTimeMillis();
-
-      lastPurgeTimestamp = purgeCompleted;
-
-      if (purgeCompleted - before > 20) {
-        LOG.warn("Removing expired vehicles took {} ms", (purgeCompleted - before));
-      }
-    }
 
     final long filteringStart = System.currentTimeMillis();
     final Map<VehicleKey, VehicleUpdate> vehicleUpdates = Maps.filterValues(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
