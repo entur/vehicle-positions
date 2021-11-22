@@ -25,13 +25,13 @@ public class AutoPurgingMap extends ConcurrentHashMap<VehicleRepository.VehicleK
         long before = System.currentTimeMillis();
 
         int sizeBefore = this.size();
-        final boolean vehicledRemoved = this.entrySet().removeIf(vehicleUpdate -> vehicleUpdate.getValue()
+        final boolean vehicleRemoved = this.entrySet().removeIf(vehicleUpdate -> vehicleUpdate.getValue()
             .getExpiration()
             .isBefore(ZonedDateTime.now()));
 
         final long duration = System.currentTimeMillis() - before;
 
-        if (vehicledRemoved) {
+        if (vehicleRemoved) {
             LOG.info("Removed {} expired vehicles in {} ms, current size: {}",
                 sizeBefore-this.size(),
                 duration,
