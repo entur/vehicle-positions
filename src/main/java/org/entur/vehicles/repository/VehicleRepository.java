@@ -49,24 +49,33 @@ public class VehicleRepository {
   @Autowired
   JourneyPlannerGraphQLClient graphQLClient;
 
+  @Value("${vehicle.linecache.enabled:false}")
+  private boolean lineCacheEnabled;
+
   private LoadingCache<String, Line> lineCache = CacheBuilder.newBuilder()
       .expireAfterWrite(24, TimeUnit.HOURS)
       .build(new CacheLoader<>() {
         @Override
         public Line load(String lineRef) throws Exception {
-          return graphQLClient.getLine(lineRef);
+          if (lineCacheEnabled) {
+            return graphQLClient.getLine(lineRef);
+          }
+          return new Line(lineRef);
         }
       });
 
   @PostConstruct
   private void warmUpLineCache() {
-    try {
-      final List<Line> allLines = graphQLClient.getAllLines();
-      for (Line line : allLines) {
-        lineCache.put(line.getLineRef(), line);
+    if (lineCacheEnabled) {
+      try {
+        final List<Line> allLines = graphQLClient.getAllLines();
+        for (Line line : allLines) {
+          lineCache.put(line.getLineRef(), line);
+        }
       }
-    } catch (IOException e) {
-      e.printStackTrace();
+      catch (IOException e) {
+        e.printStackTrace();
+      }
     }
   }
 
