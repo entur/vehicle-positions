@@ -1,6 +1,8 @@
 
 configMap:
   projectId: entur-ror-dev
+  journeyPlannerUrl: https://api.dev.entur.io/journey-planner/v3/graphql
+  EtClientName: ror.vehicle-positions.graphql.dev
 
 ingress:
   enabled: true
