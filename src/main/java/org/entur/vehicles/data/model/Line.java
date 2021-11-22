@@ -6,10 +6,19 @@ import java.util.StringJoiner;
 
 public class Line extends ObjectRef {
     private String lineName;
+    private String publicCode;
+
+    public Line() {
+        super("");
+    }
 
     public Line(String lineRef, String lineName) {
         super(lineRef);
         this.lineName = lineName;
+    }
+
+    public Line(String lineRef) {
+        super(lineRef);
     }
 
     public String getLineRef() {
@@ -26,6 +35,14 @@ public class Line extends ObjectRef {
 
     public void setLineName(String lineName) {
         this.lineName = lineName;
+    }
+
+    public String getPublicCode() {
+        return publicCode;
+    }
+
+    public void setPublicCode(String publicCode) {
+        this.publicCode = publicCode;
     }
 
     @Override

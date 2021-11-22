@@ -13,7 +13,9 @@ rollingUpdate:
 
 
 configMap:
-  graphiqlEnabled: true
+  graphiqlEnabled: false
+  journeyPlannerUrl: https://api.entur.io/journey-planner/v2/graphql
+  EtClientName: ror.vehicle-positions.graphql
 
 secretMount:
    name: vehicle-positions

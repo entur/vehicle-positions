@@ -91,6 +91,7 @@ type Location {
 type Line {
     lineRef: String
     lineName: String
+    publicCode: String
 }
 
 type Codespace {
