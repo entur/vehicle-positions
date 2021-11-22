@@ -1,8 +1,27 @@
 package org.entur.vehicles.data.model;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
 public class Codespace extends ObjectRef {
 
-    public Codespace(String id) {
+    private static Cache<String, Codespace> objectCache = CacheBuilder.newBuilder()
+        .expireAfterAccess(3600, TimeUnit.SECONDS)
+        .build();
+
+    public static Codespace getCodespace(String codespaceId) {
+        try {
+            return objectCache.get(codespaceId, () -> new Codespace(codespaceId));
+        }
+        catch (ExecutionException e) {
+            return new Codespace(codespaceId);
+        }
+    }
+
+    private Codespace(String id) {
         super(id);
     }
 

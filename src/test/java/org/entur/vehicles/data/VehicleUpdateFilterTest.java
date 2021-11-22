@@ -71,11 +71,11 @@ class VehicleUpdateFilterTest {
 
     VehicleUpdate update = new VehicleUpdate();
     update.setLine(new Line("TST:Line:123", "A - B"));
-    update.setCodespace(new Codespace("TST"));
+    update.setCodespace(Codespace.getCodespace("TST"));
 
     assertTrue(filter.isMatch(update));
 
-    update.setCodespace(new Codespace("ABC"));
+    update.setCodespace(Codespace.getCodespace("ABC"));
     assertFalse(filter.isMatch(update));
   }
 }

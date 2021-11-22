@@ -29,13 +29,13 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
   ) {
     if (serviceJourneyId != null) {
-      this.serviceJourney = new ServiceJourney(serviceJourneyId);
+      this.serviceJourney = ServiceJourney.getServiceJourney(serviceJourneyId);
     }
     if (operatorRef != null) {
-      this.operator = new Operator(operatorRef);
+      this.operator = Operator.getOperator(operatorRef);
     }
     if (codespaceId != null) {
-      this.codespace = new Codespace(codespaceId);
+      this.codespace = Codespace.getCodespace(codespaceId);
     }
     this.mode = mode;
     this.vehicleRef = vehicleId;

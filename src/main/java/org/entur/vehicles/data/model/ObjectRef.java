@@ -4,7 +4,7 @@ import com.google.common.base.Objects;
 
 import java.util.StringJoiner;
 
-public class ObjectRef {
+public abstract class ObjectRef {
     private String ref;
 
     protected ObjectRef(String ref) {

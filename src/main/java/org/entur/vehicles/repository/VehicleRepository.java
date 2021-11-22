@@ -54,7 +54,7 @@ public class VehicleRepository {
 
     int addedCounter = 0;
     for (VehicleActivityStructure vehicleActivity : vehicleList) {
-      VehicleUpdate v = new VehicleUpdate();
+
 
       try {
         final VehicleActivityStructure.MonitoredVehicleJourneyType journey = vehicleActivity.getMonitoredVehicleJourney();
@@ -64,13 +64,33 @@ public class VehicleRepository {
           continue;
         }
 
-        v.setLocation(new Location(journey.getVehicleLocation().getLongitude(),
-            journey.getVehicleLocation().getLatitude()
-        ));
+        final Codespace codespace = Codespace.getCodespace(journey.getDataSource());
+
+        String vehicleRef = null;
+        if (journey.getVehicleRef() != null) {
+          vehicleRef = journey.getVehicleRef().getValue();
+        }
+
+        final VehicleKey key = new VehicleKey(codespace, vehicleRef);
+
+        final VehicleUpdate v = vehicles.getOrDefault(key, new VehicleUpdate());
+
+        v.setCodespace(codespace);
+
+        v.setVehicleRef(vehicleRef);
+
+        if (v.getLocation() != null) {
+          v.getLocation().setLongitude(journey.getVehicleLocation().getLongitude());
+          v.getLocation().setLatitude(journey.getVehicleLocation().getLatitude());
+        } else {
+          v.setLocation(new Location(
+              journey.getVehicleLocation().getLongitude(),
+              journey.getVehicleLocation().getLatitude()
+          ));
+        }
 
         v.setLine(new Line(journey.getLineRef().getValue(), buildLineName(journey)));
 
-        v.setCodespace(new Codespace(journey.getDataSource()));
 
         if (journey.hasLocationRecordedAtTime()) {
           v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
@@ -95,10 +115,10 @@ public class VehicleRepository {
         }
 
         if (journey.getOperatorRef() != null) {
-          v.setOperator(new Operator(journey.getOperatorRef().getValue()));
+          v.setOperator(Operator.getOperator(journey.getOperatorRef().getValue()));
         }
 
-        v.setServiceJourney(new ServiceJourney(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef()));
+        v.setServiceJourney(ServiceJourney.getServiceJourney(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef()));
 
         v.setDirection(journey.getDirectionRef().getValue());
 
@@ -120,12 +140,7 @@ public class VehicleRepository {
           v.setExpiration(ZonedDateTime.now().plusMinutes(10));
         }
 
-        if (journey.getVehicleRef() != null) {
-          String vehicleRef = journey.getVehicleRef().getValue();
-          v.setVehicleRef(vehicleRef);
-
-        }
-        vehicles.put(new VehicleKey(v.getCodespace(), v.getVehicleRef()), v);
+        vehicles.put(key, v);
         publisher.publishUpdate(v);
 
         metricsService.markUpdate(1, v.getCodespace());
