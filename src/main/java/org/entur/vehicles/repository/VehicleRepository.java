@@ -1,23 +1,15 @@
 package org.entur.vehicles.repository;
 
 import com.google.common.base.Objects;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Maps;
 import com.google.protobuf.Timestamp;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
-import org.entur.vehicles.data.model.Codespace;
-import org.entur.vehicles.data.model.Line;
-import org.entur.vehicles.data.model.Location;
-import org.entur.vehicles.data.model.ObjectRef;
-import org.entur.vehicles.data.model.Operator;
-import org.entur.vehicles.data.model.ServiceJourney;
+import org.entur.vehicles.data.model.*;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
-import org.entur.vehicles.service.JourneyPlannerGraphQLClient;
+import org.entur.vehicles.service.LineService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,8 +17,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 import uk.org.siri.www.siri.VehicleActivityStructure;
 
-import javax.annotation.PostConstruct;
-import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -35,7 +25,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Repository
@@ -47,37 +36,7 @@ public class VehicleRepository {
   AutoPurgingMap vehicles = new AutoPurgingMap(5);
 
   @Autowired
-  JourneyPlannerGraphQLClient graphQLClient;
-
-  @Value("${vehicle.linecache.enabled:false}")
-  private boolean lineCacheEnabled;
-
-  private LoadingCache<String, Line> lineCache = CacheBuilder.newBuilder()
-      .expireAfterWrite(24, TimeUnit.HOURS)
-      .build(new CacheLoader<>() {
-        @Override
-        public Line load(String lineRef) throws Exception {
-          if (lineCacheEnabled) {
-            return graphQLClient.getLine(lineRef);
-          }
-          return new Line(lineRef);
-        }
-      });
-
-  @PostConstruct
-  private void warmUpLineCache() {
-    if (lineCacheEnabled) {
-      try {
-        final List<Line> allLines = graphQLClient.getAllLines();
-        for (Line line : allLines) {
-          lineCache.put(line.getLineRef(), line);
-        }
-      }
-      catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
-  }
+  private LineService lineService;
 
   private VehicleUpdateRxPublisher publisher;
 
@@ -131,7 +90,7 @@ public class VehicleRepository {
         }
 
         try {
-          v.setLine(lineCache.get(journey.getLineRef().getValue()));
+          v.setLine(lineService.getLine(journey.getLineRef().getValue()));
         } catch (ExecutionException e) {
           v.setLine(new Line(journey.getLineRef().getValue()));
         }

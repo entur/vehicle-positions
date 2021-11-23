@@ -20,6 +20,7 @@ import java.util.List;
 public class JourneyPlannerGraphQLClient {
 
     private final String graphQlUrl;
+
     @Value("${vehicle.journeyplanner.EtClientName}")
     private String etClientNameHeader;
 
@@ -27,28 +28,9 @@ public class JourneyPlannerGraphQLClient {
         this.graphQlUrl = graphQlUrl;
     }
 
-    public Line getLine(String lineRef) throws IOException {
-        String query = "{\"query\":\"{line(id:\\\"" + lineRef + "\\\"){lineId:id publicCode lineName:name}}\",\"variables\":null}";
-
-        Data data = executeQuery(query);
-        if (data != null && data.line != null) {
-            return data.line;
-        }
-        return new Line(lineRef);
-    }
-
-    public List<Line> getAllLines() throws IOException {
-        String query = "{\"query\":\"{lines {lineRef:id publicCode lineName:name}}\",\"variables\":null}";
-
-        Data data = executeQuery(query);
-        if (data != null) {
-            return data.lines;
-        }
-        return null;
-    }
 
     @Nullable
-    private Data executeQuery(String query) throws IOException {
+    Data executeQuery(String query) throws IOException {
         CloseableHttpClient httpclient = HttpClients.createDefault();
         HttpPost httppost = new HttpPost(graphQlUrl);
 
@@ -71,6 +53,10 @@ public class JourneyPlannerGraphQLClient {
         return null;
     }
 }
+/*
+ * Internal wrapper-classes for GraphQL-response
+ */
+
 class Response {
     Data data;
     Response() {}
