@@ -20,8 +20,10 @@ public class LineService {
     @Autowired
     private JourneyPlannerGraphQLClient graphQLClient;
 
-    @Value("${vehicle.linecache.enabled:false}")
     private boolean lineCacheEnabled;
+    public LineService(@Value("${vehicle.linecache.enabled:false}") boolean lineCacheEnabled) {
+        this.lineCacheEnabled = lineCacheEnabled;
+    }
 
     private LoadingCache<String, Line> lineCache = CacheBuilder.newBuilder()
             .expireAfterWrite(24, TimeUnit.HOURS)

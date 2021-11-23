@@ -9,6 +9,7 @@ import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.VehicleRepository;
+import org.entur.vehicles.service.LineService;
 import org.junit.Before;
 import org.junit.jupiter.api.Test;
 import uk.org.siri.www.siri.VehicleActivityStructure;
@@ -29,7 +30,10 @@ public class GraphQLTests {
 
     @Before
     public void initData() {
-        repository = new VehicleRepository(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
+        repository = new VehicleRepository(
+                new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)),
+                new LineService(false)
+        );
         repository.addUpdateListener(new VehicleUpdateRxPublisher(repository));
         queryService = new Query(repository);
 

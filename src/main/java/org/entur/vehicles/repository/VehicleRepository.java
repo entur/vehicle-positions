@@ -35,7 +35,6 @@ public class VehicleRepository {
 
   AutoPurgingMap vehicles = new AutoPurgingMap(5);
 
-  @Autowired
   private LineService lineService;
 
   private VehicleUpdateRxPublisher publisher;
@@ -45,8 +44,9 @@ public class VehicleRepository {
   @Value("${vehicle.updates.max.validity.minutes:1440}") // Default one day
   private long MAX_VALIDITY_TIME_MINUTES;
 
-  public VehicleRepository(@Autowired PrometheusMetricsService metricsService) {
+  public VehicleRepository(@Autowired PrometheusMetricsService metricsService, @Autowired LineService lineService) {
     this.metricsService = metricsService;
+    this.lineService = lineService;
     zone = ZonedDateTime.now().getZone();
   }
 
