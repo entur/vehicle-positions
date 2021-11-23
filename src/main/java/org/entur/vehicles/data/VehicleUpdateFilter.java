@@ -1,12 +1,7 @@
 package org.entur.vehicles.data;
 
 
-import org.entur.vehicles.data.model.BoundingBox;
-import org.entur.vehicles.data.model.Codespace;
-import org.entur.vehicles.data.model.Line;
-import org.entur.vehicles.data.model.ObjectRef;
-import org.entur.vehicles.data.model.Operator;
-import org.entur.vehicles.data.model.ServiceJourney;
+import org.entur.vehicles.data.model.*;
 
 import java.util.StringJoiner;
 
@@ -17,7 +12,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   private int bufferSize;
   private int bufferTimeMillis;
 
-  public VehicleUpdateFilter(
+  public VehicleUpdateFilter (
       String serviceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
@@ -29,7 +24,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
   ) {
     if (serviceJourneyId != null) {
-      this.serviceJourney = ServiceJourney.getServiceJourney(serviceJourneyId);
+      this.serviceJourney = new ServiceJourney(serviceJourneyId);
     }
     if (operatorRef != null) {
       this.operator = Operator.getOperator(operatorRef);

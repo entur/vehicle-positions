@@ -10,6 +10,7 @@ import org.entur.vehicles.data.model.*;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.ServiceJourneyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,9 @@ public class VehicleRepository {
 
   @Autowired
   private LineService lineService;
+
+  @Autowired
+  private ServiceJourneyService serviceJourneyService;
 
   private VehicleUpdateRxPublisher publisher;
 
@@ -95,6 +99,12 @@ public class VehicleRepository {
           v.setLine(new Line(journey.getLineRef().getValue()));
         }
 
+        try {
+          v.setServiceJourney(serviceJourneyService.getServiceJourney(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef()));
+        } catch (ExecutionException e) {
+          v.setServiceJourney(new ServiceJourney(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef()));
+        }
+
         if (journey.hasLocationRecordedAtTime()) {
           v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
         } else if (vehicleActivity.hasRecordedAtTime()) {
@@ -120,8 +130,6 @@ public class VehicleRepository {
         if (journey.getOperatorRef() != null) {
           v.setOperator(Operator.getOperator(journey.getOperatorRef().getValue()));
         }
-
-        v.setServiceJourney(ServiceJourney.getServiceJourney(journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef()));
 
         v.setDirection(journey.getDirectionRef().getValue());
 

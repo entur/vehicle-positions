@@ -100,6 +100,12 @@ type Codespace {
 
 type ServiceJourney {
     serviceJourneyId: String!
+    pointsOnLink: PointsOnLink  @deprecated(reason: "Not yet implemented")
+}
+
+type PointsOnLink {
+    length: Float
+    points: String
 }
 
 type Operator {
