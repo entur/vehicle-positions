@@ -71,9 +71,9 @@ public class PrometheusMetricsService {
         final int updatesSinceLastTime = currentCount - lastLoggedCount;
         final long elapsedSinceLastTime = now - lastLoggedCountTimeMillis;
 
-        final long elapsedTimeSeconds = elapsedSinceLastTime / 1000;
+        final double elapsedTimeSeconds = Math.max(elapsedSinceLastTime / 1000, 0.1);
 
-        final long rate = updatesSinceLastTime / elapsedTimeSeconds;
+        final long rate = (long) (updatesSinceLastTime / elapsedTimeSeconds);
 
         lastLoggedCount = currentCount;
         lastLoggedCountTimeMillis = now;
