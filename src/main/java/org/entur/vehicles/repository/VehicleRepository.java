@@ -240,10 +240,12 @@ public class VehicleRepository {
   static class VehicleKey {
     Codespace codespace;
     String vehicleRef;
+    int hashCode = -1;
 
     public VehicleKey(Codespace codespace, String vehicleRef) {
       this.codespace = codespace;
       this.vehicleRef = vehicleRef;
+      hashCode = Objects.hashCode(codespace, vehicleRef);
     }
 
     @Override
@@ -257,7 +259,7 @@ public class VehicleRepository {
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(codespace, vehicleRef);
+      return hashCode;
     }
   }
 }

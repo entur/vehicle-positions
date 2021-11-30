@@ -7,6 +7,8 @@ import java.util.StringJoiner;
 public abstract class ObjectRef {
     private String ref;
 
+    private transient int hashCode = -1;
+
     protected ObjectRef(String ref) {
         this.ref = ref;
     }
@@ -31,7 +33,10 @@ public abstract class ObjectRef {
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(ref);
+        if (hashCode == -1) {
+            hashCode = Objects.hashCode(ref);
+        }
+        return hashCode;
     }
 
     @Override
