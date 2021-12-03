@@ -2,21 +2,12 @@ package org.entur.vehicles.service;
 
 import com.google.api.gax.core.CredentialsProvider;
 import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.pubsub.v1.AckReplyConsumer;
-import com.google.cloud.pubsub.v1.MessageReceiver;
-import com.google.cloud.pubsub.v1.Subscriber;
-import com.google.cloud.pubsub.v1.SubscriptionAdminClient;
-import com.google.cloud.pubsub.v1.SubscriptionAdminSettings;
+import com.google.cloud.pubsub.v1.*;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.pubsub.v1.ExpirationPolicy;
-import com.google.pubsub.v1.ProjectSubscriptionName;
-import com.google.pubsub.v1.ProjectTopicName;
-import com.google.pubsub.v1.PubsubMessage;
-import com.google.pubsub.v1.PushConfig;
-import com.google.pubsub.v1.Subscription;
+import com.google.pubsub.v1.*;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +43,8 @@ public class PubSubSubscriber {
   private ProjectTopicName topic;
   private ProjectSubscriptionName projectSubscriptionName;
   private Map<String, String> appLabels = new HashMap<>();
+  @Value("${entur.vehicle-positions.shutdownhook:false}")
+  private boolean addManualShutdownhook;
 
   public PubSubSubscriber(@Autowired VehicleRepository vehicleRepository,
       @Value("${entur.vehicle-positions.gcp.project.name}") String projectName,
@@ -98,7 +91,9 @@ public class PubSubSubscriber {
 
         LOG.info("Credentials read from path: {}", credentialsPath);
       }
-      addShutdownHook();
+      if (addManualShutdownhook) {
+        addShutdownHook();
+      }
 
     } catch (IOException e) {
       e.printStackTrace();
@@ -169,7 +164,10 @@ public class PubSubSubscriber {
 
   private void addShutdownHook() {
     try {
-      Runtime.getRuntime().addShutdownHook(new Thread(this::teardown));
+      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        LOG.info("Calling Runtime shutdownhook");
+        teardown();
+      }));
       LOG.info("Shutdown-hook to clean up Google Pubsub subscription has been added.");
     } catch (IllegalStateException e) {
       // Handling cornercase when instance is being shut down before it has been initialized
@@ -184,6 +182,8 @@ public class PubSubSubscriber {
       LOG.info("Deleting subscription {}", projectSubscriptionName);
       subscriptionAdminClient.deleteSubscription(projectSubscriptionName);
       LOG.info("Subscription deleted {}", projectSubscriptionName);
+    } else {
+      LOG.info("Nothing to clean up");
     }
   }
 

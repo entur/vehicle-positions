@@ -18,3 +18,5 @@ data:
       graphiql.enabled={{ .Values.configMap.graphiqlEnabled }}
       vehicle.journeyplanner.url={{ .Values.configMap.journeyPlannerUrl }}
       vehicle.journeyplanner.EtClientName={{ .Values.configMap.EtClientName }}
+
+      entur.vehicle-positions.shutdownhook=false
