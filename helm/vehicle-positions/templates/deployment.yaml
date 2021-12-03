@@ -42,7 +42,7 @@ spec:
           image: {{ .Values.image.identifier }}
           imagePullPolicy: {{ .Values.image.imagePullPolicy }}
           env:
-            - name: JAVA_OPTIONS
+            - name: JDK_JAVA_OPTIONS
               value: -server -Xmx{{ .Values.resources.xmx }} -XX:+UseParallelGC -XX:GCTimeRatio=4
                 -XX:AdaptiveSizePolicyWeight=90 -XX:MinHeapFreeRatio=20 -XX:MaxHeapFreeRatio=40
                 -Dspring.config.additional-location=/etc/application-config/application.properties

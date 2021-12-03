@@ -11,6 +11,6 @@ USER appuser
 ADD target/vehicle-positions-*-SNAPSHOT.jar vehicle-positions.jar
 
 EXPOSE 8080 3000
-# CMD java $JAVA_OPTIONS -jar vehicle-positions.jar
 
-CMD ["java","-server","-Xmx2G","-XX:+UseParallelGC","-XX:GCTimeRatio=4","-XX:AdaptiveSizePolicyWeight=90","-XX:MinHeapFreeRatio=20","-XX:MaxHeapFreeRatio=40","-Dspring.config.additional-location=/etc/application-config/application.properties","-Dfile.encoding=UTF-8","-jar","vehicle-positions.jar"]
+# JDK-options are set in $JDK_JAVA_OPTIONS
+CMD ["java", "-jar","vehicle-positions.jar"]
