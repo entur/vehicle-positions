@@ -1,4 +1,9 @@
-replicas: 2
+replicas: 4
+
+resources:
+  memLimit: 4G
+  memRequest: 3G
+  xmx: 3G
 
 configMap:
   projectId: entur-ror-prod
