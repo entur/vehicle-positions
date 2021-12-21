@@ -13,7 +13,6 @@ configMap:
 ingress:
   enabled: true
   vehicles:
-    loadBalancerIP: 35.205.233.237
     domainName: .entur.io
 
 rbac:
