@@ -43,8 +43,8 @@ spec:
           imagePullPolicy: {{ .Values.image.imagePullPolicy }}
           env:
             - name: JDK_JAVA_OPTIONS
-              value: -server -Xmx{{ .Values.resources.xmx }} -XX:+UseParallelGC -XX:GCTimeRatio=4
-                -XX:AdaptiveSizePolicyWeight=90 -XX:MinHeapFreeRatio=20 -XX:MaxHeapFreeRatio=40
+              value: -server -Xmx{{ .Values.resources.xmx }} -XX:+UseG1GC -XX:MaxGCPauseMillis=750 -XX:ConcGCThreads=2
+                -XX:ParallelGCThreads=5
                 -Dspring.config.additional-location=/etc/application-config/application.properties
                 -Dfile.encoding=UTF-8
             - name: TZ
