@@ -88,4 +88,15 @@ class Query implements GraphQLQueryResolver {
         MDC.remove(TRACING_HEADER_NAME);
         return serviceJourneys;
     }
+
+    ServiceJourney serviceJourney(String id) {
+        MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
+        final long start = System.currentTimeMillis();
+
+        final ServiceJourney serviceJourney = repository.getServiceJourney(id);
+        LOG.info("Returning serviceJourney in {} ms", serviceJourney, System.currentTimeMillis() - start);
+
+        MDC.remove(TRACING_HEADER_NAME);
+        return serviceJourney;
+    }
 }

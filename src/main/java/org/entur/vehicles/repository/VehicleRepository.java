@@ -6,7 +6,12 @@ import com.google.protobuf.Timestamp;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
-import org.entur.vehicles.data.model.*;
+import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.Location;
+import org.entur.vehicles.data.model.ObjectRef;
+import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.service.LineService;
@@ -25,6 +30,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -243,6 +249,19 @@ public class VehicleRepository {
   private boolean isMatch(ObjectRef obj, String ref){
     if (obj == null) return false;
     return obj.getRef().matches(ref);
+  }
+
+  public ServiceJourney getServiceJourney(String id) {
+    Optional<ServiceJourney> serviceJourney = vehicles.values()
+            .stream()
+            .filter(vehicleUpdate -> isMatch(vehicleUpdate.getServiceJourney(), id))
+            .map(vehicleUpdate -> vehicleUpdate.getServiceJourney())
+            .findAny();
+    if (serviceJourney.isEmpty()) {
+      return null;
+    } else {
+      return serviceJourney.get();
+    }
   }
 
   static class VehicleKey {

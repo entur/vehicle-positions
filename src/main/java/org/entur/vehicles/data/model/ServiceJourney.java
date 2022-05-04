@@ -15,6 +15,9 @@ public class ServiceJourney extends ObjectRef {
     public String getServiceJourneyId() {
         return super.getRef();
     }
+    public String getId() {
+        return super.getRef();
+    }
 
     public PointsOnLink getPointsOnLink() {
         return pointsOnLink;

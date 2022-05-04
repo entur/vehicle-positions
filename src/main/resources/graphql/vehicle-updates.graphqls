@@ -22,6 +22,8 @@ type Query {
 
     codespaces : [Codespace]
 
+    serviceJourney(id: String!) : ServiceJourney
+
     serviceJourneys(lineRef: String!) : [ServiceJourney]
 
     operators(codespaceId: String!) : [Operator]
@@ -99,8 +101,9 @@ type Codespace {
 }
 
 type ServiceJourney {
-    serviceJourneyId: String!
-    pointsOnLink: PointsOnLink  @deprecated(reason: "Not yet implemented")
+    id: String!
+    serviceJourneyId: String! @deprecated(reason: "Use 'id' instead.")
+    pointsOnLink: PointsOnLink  @deprecated(reason: "Experimental - should not be used with subscription")
 }
 
 type PointsOnLink {
