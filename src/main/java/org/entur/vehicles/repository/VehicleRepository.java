@@ -44,7 +44,6 @@ public class VehicleRepository {
 
   private LineService lineService;
 
-  @Autowired
   private ServiceJourneyService serviceJourneyService;
 
   private VehicleUpdateRxPublisher publisher;
@@ -54,9 +53,13 @@ public class VehicleRepository {
   @Value("${vehicle.updates.max.validity.minutes:1440}") // Default one day
   private long MAX_VALIDITY_TIME_MINUTES;
 
-  public VehicleRepository(@Autowired PrometheusMetricsService metricsService, @Autowired LineService lineService) {
+  public VehicleRepository(
+          @Autowired PrometheusMetricsService metricsService,
+          @Autowired LineService lineService,
+          @Autowired ServiceJourneyService serviceJourneyService) {
     this.metricsService = metricsService;
     this.lineService = lineService;
+    this.serviceJourneyService = serviceJourneyService;
     zone = ZonedDateTime.now().getZone();
   }
 
