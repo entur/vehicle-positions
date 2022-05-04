@@ -8,6 +8,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.ServiceJourney;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -67,6 +68,7 @@ class Response {
 class Data {
     Line line;
     List<Line> lines;
+    ServiceJourney serviceJourney;
     Data() {}
     public void setLine(Line line) {
         this.line = line;
@@ -74,5 +76,9 @@ class Data {
 
     public void setLines(List<Line> lines) {
         this.lines = lines;
+    }
+
+    public void setServiceJourney(ServiceJourney serviceJourney) {
+        this.serviceJourney = serviceJourney;
     }
 }
