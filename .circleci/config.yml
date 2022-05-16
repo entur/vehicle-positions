@@ -5,6 +5,11 @@ aliases:
     command: |
       echo 'export GCLOUD_SERVICE_KEY="$GCLOUD_SERVICE_KEY"' >> $BASH_ENV
       /tools/gcp_authenticate.sh
+  - &jfrog-login
+    name: Rename jfrog environment variable for maven setting.xml
+    command: |
+      echo "export JFROG_USER=$ARTIFACTORY_USER"  >> $BASH_ENV
+      echo "export JFROG_PASS=$ARTIFACTORY_PASSWORD"  >> $BASH_ENV
   - &docker-login
     name: Docker login
     command: |
@@ -47,6 +52,7 @@ jobs:
       - checkout
       - restore_cache:
           key: dep-cache-{{ checksum "pom.xml" }}
+      - run: *jfrog-login
       - run: mvn org.apache.maven.plugins:maven-dependency-plugin:3.1.0:go-offline -s /tools/m2/settings.xml
       - save_cache:
           paths:
@@ -95,7 +101,7 @@ workflows:
   build_test_deploy:
     jobs:
       - build:
-          context: org-carbon
+          context: global
       - deploy-docker:
           context: global
           requires:
