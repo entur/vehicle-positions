@@ -2,7 +2,7 @@ apiVersion: autoscaling/v2beta2
 kind: HorizontalPodAutoscaler
 metadata:
   labels:
-    {{- include "common.labels.proxy" . | indent 4 }}
+    {{- include "common.labels" . | indent 4 }}
   name: {{ template "app.name" . }}
   namespace: {{ .Release.Namespace }}
 spec:
