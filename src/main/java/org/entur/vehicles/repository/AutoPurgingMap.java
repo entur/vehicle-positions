@@ -32,7 +32,7 @@ public class AutoPurgingMap extends ConcurrentHashMap<VehicleRepository.VehicleK
         final long duration = System.currentTimeMillis() - before;
 
         if (vehicleRemoved) {
-            LOG.info("Removed {} expired vehicles in {} ms, current size: {}",
+            LOG.debug("Removed {} expired vehicles in {} ms, current size: {}",
                 sizeBefore-this.size(),
                 duration,
                 this.size()
