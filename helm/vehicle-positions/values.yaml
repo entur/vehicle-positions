@@ -2,9 +2,9 @@ replicas: 1
 
 resources:
   cpuLimit: '2'
-  memLimit: 2G
+  memLimit: 3G
   cpuRequest: '0.5'
-  memRequest: 1G
+  memRequest: 2G
   xmx: 2G
 
 rollingUpdate:
