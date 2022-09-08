@@ -33,7 +33,7 @@ class Subscription implements GraphQLSubscriptionResolver {
         final String uuid = UUID.randomUUID().toString();
         MDC.put(TRACING_HEADER_NAME, uuid);
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
-        LOG.info("Creating new subscription with filter: {}", filter);
+        LOG.debug("Creating new subscription with filter: {}", filter);
         MDC.remove(TRACING_HEADER_NAME);
         return vehicleUpdater.getPublisher(filter, uuid);
     }

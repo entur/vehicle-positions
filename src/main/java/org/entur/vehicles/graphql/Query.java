@@ -38,10 +38,10 @@ class Query implements GraphQLQueryResolver {
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
 
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
-        LOG.info("Requesting vehicles with filter: {}", filter);
+        LOG.debug("Requesting vehicles with filter: {}", filter);
         final long start = System.currentTimeMillis();
         final Collection<VehicleUpdate> vehicles = repository.getVehicles(filter);
-        LOG.info("Returning {} vehicles in {} ms", vehicles.size(), System.currentTimeMillis() - start);
+        LOG.debug("Returning {} vehicles in {} ms", vehicles.size(), System.currentTimeMillis() - start);
 
         MDC.remove(TRACING_HEADER_NAME);
         return vehicles;

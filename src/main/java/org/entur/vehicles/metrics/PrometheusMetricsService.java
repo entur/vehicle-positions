@@ -60,7 +60,7 @@ public class PrometheusMetricsService {
         if (counter.addAndGet(count) % 1000 == 0) {
             final int currentCount = counter.get();
 
-            LOG.info("Processed {} updates. Current rate: {}/s", currentCount, calculateRate(currentCount));
+            LOG.debug("Processed {} updates. Current rate: {}/s", currentCount, calculateRate(currentCount));
 
         }
     }
