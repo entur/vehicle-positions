@@ -1,10 +1,11 @@
-replicas: 1
+replicas: ${replicas.RUNNING_REPLICAS}
+default-replicas: 4
 
 resources:
   cpuLimit: '2'
-  memLimit: 3G
+  memLimit: 2G
   cpuRequest: '0.5'
-  memRequest: 2G
+  memRequest: 1G
   xmx: 2G
 
 rollingUpdate:

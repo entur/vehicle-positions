@@ -1,14 +1,9 @@
-replicas: 4
-
-resources:
-  memLimit: 2G
-  memRequest: 1G
-  xmx: 2G
 
 configMap:
   projectId: entur-ror-prod
   journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql
+  serviceJourneyCacheEnabled: true
 
 ingress:
   enabled: true
