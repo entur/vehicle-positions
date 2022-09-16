@@ -1,5 +1,5 @@
 replicas: ${replicas.RUNNING_REPLICAS}
-default-replicas: 4
+default_replicas: 4
 
 resources:
   cpuLimit: '2'
