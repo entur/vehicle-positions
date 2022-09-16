@@ -15,7 +15,7 @@ rollingUpdate:
 
 configMap:
   graphiqlEnabled: false
-  journeyPlannerUrl: https://api.entur.io/journey-planner/v2/graphql
+  journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql
   serviceJourneyCacheEnabled: false
 
