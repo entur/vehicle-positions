@@ -22,7 +22,7 @@ public class ServiceJourneyService {
     private boolean serviceJourneyCacheEnabled;
 
     private LoadingCache<String, ServiceJourney> serviceJourneyCache = CacheBuilder.newBuilder()
-            .expireAfterWrite(24, TimeUnit.HOURS)
+            .expireAfterWrite(6, TimeUnit.HOURS)
             .build(new CacheLoader<>() {
                 @Override
                 public ServiceJourney load(String serviceJourneyId) {

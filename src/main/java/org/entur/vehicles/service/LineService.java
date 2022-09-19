@@ -26,7 +26,7 @@ public class LineService {
     }
 
     private LoadingCache<String, Line> lineCache = CacheBuilder.newBuilder()
-            .expireAfterWrite(24, TimeUnit.HOURS)
+            .expireAfterWrite(6, TimeUnit.HOURS)
             .build(new CacheLoader<>() {
                 @Override
                 public Line load(String lineRef) {
