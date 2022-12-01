@@ -1,0 +1,45 @@
+replicas: ${replicas.RUNNING_REPLICAS}
+default_replicas: 4
+
+resources:
+  cpuLimit: '2'
+  memLimit: 2G
+  cpuRequest: '0.5'
+  memRequest: 1G
+  xmx: 2G
+
+rollingUpdate:
+  maxSurge: 1
+  maxUnavailable: 0
+
+
+configMap:
+  graphiqlEnabled: false
+  journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
+  EtClientName: ror.vehicle-positions.graphql
+  serviceJourneyCacheEnabled: false
+
+secretMount:
+  name: vehicle-positions
+  mountPath: /etc/vehicle-positions/credentials.json
+  subPath: credentials.json
+  secretName: ror-vehicle-positions-sa-key
+  readOnly: true
+
+
+configMapMount:
+  name: vehicle-positions-config
+
+image:
+  identifier: ${artifact.metadata.image}
+  imagePullPolicy: Always
+
+service:
+  http:
+    externalPort: 80
+    internalPort: 8080
+
+hpa:
+  maxReplicas: 10
+  minReplicas: 2
+  targetCPUUtilizationPercentage: 70
