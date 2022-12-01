@@ -12,6 +12,7 @@ data:
       entur.vehicle-positions.gcp.subscription.name=${HOSTNAME}-graphql
       entur.vehicle-positions.gcp.labels={app:'vehicle-positions',team:'ror', slack:'talk-ror', manager:'application'}
       entur.vehicle-positions.shutdownhook=false
+      entur.default.gcp.credentials.enabled=true
 
       vehicle.journeyplanner.url={{ .Values.configMap.journeyPlannerUrl }}
       vehicle.journeyplanner.EtClientName={{ .Values.configMap.EtClientName }}

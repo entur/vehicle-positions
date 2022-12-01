@@ -58,10 +58,6 @@ spec:
               cpu: {{ .Values.resources.cpuRequest }}
               memory: {{ .Values.resources.memRequest }}
           volumeMounts:
-            - name: {{ .Values.secretMount.name }}
-              mountPath: {{ .Values.secretMount.mountPath }}
-              subPath: {{ .Values.secretMount.subPath }}
-              readOnly: {{ .Values.secretMount.readOnly }}
             - mountPath: /etc/application-config
               name: application-config
               readOnly: true
@@ -119,9 +115,6 @@ spec:
             matchLabels:
               app: vehicle-positions
       volumes:
-        - name: {{ .Values.secretMount.name }}
-          secret:
-            secretName: {{ .Values.secretMount.secretName }}
         - name: application-config
           configMap:
             name: {{ .Values.configMapMount.name }}
