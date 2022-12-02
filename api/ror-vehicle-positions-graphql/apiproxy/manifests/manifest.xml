@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Manifest name="manifest">
+    <Policies>
+        <VersionInfo resourceName="assignMessage.addCors" version="SHA-512:e5b27389f881e836d02eff8d7b6bce5af8aff2c989d5b6f03900ae6a7f37389e7278ac0872cbd9baea842be11694d76c52460cc54c5a32905053e991f26c0e17"/>
+        <VersionInfo resourceName="flowCallout.generalSecurityHeaders" version="SHA-512:94598858c29b09fbeebc167a02a1be970e3ef9c573691cba5d5994c2d9123fb1c76cb765e0b97c3c54217ac71d589dd4267634bbed75a3f77c944a6a75201522"/>
+        <VersionInfo resourceName="flowCallout.getEnvironmentConfiguration" version="SHA-512:a779b514b4b73e8a8331de3d22403c76c13865269330a5217200d26af7953833dc3befd77eefcb0c9acb111e4c1dd27301eb360b7d42a95ffdb26088e0f620e2"/>
+        <VersionInfo resourceName="flowCallout.globalIpBlacklistTeamRutedata" version="SHA-512:84ca7613b00ecdf7e0c0c9080f4789c1e1bf32eed0fcceb7d6adf26e74e2194fd3508b95f8a80a2cab0bd8634c580f57c68f0bf28a3037e445aaf4ea1fe1bda6"/>
+        <VersionInfo resourceName="flowCallout.replaceTargetUrl" version="SHA-512:e5c02dc3f4f5e88ac210f9a791cc7b39ea39b3914843b1772938e22f1543253b3efe05ee5ebcfe742c4ba538dce65361a6ae861f3e74510b680ce53eeb3087bc"/>
+        <VersionInfo resourceName="spikeArrest" version="SHA-512:e09215c1fc5f7c9370bc7975bb3ff34083ecd4a1fd6c3910044fffcd33bce3a32c0833fbf64d3f3641a671ee5f01f1135ab3c4ea5c61e739216fe11025234bfc"/>
+    </Policies>
+    <ProxyEndpoints>
+        <VersionInfo resourceName="vehicle-positions-graphql-v1" version="SHA-512:395515ec8e1db2dbe270b0cac284067d68560f544cf102012bab06c988c8e3a83cca8e97356a2d7632d7e94c3e7b85c533f2c1413da449326ad0ddd3bd63055b"/>
+    </ProxyEndpoints>
+    <Resources/>
+    <SharedFlows/>
+    <TargetEndpoints>
+        <VersionInfo resourceName="vehicle-positions-graphql-v1" version="SHA-512:4e4e43a366843257d775c823730bfec4c5a40d95309110f3d69138275acf115ec6ddbdebe0a8203ae6134e1cae28ea7ad49413993ee1a12da33a9f2aac784251"/>
+    </TargetEndpoints>
+</Manifest>
