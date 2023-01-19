@@ -3,8 +3,8 @@ default_replicas: 4
 
 resources:
   cpuLimit: '2'
-  memLimit: 2G
-  cpuRequest: '0.5'
+  memLimit: 3G
+  cpuRequest: '1'
   memRequest: 1G
   xmx: 2G
 
@@ -40,6 +40,6 @@ service:
     internalPort: 8080
 
 hpa:
-  maxReplicas: 10
+  maxReplicas: 20
   minReplicas: 2
-  targetCPUUtilizationPercentage: 70
+  targetCPUUtilizationPercentage: 60
