@@ -18,15 +18,15 @@ public class ServiceJourneyService {
     @Autowired
     private JourneyPlannerGraphQLClient graphQLClient;
 
-    @Value("${vehicle.serviceJourneyCache.enabled:false}")
-    private boolean serviceJourneyCacheEnabled;
+    @Value("${vehicle.serviceJourney.lookup.enabled:false}")
+    private boolean serviceJourneyLookupEnabled;
 
     private LoadingCache<String, ServiceJourney> serviceJourneyCache = CacheBuilder.newBuilder()
             .expireAfterWrite(6, TimeUnit.HOURS)
             .build(new CacheLoader<>() {
                 @Override
                 public ServiceJourney load(String serviceJourneyId) {
-                    if (serviceJourneyCacheEnabled) {
+                    if (serviceJourneyLookupEnabled) {
                         return lookupServiceJourney(serviceJourneyId);
                     }
                     return new ServiceJourney(serviceJourneyId, null);

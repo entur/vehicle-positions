@@ -16,9 +16,9 @@ data:
 
       vehicle.journeyplanner.url={{ .Values.configMap.journeyPlannerUrl }}
       vehicle.journeyplanner.EtClientName={{ .Values.configMap.EtClientName }}
-      vehicle.serviceJourneyCache.enabled={{ .Values.configMap.serviceJourneyCacheEnabled }}
+      vehicle.serviceJourney.lookup.enabled={{ .Values.configMap.serviceJourneyLookupEnabled }}
       vehicle.updates.max.validity.minutes=1440
-      vehicle.linecache.enabled=true
+      vehicle.line.lookup.enabled=true
 
       management.endpoints.web.exposure.include=info, health, prometheus, env, metrics, loggers
       management.endpoints.prometheus.enabled=true

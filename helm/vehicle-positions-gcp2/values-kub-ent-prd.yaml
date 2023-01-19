@@ -5,5 +5,5 @@ configMap:
   projectId: entur-ror-prod
   journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql
-  serviceJourneyCacheEnabled: true
+  serviceJourneyLookupEnabled: true
 

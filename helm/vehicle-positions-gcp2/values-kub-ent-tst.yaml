@@ -5,4 +5,4 @@ configMap:
   projectId: entur-ror-test
   journeyPlannerUrl: https://api.staging.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql.staging
-  serviceJourneyCacheEnabled: true
+  serviceJourneyLookupEnabled: true

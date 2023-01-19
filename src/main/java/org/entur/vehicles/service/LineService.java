@@ -20,9 +20,9 @@ public class LineService {
     @Autowired
     private JourneyPlannerGraphQLClient graphQLClient;
 
-    private boolean lineCacheEnabled;
-    public LineService(@Value("${vehicle.linecache.enabled:false}") boolean lineCacheEnabled) {
-        this.lineCacheEnabled = lineCacheEnabled;
+    private boolean lineLookupEnabled;
+    public LineService(@Value("${vehicle.line.lookup.enabled:false}") boolean lineLookupEnabled) {
+        this.lineLookupEnabled = lineLookupEnabled;
     }
 
     private LoadingCache<String, Line> lineCache = CacheBuilder.newBuilder()
@@ -30,7 +30,7 @@ public class LineService {
             .build(new CacheLoader<>() {
                 @Override
                 public Line load(String lineRef) {
-                    if (lineCacheEnabled) {
+                    if (lineLookupEnabled) {
                         return lookupLine(lineRef);
                     }
                     return new Line(lineRef);
@@ -39,7 +39,7 @@ public class LineService {
 
     @PostConstruct
     private void warmUpLineCache() {
-        if (lineCacheEnabled) {
+        if (lineLookupEnabled) {
             try {
                 final List<Line> allLines = getAllLines();
                 for (Line line : allLines) {
