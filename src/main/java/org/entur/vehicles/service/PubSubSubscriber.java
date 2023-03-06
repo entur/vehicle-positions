@@ -57,16 +57,17 @@ public class PubSubSubscriber {
   private boolean addManualShutdownhook;
 
   public PubSubSubscriber(@Autowired VehicleRepository vehicleRepository,
-                          @Value("${entur.vehicle-positions.gcp.project.name}") String projectName,
+                          @Value("${entur.vehicle-positions.gcp.subscription.project.name}") String subscriptionProjectName,
                           @Value("${entur.vehicle-positions.gcp.subscription.name}") String subscriptionName,
+                          @Value("${entur.vehicle-positions.gcp.topic.project.name}") String topicProjectName,
                           @Value("${entur.vehicle-positions.gcp.topic.name}") String topicName,
                           @Value("${entur.vehicle-positions.gcp.credentials.path:}") String credentialsPath,
                           @Value("#{${entur.vehicle-positions.gcp.labels}}") Map<String, String> appLabels,
                           @Value("${entur.default.gcp.credentials.enabled:false}") boolean defaultGcpCredentialsEnabled) {
     this.vehicleRepository = vehicleRepository;
 
-    projectSubscriptionName = ProjectSubscriptionName.of(projectName, subscriptionName);
-    topic = ProjectTopicName.of(projectName, topicName);
+    projectSubscriptionName = ProjectSubscriptionName.of(subscriptionProjectName, subscriptionName);
+    topic = ProjectTopicName.of(topicProjectName, topicName);
     this.appLabels.putAll(appLabels);
 
     if (System.getenv("HOSTNAME") != null) {

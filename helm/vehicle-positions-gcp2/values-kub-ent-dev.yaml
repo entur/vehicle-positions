@@ -3,7 +3,8 @@ ingress:
 
 
 configMap:
-  projectId: entur-ror-dev
+  subscriptionProjectId: ent-kishar-dev
+  topicProjectId: ent-anshar-dev
   journeyPlannerUrl: https://api.dev.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql.dev
   serviceJourneyLookupEnabled: true

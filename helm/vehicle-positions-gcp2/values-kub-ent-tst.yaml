@@ -2,7 +2,8 @@ ingress:
   domainName: -gcp2.staging.entur.io
 
 configMap:
-  projectId: entur-ror-test
+  subscriptionProjectId: ent-kishar-tst
+  topicProjectId: ent-anshar-tst
   journeyPlannerUrl: https://api.staging.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql.staging
   serviceJourneyLookupEnabled: true
