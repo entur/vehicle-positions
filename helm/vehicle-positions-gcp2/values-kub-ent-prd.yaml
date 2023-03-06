@@ -2,7 +2,7 @@ ingress:
   domainName: -gcp2.entur.io
 
 configMap:
-  subscriptionProjectId: ent-kishar-prd
+  subscriptionProjectId: ent-vpos-prd
   topicProjectId: ent-anshar-prd
   journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql
