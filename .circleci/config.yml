@@ -10,10 +10,6 @@ aliases:
     name: Write artifactory settings to file
     command: |
       echo "$ARTIFACTORY_SETTINGS" | base64 --decode > .circleci/settings.xml
-      - &go-offline
-        name: Maven go-offline
-        command: |
-          mvn org.apache.maven.plugins:maven-dependency-plugin:3.1.0:go-offline -s .circleci/settings.xml
   - &go-offline
     name: Maven go-offline
     command: |
