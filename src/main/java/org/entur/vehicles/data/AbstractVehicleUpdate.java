@@ -97,7 +97,7 @@ abstract class AbstractVehicleUpdate {
   }
 
 
-  public void setMonitored(boolean monitored) {
+  public void setMonitored(Boolean monitored) {
     this.monitored = monitored;
   }
 

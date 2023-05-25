@@ -15,6 +15,7 @@ rollingUpdate:
 
 configMap:
   graphiqlEnabled: false
+  topicName: avro.vehicle_monitoring
   journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql
   serviceJourneyLookupEnabled: false

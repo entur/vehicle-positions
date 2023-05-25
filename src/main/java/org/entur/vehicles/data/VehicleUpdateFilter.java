@@ -1,7 +1,12 @@
 package org.entur.vehicles.data;
 
 
-import org.entur.vehicles.data.model.*;
+import org.entur.vehicles.data.model.BoundingBox;
+import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.ObjectRef;
+import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.ServiceJourney;
 
 import java.util.StringJoiner;
 

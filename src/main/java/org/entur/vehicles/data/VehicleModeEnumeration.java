@@ -1,26 +1,26 @@
 package org.entur.vehicles.data;
 
-import uk.org.siri.www.siri.VehicleModesEnumeration;
+import org.entur.avro.realtime.siri.model.VehicleModeEnum;
 
 public enum VehicleModeEnumeration {
     
     AIR, BUS, RAIL, TRAM, COACH, FERRY, METRO;
 
-    public static VehicleModeEnumeration fromValue(VehicleModesEnumeration mode) {
+    public static VehicleModeEnumeration fromValue(VehicleModeEnum mode) {
         switch (mode) {
-            case VEHICLE_MODES_ENUMERATION_AIR:
+            case AIR:
                 return AIR;
-            case VEHICLE_MODES_ENUMERATION_BUS:
+            case BUS:
                 return BUS;
-            case VEHICLE_MODES_ENUMERATION_RAIL:
+            case RAIL:
                 return RAIL;
-            case VEHICLE_MODES_ENUMERATION_TRAM:
+            case TRAM:
                 return TRAM;
-            case VEHICLE_MODES_ENUMERATION_COACH:
+            case COACH:
                 return COACH;
-            case VEHICLE_MODES_ENUMERATION_FERRY:
+            case FERRY:
                 return FERRY;
-            case VEHICLE_MODES_ENUMERATION_METRO:
+            case METRO:
                 return METRO;
         }
         return null;

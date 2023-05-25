@@ -1,45 +1,33 @@
 package org.entur.vehicles.service;
 
-import com.google.api.gax.core.CredentialsProvider;
 import com.google.api.gax.rpc.AlreadyExistsException;
-import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.pubsub.v1.AckReplyConsumer;
 import com.google.cloud.pubsub.v1.MessageReceiver;
 import com.google.cloud.pubsub.v1.Subscriber;
 import com.google.cloud.pubsub.v1.SubscriptionAdminClient;
-import com.google.cloud.pubsub.v1.SubscriptionAdminSettings;
-import com.google.common.collect.Lists;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.pubsub.v1.ExpirationPolicy;
-import com.google.pubsub.v1.ProjectSubscriptionName;
-import com.google.pubsub.v1.ProjectTopicName;
 import com.google.pubsub.v1.PubsubMessage;
 import com.google.pubsub.v1.PushConfig;
 import com.google.pubsub.v1.Subscription;
+import com.google.pubsub.v1.SubscriptionName;
+import com.google.pubsub.v1.TopicName;
+import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Service;
-import uk.org.siri.www.siri.SiriType;
-import uk.org.siri.www.siri.VehicleMonitoringDeliveryStructure;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Configuration
 @Service
 public class PubSubSubscriber {
 
@@ -50,8 +38,8 @@ public class PubSubSubscriber {
 
   private SubscriptionAdminClient subscriptionAdminClient;
 
-  private ProjectTopicName topic;
-  private ProjectSubscriptionName projectSubscriptionName;
+  private TopicName topic;
+  private SubscriptionName projectSubscriptionName;
   private Map<String, String> appLabels = new HashMap<>();
   @Value("${entur.vehicle-positions.shutdownhook:false}")
   private boolean addManualShutdownhook;
@@ -61,13 +49,11 @@ public class PubSubSubscriber {
                           @Value("${entur.vehicle-positions.gcp.subscription.name}") String subscriptionName,
                           @Value("${entur.vehicle-positions.gcp.topic.project.name}") String topicProjectName,
                           @Value("${entur.vehicle-positions.gcp.topic.name}") String topicName,
-                          @Value("${entur.vehicle-positions.gcp.credentials.path:}") String credentialsPath,
-                          @Value("#{${entur.vehicle-positions.gcp.labels}}") Map<String, String> appLabels,
-                          @Value("${entur.default.gcp.credentials.enabled:false}") boolean defaultGcpCredentialsEnabled) {
+                          @Value("#{${entur.vehicle-positions.gcp.labels}}") Map<String, String> appLabels) {
     this.vehicleRepository = vehicleRepository;
 
-    projectSubscriptionName = ProjectSubscriptionName.of(subscriptionProjectName, subscriptionName);
-    topic = ProjectTopicName.of(topicProjectName, topicName);
+    projectSubscriptionName = SubscriptionName.of(subscriptionProjectName, subscriptionName);
+    topic = TopicName.of(topicProjectName, topicName);
     this.appLabels.putAll(appLabels);
 
     if (System.getenv("HOSTNAME") != null) {
@@ -75,41 +61,7 @@ public class PubSubSubscriber {
     }
 
     try {
-      // todo: refactor this code to used profiles
-      if (defaultGcpCredentialsEnabled) {
-        // used gcp default credentials such as work load identity
-        LOG.info("Use default gcp credentials. ");
-        subscriptionAdminClient = SubscriptionAdminClient.create();
-      } else {
-
-        if (System.getenv("GOOGLE_APPLICATION_CREDENTIALS") != null &&
-                !System.getenv("GOOGLE_APPLICATION_CREDENTIALS").isEmpty()) {
-          LOG.info("Credentials to be read from ENV-variable: {}", System.getenv("GOOGLE_APPLICATION_CREDENTIALS"));
-          subscriptionAdminClient = SubscriptionAdminClient.create();
-        } else {
-          File credentialsFile = new File(credentialsPath);
-          LOG.info(
-                  "Credentials to be read from {}, exists: {}, can read: {}",
-                  credentialsFile.getAbsolutePath(),
-                  credentialsFile.exists(),
-                  credentialsFile.canRead()
-          );
-
-          CredentialsProvider credentialsProvider = () -> GoogleCredentials
-                  .fromStream(new FileInputStream(credentialsFile))
-                  .createScoped(Lists.newArrayList(
-                          "https://www.googleapis.com/auth/cloud-platform",
-                          "https://www.googleapis.com/auth/pubsub"
-                  ));
-
-          subscriptionAdminClient = SubscriptionAdminClient.create(SubscriptionAdminSettings
-                  .newBuilder()
-                  .setCredentialsProvider(credentialsProvider)
-                  .build());
-
-          LOG.info("Credentials read from path: {}", credentialsPath);
-        }
-      }
+      subscriptionAdminClient = SubscriptionAdminClient.create();
       if (addManualShutdownhook) {
         addShutdownHook();
       }
@@ -152,7 +104,7 @@ public class PubSubSubscriber {
                       .setTtl(Duration.newBuilder().setSeconds(86400).build()).build())
               .build());
 
-      LOG.info("Created subscription {}", projectSubscriptionName);
+      LOG.info("Created subscription {} on topic {}", projectSubscriptionName, topic);
 
     } catch (AlreadyExistsException e) {
       LOG.info("Subscription already exists - reconnect to existing {}", projectSubscriptionName);
@@ -167,8 +119,8 @@ public class PubSubSubscriber {
       try {
         LOG.info("Starting subscriber");
         subscriber = Subscriber.newBuilder(subscription.getName(), receiver).build();
-        LOG.info("Started subscriber");
         subscriber.startAsync().awaitRunning();
+        LOG.info("Started subscriber");
 
         subscriber.awaitTerminated();
       } catch (IllegalStateException e) {
@@ -220,30 +172,12 @@ public class PubSubSubscriber {
         PubsubMessage pubsubMessage, AckReplyConsumer ackReplyConsumer
     ) {
 
-      SiriType siriType;
       try {
-        final ByteString data = pubsubMessage.getData();
-
-        siriType = SiriType.parseFrom(data);
-
-      }
-      catch (InvalidProtocolBufferException e) {
+        vehicleRepository.add(
+                VehicleActivityRecord.fromByteBuffer(pubsubMessage.getData().asReadOnlyByteBuffer())
+        );
+      } catch (IOException e) {
         throw new RuntimeException(e);
-      }
-
-      if (siriType.getServiceDelivery() != null) {
-        // Handle trip updates via graph writer runnable
-        if (siriType.getServiceDelivery().getVehicleMonitoringDeliveryCount() > 0) {
-          final List<VehicleMonitoringDeliveryStructure> updateList = siriType
-              .getServiceDelivery()
-              .getVehicleMonitoringDeliveryList();
-
-          for (VehicleMonitoringDeliveryStructure monitoringDeliveryStructure : updateList) {
-            vehicleRepository.addAll(monitoringDeliveryStructure.getVehicleActivityList());
-          }
-
-        }
-
       }
 
       // Ack only after all work for the message is complete.

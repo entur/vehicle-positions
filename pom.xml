@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.rutebanken.superpom</groupId>
 		<artifactId>superpom</artifactId>
-		<version>1.0.11</version>
+		<version>1.0.38</version>
 	</parent>
 	<groupId>org.entur.vehicles</groupId>
 	<artifactId>vehicle-positions</artifactId>
@@ -16,7 +16,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<spring-boot.version>2.6.1</spring-boot.version>
+		<spring-boot.version>2.7.11</spring-boot.version>
 
 		<!-- https://github.com/graphql-java-kickstart/graphql-java-tools/blob/master/README.md#using-maven -->
 		<kotlin.version>1.5.0</kotlin.version>
@@ -25,11 +25,23 @@
 		<log4j2.version>2.15.0</log4j2.version>
 	</properties>
 
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>com.google.cloud</groupId>
+				<artifactId>libraries-bom</artifactId>
+				<version>26.14.0</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>net.logstash.logback</groupId>
 			<artifactId>logstash-logback-encoder</artifactId>
-			<version>7.2</version>
+			<version>7.3</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -68,23 +80,21 @@
 		</dependency>
 		<dependency>
 			<groupId>org.entur</groupId>
-			<artifactId>siri-protobuf-mapper</artifactId>
-			<version>0.6</version>
-			<exclusions>
-				<exclusion>
-					<groupId>com.google.protobuf</groupId>
-					<artifactId>protobuf-java</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.google.protobuf</groupId>
-					<artifactId>protobuf-java-util</artifactId>
-				</exclusion>
-			</exclusions>
+			<artifactId>siri-avro-mapper</artifactId>
+			<version>0.7</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.avro</groupId>
+			<artifactId>avro</artifactId>
+			<version>1.11.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpclient</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.google.cloud</groupId>
 			<artifactId>google-cloud-pubsub</artifactId>
-			<version>1.114.7</version>
 		</dependency>
 
 		<dependency>
