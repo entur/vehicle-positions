@@ -159,7 +159,7 @@ public class VehicleRepository {
         v.setMode(VehicleModeEnumeration.BUS);
       }
 
-      v.setOperator(Operator.getOperator(operatorRef != null ? operatorRef.toString():""));
+      v.setOperator(Operator.getOperator(operatorRef != null ? operatorRef.toString():null));
 
       if (journey.getDirectionRef() != null) {
         v.setDirection( journey.getDirectionRef().toString());
