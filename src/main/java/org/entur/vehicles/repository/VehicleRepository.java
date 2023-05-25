@@ -149,10 +149,10 @@ public class VehicleRepository {
 
       if (journey.getVehicleModes() != null && journey.getVehicleModes().size() > 0) {
         v.setMode(VehicleModeEnumeration.fromValue(journey.getVehicleModes().get(0)));
-      } else {
-        if (journey.getOperatorRef() != null) {
+      } else if (journey.getOperatorRef() != null) {
           v.setMode(resolveModeByOperator(journey.getOperatorRef().toString()));
-        }
+      } else {
+        v.setMode(VehicleModeEnumeration.BUS);
       }
 
       if (journey.getOperatorRef() != null) {
