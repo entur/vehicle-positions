@@ -112,7 +112,7 @@ public class VehicleRepository {
           v.setLine(new Line(lineRef));
         }
       } else {
-        v.setLine(new Line(null));
+        v.setLine(new Line("NOT_SET"));
       }
 
       String serviceJourneyId = null;
@@ -159,7 +159,11 @@ public class VehicleRepository {
         v.setMode(VehicleModeEnumeration.BUS);
       }
 
-      v.setOperator(Operator.getOperator(operatorRef != null ? operatorRef.toString():""));
+      if (operatorRef != null) {
+        v.setOperator(Operator.getOperator(operatorRef.toString()));
+      } else {
+        v.setOperator(Operator.getOperator("NOT_SET"));
+      }
 
       if (journey.getDirectionRef() != null) {
         v.setDirection( journey.getDirectionRef().toString());
