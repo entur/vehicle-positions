@@ -111,6 +111,8 @@ public class VehicleRepository {
         } catch (ExecutionException e) {
           v.setLine(new Line(lineRef));
         }
+      } else {
+        v.setLine(new Line(null));
       }
 
       String serviceJourneyId = null;
