@@ -13,9 +13,6 @@ public class Operator extends ObjectRef {
         .build();
 
     public static Operator getOperator(String id) {
-        if(id == null) {
-            return new Operator(null);
-        }
         try {
             return objectCache.get(id, () -> new Operator(id));
         }
