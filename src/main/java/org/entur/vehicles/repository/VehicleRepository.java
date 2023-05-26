@@ -111,6 +111,8 @@ public class VehicleRepository {
         } catch (ExecutionException e) {
           v.setLine(new Line(lineRef));
         }
+      } else {
+        v.setLine(Line.DEFAULT);
       }
 
       String serviceJourneyId = null;
@@ -159,6 +161,8 @@ public class VehicleRepository {
 
       if (operatorRef != null) {
         v.setOperator(Operator.getOperator(operatorRef.toString()));
+      }else {
+        v.setOperator(Operator.DEFAULT);
       }
 
       if (journey.getDirectionRef() != null) {
