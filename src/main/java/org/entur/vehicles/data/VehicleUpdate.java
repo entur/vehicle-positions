@@ -13,7 +13,7 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private Location location;
   private Double speed;
   private Double bearing;
-  private Long delay;
+  private long delay;
   private String occupancy;
 
   public String getLineRef() {
@@ -98,7 +98,7 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
     return delay;
   }
 
-  public void setDelay(Long delay) {
+  public void setDelay(long delay) {
     this.delay = delay;
   }
 

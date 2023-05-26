@@ -99,8 +99,8 @@ public class VehicleRepository {
         v.getLocation().setLatitude(journey.getVehicleLocation().getLatitude());
       } else {
         v.setLocation(new Location(
-            journey.getVehicleLocation().getLongitude(),
-            journey.getVehicleLocation().getLatitude()
+                journey.getVehicleLocation().getLongitude(),
+                journey.getVehicleLocation().getLatitude()
         ));
       }
 
@@ -135,12 +135,13 @@ public class VehicleRepository {
         v.setLastUpdated(convert(journey.getLocationRecordedAtTime()));
       } else if (vehicleActivity.getRecordedAtTime() != null) {
         v.setLastUpdated(convert(vehicleActivity.getRecordedAtTime()));
-      }
-      else {
+      } else {
         v.setLastUpdated(ZonedDateTime.now());
       }
 
-      v.setMonitored(journey.getMonitored());
+      if (journey.getMonitored() != null) {
+        v.setMonitored(journey.getMonitored());
+      }
 
       if (journey.getBearing() != null) {
         v.setBearing(journey.getBearing().doubleValue());

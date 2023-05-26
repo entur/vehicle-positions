@@ -4,6 +4,8 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import org.entur.vehicles.data.model.Line;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,8 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class LineService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(LineService.class);
 
     @Autowired
     private JourneyPlannerGraphQLClient graphQLClient;
@@ -45,6 +49,7 @@ public class LineService {
                 for (Line line : allLines) {
                     lineCache.put(line.getLineRef(), line);
                 }
+                LOG.info("LineCache initialized with {} lines", lineCache.size());
             }
             catch (IOException e) {
                 e.printStackTrace();
