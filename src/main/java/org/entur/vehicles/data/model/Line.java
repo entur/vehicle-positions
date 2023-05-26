@@ -8,6 +8,8 @@ public class Line extends ObjectRef {
     private String lineName;
     private String publicCode;
 
+    public static final Line DUMMY = new Line();
+
     public Line() {
         super("");
     }

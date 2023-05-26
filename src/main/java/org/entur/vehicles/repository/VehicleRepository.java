@@ -111,8 +111,6 @@ public class VehicleRepository {
         } catch (ExecutionException e) {
           v.setLine(new Line(lineRef));
         }
-      } else {
-        v.setLine(new Line("NOT_SET"));
       }
 
       String serviceJourneyId = null;
@@ -143,10 +141,10 @@ public class VehicleRepository {
       v.setMonitored(journey.getMonitored());
 
       if (journey.getBearing() != null) {
-        v.setBearing(Float.valueOf(journey.getBearing()).doubleValue());
+        v.setBearing(journey.getBearing().doubleValue());
       }
       if (journey.getVelocity() != null) {
-        v.setSpeed(Integer.valueOf(journey.getVelocity()).doubleValue());
+        v.setSpeed(journey.getVelocity().doubleValue());
       }
 
       CharSequence operatorRef = journey.getOperatorRef();
@@ -161,8 +159,6 @@ public class VehicleRepository {
 
       if (operatorRef != null) {
         v.setOperator(Operator.getOperator(operatorRef.toString()));
-      } else {
-        v.setOperator(Operator.getOperator("NOT_SET"));
       }
 
       if (journey.getDirectionRef() != null) {

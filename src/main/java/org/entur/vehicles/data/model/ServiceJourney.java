@@ -4,7 +4,7 @@ public class ServiceJourney extends ObjectRef {
 
     private PointsOnLink pointsOnLink;
 
-    public ServiceJourney() {super("dummy");}
+    public ServiceJourney() {super("");}
     public ServiceJourney(String id) {
         super(id);
     }

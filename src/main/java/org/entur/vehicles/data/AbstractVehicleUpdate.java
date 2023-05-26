@@ -9,11 +9,11 @@ import org.entur.vehicles.data.model.ServiceJourney;
 abstract class AbstractVehicleUpdate {
 
   protected ServiceJourney serviceJourney;
-  protected Operator operator;
+  protected Operator operator = Operator.DEFAULT;
   protected Codespace codespace;
   protected VehicleModeEnumeration mode;
   protected String vehicleRef;
-  protected Line line;
+  protected Line line = Line.DUMMY;
   protected Boolean monitored;
 
   public ServiceJourney getServiceJourney() {

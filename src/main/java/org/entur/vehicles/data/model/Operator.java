@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Operator extends ObjectRef {
 
+    public static final Operator DEFAULT = new Operator("");
     private static Cache<String, Operator> objectCache = CacheBuilder.newBuilder()
         .expireAfterAccess(3600, TimeUnit.SECONDS)
         .build();
