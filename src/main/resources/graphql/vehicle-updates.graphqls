@@ -69,6 +69,7 @@ type VehicleUpdate {
     mode: VehicleModeEnumeration
     vehicleId: String
     vehicleRef: String @deprecated(reason: "Use 'vehicleId'.")
+    occupancy: OccupancyEnumeration
     line: Line
     lastUpdated: DateTime
     lastUpdatedEpochSecond: Float
@@ -130,4 +131,14 @@ enum VehicleModeEnumeration {
     COACH
     FERRY
     METRO
+}
+
+enum OccupancyEnumeration {
+    UNKNOWN
+    MANY_SEATS_AVAILABLE
+    SEATS_AVAILABLE
+    FEW_SEATS_AVAILABLE
+    STANDING_AVAILABLE
+    FULL
+    NOT_ACCEPTING_PASSENGERS
 }

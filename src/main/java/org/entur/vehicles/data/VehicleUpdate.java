@@ -14,7 +14,7 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private Double speed;
   private Double bearing;
   private long delay;
-  private String occupancy;
+  private OccupancyEnumeration occupancy;
 
   public String getLineRef() {
     return super.getLine().getLineRef();
@@ -86,11 +86,11 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
     return bearing;
   }
 
-  public String getOccupancy() {
+  public OccupancyEnumeration getOccupancy() {
     return occupancy;
   }
 
-  public void setOccupancy(String occupancy) {
+  public void setOccupancy(OccupancyEnumeration occupancy) {
     this.occupancy = occupancy;
   }
 

@@ -4,6 +4,7 @@ import com.google.common.base.Objects;
 import com.google.common.collect.Maps;
 import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
+import org.entur.vehicles.data.OccupancyEnumeration;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
@@ -171,7 +172,7 @@ public class VehicleRepository {
       }
 
       if (journey.getOccupancy() != null) {
-        v.setOccupancy(journey.getOccupancy().name());
+        v.setOccupancy(OccupancyEnumeration.fromValue(journey.getOccupancy()));
       }
 
       if (journey.getDelay() != null) {
