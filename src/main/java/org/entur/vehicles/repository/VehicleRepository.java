@@ -140,9 +140,8 @@ public class VehicleRepository {
         v.setLastUpdated(ZonedDateTime.now());
       }
 
-      if (journey.getMonitored() != null) {
-        v.setMonitored(journey.getMonitored());
-      }
+      v.setMonitored(journey.getMonitored() != null ? journey.getMonitored():true);
+
 
       if (journey.getBearing() != null) {
         v.setBearing(journey.getBearing().doubleValue());
