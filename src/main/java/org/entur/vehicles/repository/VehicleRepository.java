@@ -6,6 +6,7 @@ import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.OccupancyEnumeration;
 import org.entur.vehicles.data.VehicleModeEnumeration;
+import org.entur.vehicles.data.VehicleStatusEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.data.model.Codespace;
@@ -174,6 +175,10 @@ public class VehicleRepository {
         v.setOccupancy(OccupancyEnumeration.fromValue(journey.getOccupancy()));
       }
 
+      if (journey.getInCongestion() != null) {
+        v.setInCongestion(journey.getInCongestion());
+      }
+
       if (journey.getDelay() != null) {
         v.setDelay(Duration.parse(journey.getDelay()).getSeconds());
       }
@@ -188,6 +193,10 @@ public class VehicleRepository {
         }
       } else {
         v.setExpiration(ZonedDateTime.now().plusMinutes(10));
+      }
+
+      if (journey.getVehicleStatus() != null) {
+        v.setVehicleStatus(VehicleStatusEnumeration.fromValue(journey.getVehicleStatus()));
       }
 
       vehicles.put(key, v);

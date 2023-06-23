@@ -15,6 +15,8 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private Double bearing;
   private long delay;
   private OccupancyEnumeration occupancy;
+  private VehicleStatusEnumeration vehicleStatus;
+  private Boolean inCongestion;
 
   public String getLineRef() {
     return super.getLine().getLineRef();
@@ -110,5 +112,21 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   @Override
   public int hashCode() {
     return Objects.hashCode(super.hashCode());
+  }
+
+    public void setVehicleStatus(VehicleStatusEnumeration vehicleStatus) {
+        this.vehicleStatus = vehicleStatus;
+    }
+
+    public VehicleStatusEnumeration getVehicleStatus() {
+        return vehicleStatus;
+    }
+
+  public void setInCongestion(Boolean inCongestion) {
+    this.inCongestion = inCongestion;
+  }
+
+  public Boolean getInCongestion() {
+    return inCongestion;
   }
 }

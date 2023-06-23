@@ -84,6 +84,12 @@ type VehicleUpdate {
 
     # The current delay in seconds - negative delay means ahead of schedule
     delay: Float
+
+    # Whether the vehicle is affected by traffic jams or other circumstances which may lead to further delays. If `null`, current status is unknown.
+    inCongestion: Boolean
+
+    # Reported status of the vehicle
+    vehicleStatus: VehicleStatusEnumeration
 }
 
 type Location {
@@ -141,4 +147,13 @@ enum OccupancyEnumeration {
     STANDING_AVAILABLE
     FULL
     NOT_ACCEPTING_PASSENGERS
+}
+
+enum VehicleStatusEnumeration {
+    ASSIGNED
+    AT_ORIGIN
+    CANCELLED
+    COMPLETED
+    IN_PROGRESS
+    OFF_ROUTE
 }
