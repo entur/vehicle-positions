@@ -63,7 +63,7 @@ public class LineService {
     }
 
     private Line lookupLine(String lineRef) {
-        String query = "{\"query\":\"{line(id:\\\"" + lineRef + "\\\"){lineId:id publicCode lineName:name}}\",\"variables\":null}";
+        String query = "{\"query\":\"{line(id:\\\"" + lineRef + "\\\"){lineRef:id publicCode lineName:name}}\",\"variables\":null}";
 
         Data data = null;
         try {
