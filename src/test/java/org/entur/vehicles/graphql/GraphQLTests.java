@@ -8,6 +8,7 @@ import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.repository.AutoPurgingMap;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.ServiceJourneyService;
@@ -21,6 +22,7 @@ import uk.org.siri.siri21.LocationStructure;
 import uk.org.siri.siri21.VehicleActivityStructure;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -42,7 +44,8 @@ public class GraphQLTests {
                 new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)),
                 new LineService(false),
                 new ServiceJourneyService(),
-                180
+                new AutoPurgingMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
+                        180
         );
         repository.addUpdateListener(new VehicleUpdateRxPublisher(repository));
         queryService = new Query(repository);

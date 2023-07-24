@@ -42,7 +42,7 @@ public class VehicleRepository {
   private static final Logger LOG = LoggerFactory.getLogger(VehicleRepository.class);
   private final PrometheusMetricsService metricsService;
 
-  AutoPurgingMap vehicles = new AutoPurgingMap(5);
+  private final AutoPurgingMap vehicles;
 
   private LineService lineService;
 
@@ -58,10 +58,12 @@ public class VehicleRepository {
           @Autowired PrometheusMetricsService metricsService,
           @Autowired LineService lineService,
           @Autowired ServiceJourneyService serviceJourneyService,
+          @Autowired AutoPurgingMap vehicles,
           @Value("${vehicle.updates.max.validity.minutes}") long maxValidityInMinutes) {
     this.metricsService = metricsService;
     this.lineService = lineService;
     this.serviceJourneyService = serviceJourneyService;
+    this.vehicles = vehicles;
     this.maxValidityInMinutes = maxValidityInMinutes;
     zone = ZonedDateTime.now().getZone();
   }
