@@ -3,10 +3,10 @@ default_replicas: 4
 
 resources:
   cpuLimit: '4'
-  memLimit: 5G
+  memLimit: 6G
   cpuRequest: '2'
-  memRequest: 4G
-  xmx: 3G
+  memRequest: 5G
+  xmx: 4G
 
 rollingUpdate:
   maxSurge: 1
