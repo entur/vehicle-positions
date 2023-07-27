@@ -2,9 +2,9 @@ replicas: ${replicas.RUNNING_REPLICAS}
 default_replicas: 4
 
 resources:
-  cpuLimit: '4'
+  cpuLimit: '8'
   memLimit: 6G
-  cpuRequest: '2'
+  cpuRequest: '4'
   memRequest: 5G
   xmx: 4G
 
