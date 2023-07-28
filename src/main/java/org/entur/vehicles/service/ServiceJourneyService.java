@@ -7,8 +7,8 @@ import org.entur.vehicles.data.model.ServiceJourney;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClientException;
 
-import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -47,7 +47,7 @@ public class ServiceJourneyService {
             Data data = null;
             try {
                 data = graphQLClient.executeQuery(query);
-            } catch (IOException e) {
+            } catch (WebClientException e) {
                 // Ignore - return empty ServiceJourney
             }
             if (data != null && data.serviceJourney != null) {
