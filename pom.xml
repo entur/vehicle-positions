@@ -16,7 +16,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<spring-boot.version>3.1.2</spring-boot.version>
+		<spring-boot.version>2.7.14</spring-boot.version>
 		<graphql-starter.version>15.0.0</graphql-starter.version>
 	</properties>
 
