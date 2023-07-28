@@ -3,9 +3,9 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
-		<groupId>org.rutebanken.superpom</groupId>
+		<groupId>org.entur.ror</groupId>
 		<artifactId>superpom</artifactId>
-		<version>1.0.38</version>
+		<version>1.62</version>
 	</parent>
 	<groupId>org.entur.vehicles</groupId>
 	<artifactId>vehicle-positions</artifactId>
@@ -14,10 +14,10 @@
 	<description>GraphQL-service for Vehicle-updates</description>
 
 	<properties>
+		<java.version>17</java.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<spring-boot.version>2.7.14</spring-boot.version>
-		<graphql-starter.version>15.0.0</graphql-starter.version>
+		<graphql-starter.version>14.1.0</graphql-starter.version>
 
 		<!-- https://github.com/graphql-java-kickstart/graphql-java-tools/blob/master/README.md#using-maven -->
 		<kotlin.version>1.8.10</kotlin.version>
@@ -44,17 +44,18 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
-			<version>${spring-boot.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
-			<version>${spring-boot.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webflux</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
-			<version>${spring-boot.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.graphql-java-kickstart</groupId>
@@ -88,10 +89,6 @@
 			<version>1.11.2</version>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.httpcomponents</groupId>
-			<artifactId>httpclient</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>com.google.cloud</groupId>
 			<artifactId>google-cloud-pubsub</artifactId>
 		</dependency>
@@ -104,7 +101,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
-			<version>${spring-boot.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -114,7 +110,6 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<version>${spring-boot.version}</version>
 			</plugin>
 		</plugins>
 	</build>

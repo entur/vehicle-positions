@@ -9,9 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClientException;
 
 import javax.annotation.PostConstruct;
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -51,8 +51,8 @@ public class LineService {
                 }
                 LOG.info("LineCache initialized with {} lines", lineCache.size());
             }
-            catch (IOException e) {
-                e.printStackTrace();
+            catch (WebClientException e) {
+                LOG.error("Error while getting all lines", e);
             }
         }
     }
@@ -68,7 +68,7 @@ public class LineService {
         Data data = null;
         try {
             data = graphQLClient.executeQuery(query);
-        } catch (IOException e) {
+        } catch (WebClientException e) {
             // Ignore - return empty Line
         }
         if (data != null && data.line != null) {
@@ -77,7 +77,7 @@ public class LineService {
         return new Line(lineRef);
     }
 
-    private List<Line> getAllLines() throws IOException {
+    private List<Line> getAllLines() {
         String query = "{\"query\":\"{lines {lineRef:id publicCode lineName:name}}\",\"variables\":null}";
 
         Data data = graphQLClient.executeQuery(query);

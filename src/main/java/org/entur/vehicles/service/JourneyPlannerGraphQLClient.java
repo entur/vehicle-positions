@@ -1,57 +1,48 @@
 package org.entur.vehicles.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.http.HttpEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class JourneyPlannerGraphQLClient {
 
-    private final String graphQlUrl;
+    private static final int HTTP_TIMEOUT_MILLISECONDS = 10000;
 
-    @Value("${vehicle.journeyplanner.EtClientName}")
-    private String etClientNameHeader;
+    private final WebClient webClient;
 
-    public JourneyPlannerGraphQLClient(@Value("${vehicle.journeyplanner.url}") String graphQlUrl) {
-        this.graphQlUrl = graphQlUrl;
+    public JourneyPlannerGraphQLClient(@Value("${vehicle.journeyplanner.url}") String graphQlUrl, @Value("${vehicle.journeyplanner.EtClientName}") String etClientNameHeader) {
+        webClient = WebClient.builder()
+                .baseUrl(graphQlUrl)
+                .defaultHeader("ET-Client-Name", etClientNameHeader)
+                .clientConnector(new ReactorClientHttpConnector(HttpClient.create().option(ChannelOption.CONNECT_TIMEOUT_MILLIS, HTTP_TIMEOUT_MILLISECONDS).doOnConnected(connection -> {
+                    connection.addHandlerLast(new ReadTimeoutHandler(HTTP_TIMEOUT_MILLISECONDS, TimeUnit.MILLISECONDS));
+                    connection.addHandlerLast(new WriteTimeoutHandler(HTTP_TIMEOUT_MILLISECONDS, TimeUnit.MILLISECONDS));
+                }))).build();
     }
 
-
     @Nullable
-    Data executeQuery(String query) throws IOException {
-        CloseableHttpClient httpclient = HttpClients.createDefault();
-        HttpPost httppost = new HttpPost(graphQlUrl);
+    Data executeQuery(String query) {
+        Response graphqlResponse = webClient.post()
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(query)
+                .retrieve()
+                .bodyToMono(Response.class)
+                .block();
 
-        final StringEntity stringEntity = new StringEntity(query);
-        stringEntity.setContentType("application/json");
-        httppost.setEntity(stringEntity);
-
-        httppost.setHeader("ET-Client-Name", etClientNameHeader);
-
-        final CloseableHttpResponse response = httpclient.execute(httppost);
-
-        if (response != null) {
-            final HttpEntity entity = response.getEntity();
-            final InputStream content = entity.getContent();
-            final Response graphqlResponse = new ObjectMapper().readValue(content, Response.class);
-            if (graphqlResponse != null) {
-                return graphqlResponse.data;
-            }
-        }
-        return null;
+        return graphqlResponse == null ? null : graphqlResponse.data;
     }
 }
 /*
