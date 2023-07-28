@@ -18,6 +18,9 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<spring-boot.version>2.7.14</spring-boot.version>
 		<graphql-starter.version>15.0.0</graphql-starter.version>
+
+		<!-- https://github.com/graphql-java-kickstart/graphql-java-tools/blob/master/README.md#using-maven -->
+		<kotlin.version>1.8.10</kotlin.version>
 	</properties>
 
 	<dependencyManagement>
@@ -59,6 +62,11 @@
 			<version>${graphql-starter.version}</version>
 		</dependency>
 
+		<dependency>
+			<groupId>com.graphql-java-kickstart</groupId>
+			<artifactId>graphql-java-tools</artifactId>
+			<version>13.0.3</version>
+		</dependency>
 		<dependency>
 			<groupId>com.graphql-java</groupId>
 			<artifactId>graphql-java</artifactId>
