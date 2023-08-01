@@ -9,6 +9,7 @@ import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,10 +27,13 @@ class Query implements GraphQLQueryResolver {
     private static final Logger LOG = LoggerFactory.getLogger(Query.class);
 
     private final VehicleRepository repository;
-    ;
 
-    public Query(VehicleRepository repository) {
+    PrometheusMetricsService metricsService;
+
+    public Query(VehicleRepository repository,
+                 PrometheusMetricsService metricsService) {
         this.repository = repository;
+        this.metricsService = metricsService;
     }
 
     Collection<VehicleUpdate> getVehicles(String serviceJourneyId, String operator,
@@ -44,6 +48,7 @@ class Query implements GraphQLQueryResolver {
         LOG.debug("Returning {} vehicles in {} ms", vehicles.size(), System.currentTimeMillis() - start);
 
         MDC.remove(TRACING_HEADER_NAME);
+        metricsService.markVehicleQuery();
         return vehicles;
     }
 
@@ -53,6 +58,7 @@ class Query implements GraphQLQueryResolver {
         final List<Line> lines = repository.getLines(codespace);
         LOG.info("Returning {} lines in {} ms", lines.size(), System.currentTimeMillis() - start);
         MDC.remove(TRACING_HEADER_NAME);
+        metricsService.markLinesQuery();
         return lines;
     }
 
@@ -64,6 +70,7 @@ class Query implements GraphQLQueryResolver {
         LOG.info("Returning {} codespaces in {} ms", codespaces.size(), System.currentTimeMillis() - start);
 
         MDC.remove(TRACING_HEADER_NAME);
+        metricsService.markCodespacesQuery();
         return codespaces;
     }
 
@@ -75,6 +82,7 @@ class Query implements GraphQLQueryResolver {
         LOG.info("Returning {} operators in {} ms", operators.size(), System.currentTimeMillis() - start);
 
         MDC.remove(TRACING_HEADER_NAME);
+        metricsService.markOperatorsQuery();
         return operators;
     }
 
@@ -86,6 +94,7 @@ class Query implements GraphQLQueryResolver {
         LOG.info("Returning {} serviceJourneys in {} ms", serviceJourneys.size(), System.currentTimeMillis() - start);
 
         MDC.remove(TRACING_HEADER_NAME);
+        metricsService.markServiceJourneysQuery();
         return serviceJourneys;
     }
 
@@ -97,6 +106,7 @@ class Query implements GraphQLQueryResolver {
         LOG.info("Returning serviceJourney in {} ms", serviceJourney, System.currentTimeMillis() - start);
 
         MDC.remove(TRACING_HEADER_NAME);
+        metricsService.markServiceJourneyQuery();
         return serviceJourney;
     }
 }

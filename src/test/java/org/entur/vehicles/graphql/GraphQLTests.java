@@ -40,15 +40,16 @@ public class GraphQLTests {
 
     @BeforeEach
     public void initData() {
+        PrometheusMetricsService metricsService = new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
         repository = new VehicleRepository(
-                new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)),
+                metricsService,
                 new LineService(false),
                 new ServiceJourneyService(),
                 new AutoPurgingMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                         180
         );
         repository.addUpdateListener(new VehicleUpdateRxPublisher(repository));
-        queryService = new Query(repository);
+        queryService = new Query(repository, metricsService);
 
         VehicleActivityStructure vm = new VehicleActivityStructure();
         vm.setRecordedAtTime(ZonedDateTime.now());
