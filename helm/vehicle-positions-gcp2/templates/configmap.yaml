@@ -19,6 +19,8 @@ data:
       vehicle.journeyplanner.EtClientName={{ .Values.configMap.EtClientName }}
       vehicle.serviceJourney.lookup.enabled={{ .Values.configMap.serviceJourneyLookupEnabled }}
       vehicle.updates.max.validity.minutes=1440
+      vehicle.updates.expiry.grace.period=PT10M
+      
       vehicle.line.lookup.enabled=true
 
       management.endpoints.web.exposure.include=info, health, prometheus, env, metrics, loggers
