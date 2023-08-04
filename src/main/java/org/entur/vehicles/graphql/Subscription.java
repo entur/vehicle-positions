@@ -5,11 +5,11 @@ import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.data.model.BoundingBox;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -24,8 +24,12 @@ class Subscription implements GraphQLSubscriptionResolver {
 
     private final VehicleUpdateRxPublisher vehicleUpdater;
 
-    Subscription(@Autowired VehicleUpdateRxPublisher vehicleUpdater) {
+    PrometheusMetricsService metricsService;
+
+    Subscription(VehicleUpdateRxPublisher vehicleUpdater,
+                 PrometheusMetricsService metricsService) {
         this.vehicleUpdater = vehicleUpdater;
+        this.metricsService = metricsService;
     }
 
     Publisher<List<VehicleUpdate>> vehicles(String serviceJourneyId, String operator,
@@ -35,11 +39,14 @@ class Subscription implements GraphQLSubscriptionResolver {
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
         LOG.debug("Creating new subscription with filter: {}", filter);
         MDC.remove(TRACING_HEADER_NAME);
+        metricsService.markSubscription();
         return vehicleUpdater.getPublisher(filter, uuid);
     }
 
     Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleRef, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
+
+        metricsService.markSubscription();
         return vehicles(serviceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
     }
 

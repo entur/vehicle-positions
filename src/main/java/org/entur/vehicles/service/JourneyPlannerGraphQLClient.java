@@ -30,7 +30,11 @@ public class JourneyPlannerGraphQLClient {
                 .clientConnector(new ReactorClientHttpConnector(HttpClient.create().option(ChannelOption.CONNECT_TIMEOUT_MILLIS, HTTP_TIMEOUT_MILLISECONDS).doOnConnected(connection -> {
                     connection.addHandlerLast(new ReadTimeoutHandler(HTTP_TIMEOUT_MILLISECONDS, TimeUnit.MILLISECONDS));
                     connection.addHandlerLast(new WriteTimeoutHandler(HTTP_TIMEOUT_MILLISECONDS, TimeUnit.MILLISECONDS));
-                }))).build();
+                })))
+                .codecs(codecs -> codecs
+                        .defaultCodecs()
+                        .maxInMemorySize(500 * 1024))
+                .build();
     }
 
     @Nullable

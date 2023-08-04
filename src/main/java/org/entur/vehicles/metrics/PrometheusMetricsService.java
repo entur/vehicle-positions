@@ -35,6 +35,8 @@ public class PrometheusMetricsService {
 
     private static final String METRICS_PREFIX = "app.vehicles.";
     private static final String DATA_COUNTER_NAME = METRICS_PREFIX + "data";
+    private static final String QUERY_COUNTER_NAME = METRICS_PREFIX + "query";
+    private static final String SUBSCRIPTION_COUNTER_NAME = METRICS_PREFIX + "subscription";
     private static final String CODESPACE_TAG_NAME = "codespaceId";
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
@@ -42,6 +44,14 @@ public class PrometheusMetricsService {
     private long lastLoggedCountTimeMillis = System.currentTimeMillis();
 
     private AtomicInteger counter = new AtomicInteger(0);
+
+    private static final String QUERY_TYPE = "queryType";
+    private static final String VEHICLES = "vehicles";
+    private static final String LINES = "lines";
+    private static final String SERVICE_JOURNEYS = "serviceJourneys";
+    private static final String SERVICE_JOURNEY = "serviceJourney";
+    private static final String OPERATORS = "operators";
+    private static final String CODESPACES = "codespaces";
 
     public PrometheusMetricsService(@Autowired PrometheusMeterRegistry prometheusMeterRegistry) {
         this.prometheusMeterRegistry = prometheusMeterRegistry;
@@ -81,4 +91,38 @@ public class PrometheusMetricsService {
         return rate;
     }
 
+    public void markSubscription() {
+        prometheusMeterRegistry
+                .counter(SUBSCRIPTION_COUNTER_NAME)
+                .increment();
+    }
+
+    private void markQuery(String queryType) {
+        List<Tag> counterTags = new ArrayList<>();
+        counterTags.add(new ImmutableTag(QUERY_TYPE, queryType));
+
+        prometheusMeterRegistry
+                .counter(QUERY_COUNTER_NAME, counterTags)
+                .increment();
+    }
+
+    public void markVehicleQuery() {
+        markQuery(VEHICLES);
+    }
+    public void markLinesQuery() {
+        markQuery(LINES);
+    }
+    public void markServiceJourneyQuery() {
+        markQuery(SERVICE_JOURNEY);
+    }
+    public void markServiceJourneysQuery() {
+        markQuery(SERVICE_JOURNEYS);
+    }
+
+    public void markOperatorsQuery() {
+        markQuery(OPERATORS);
+    }
+    public void markCodespacesQuery() {
+        markQuery(CODESPACES);
+    }
 }

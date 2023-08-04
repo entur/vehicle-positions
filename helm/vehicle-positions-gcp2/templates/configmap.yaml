@@ -19,13 +19,18 @@ data:
       vehicle.journeyplanner.EtClientName={{ .Values.configMap.EtClientName }}
       vehicle.serviceJourney.lookup.enabled={{ .Values.configMap.serviceJourneyLookupEnabled }}
       vehicle.updates.max.validity.minutes=1440
+      vehicle.updates.expiry.grace.period=PT10M
+      
       vehicle.line.lookup.enabled=true
 
       management.endpoints.web.exposure.include=info, health, prometheus, env, metrics, loggers
       management.endpoints.prometheus.enabled=true
       management.metrics.endpoint.export.prometheus.enabled=true
 
-      graphql.servlet.actuator-metrics=true
+      # Disabling metrics + tracing, causes excessive memory-usage
+      graphql.servlet.actuator-metrics=false
+      graphql.servlet.tracing-enabled=false
+      
       graphiql.enabled={{ .Values.configMap.graphiqlEnabled }}
       graphiql.static.basePath=/realtime/v1/vehicles/
       graphiql.endpoint.graphql=/realtime/v1/vehicles/graphql
