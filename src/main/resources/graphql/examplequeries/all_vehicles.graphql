@@ -1,0 +1,27 @@
+{
+  vehicles{
+    line {
+      lineRef
+    }
+    lastUpdated
+    location {
+      latitude
+      longitude
+    }
+  }
+}
+
+# Subscription-example
+#
+# subscription {
+#   vehicles{
+#     line {
+#       lineRef
+#     }
+#     lastUpdated
+#     location {
+#       latitude
+#       longitude
+#     }
+#   }
+# }
