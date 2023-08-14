@@ -2,7 +2,9 @@ package org.entur.vehicles.graphql;
 
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
-import org.entur.avro.realtime.siri.converter.jaxb2avro.Jaxb2AvroConverter;
+import org.entur.avro.realtime.siri.model.FramedVehicleJourneyRefRecord;
+import org.entur.avro.realtime.siri.model.LocationRecord;
+import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
@@ -15,13 +17,7 @@ import org.entur.vehicles.service.ServiceJourneyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import uk.org.siri.siri21.DataFrameRefStructure;
-import uk.org.siri.siri21.FramedVehicleJourneyRefStructure;
-import uk.org.siri.siri21.LineRef;
-import uk.org.siri.siri21.LocationStructure;
-import uk.org.siri.siri21.VehicleActivityStructure;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
@@ -51,27 +47,27 @@ public class GraphQLTests {
         repository.addUpdateListener(new VehicleUpdateRxPublisher(repository));
         queryService = new Query(repository, metricsService);
 
-        VehicleActivityStructure vm = new VehicleActivityStructure();
-        vm.setRecordedAtTime(ZonedDateTime.now());
-        vm.setValidUntilTime(ZonedDateTime.now().plusMinutes(10));
-        VehicleActivityStructure.MonitoredVehicleJourney monitoredVehicleJourney = new VehicleActivityStructure.MonitoredVehicleJourney();
-            LineRef lineRef = new LineRef();
-            lineRef.setValue("TST:Line:123");
-        monitoredVehicleJourney.setLineRef(lineRef);
-            FramedVehicleJourneyRefStructure framedVehicleJourneyRef = new FramedVehicleJourneyRefStructure();
-            DataFrameRefStructure dataFrameRef = new DataFrameRefStructure();
-            dataFrameRef.setValue("2020-12-15");
-            framedVehicleJourneyRef.setDataFrameRef(dataFrameRef);
-            framedVehicleJourneyRef.setDatedVehicleJourneyRef("TST:ServiceJourney:1234567890");
-            monitoredVehicleJourney.setFramedVehicleJourneyRef(framedVehicleJourneyRef);
-            monitoredVehicleJourney.setMonitored(true);
-            monitoredVehicleJourney.setDataSource("TST");
-        LocationStructure vehicleLocation = new LocationStructure();
-        vehicleLocation.setLongitude(BigDecimal.valueOf(10.910261));
-        vehicleLocation.setLatitude(BigDecimal.valueOf(59.09739));
+        VehicleActivityRecord vehicleActivityRecord = new VehicleActivityRecord();
+        vehicleActivityRecord.setRecordedAtTime(ZonedDateTime.now().toString());
+        vehicleActivityRecord.setValidUntilTime(ZonedDateTime.now().plusMinutes(10).toString());
+
+        MonitoredVehicleJourneyRecord monitoredVehicleJourney = new MonitoredVehicleJourneyRecord();
+        monitoredVehicleJourney.setLineRef("TST:Line:123");
+
+        FramedVehicleJourneyRefRecord framedVehicleJourneyRef = new FramedVehicleJourneyRefRecord();
+        framedVehicleJourneyRef.setDataFrameRef("2020-12-15");
+        framedVehicleJourneyRef.setDatedVehicleJourneyRef("TST:ServiceJourney:1234567890");
+        monitoredVehicleJourney.setFramedVehicleJourneyRef(framedVehicleJourneyRef);
+
+        monitoredVehicleJourney.setMonitored(true);
+        monitoredVehicleJourney.setDataSource("TST");
+
+        LocationRecord vehicleLocation = new LocationRecord();
+        vehicleLocation.setLongitude(10.910261);
+        vehicleLocation.setLatitude(59.09739);
         monitoredVehicleJourney.setVehicleLocation(vehicleLocation);
-        vm.setMonitoredVehicleJourney(monitoredVehicleJourney);
-        VehicleActivityRecord vehicleActivityRecord = Jaxb2AvroConverter.convert(vm);
+
+        vehicleActivityRecord.setMonitoredVehicleJourney(monitoredVehicleJourney);
 
         repository.addAll(Arrays.asList(vehicleActivityRecord));
     }
