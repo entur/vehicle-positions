@@ -19,6 +19,9 @@ configMap:
   journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql
   serviceJourneyLookupEnabled: false
+  parallel:
+    streamcount: 1
+    threadcount: 5
 
 secretMount:
   name: vehicle-positions

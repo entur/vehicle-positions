@@ -12,6 +12,12 @@ data:
       entur.vehicle-positions.gcp.topic.project.name={{.Values.configMap.topicProjectId}}
       entur.vehicle-positions.gcp.topic.name={{.Values.configMap.topicName}}
       entur.vehicle-positions.gcp.labels={app:'vehicle-positions',team:'ror', slack:'talk-ror', manager:'application'}
+      
+      # Number of pubsub-streams to open
+      entur.vehicle-positions.pubsub.parallel.pullcount={{.Values.configMap.parallel.streamcount}}
+      # Number of executor-threads per stream
+      entur.vehicle-positions.pubsub.parallel.executorThreadCount={{.Values.configMap.parallel.threadcount}}
+    
       entur.vehicle-positions.shutdownhook=false
       entur.default.gcp.credentials.enabled=true
 

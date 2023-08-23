@@ -1,5 +1,6 @@
 package org.entur.vehicles.service;
 
+import com.google.api.gax.core.InstantiatingExecutorProvider;
 import com.google.api.gax.rpc.AlreadyExistsException;
 import com.google.cloud.pubsub.v1.AckReplyConsumer;
 import com.google.cloud.pubsub.v1.MessageReceiver;
@@ -12,6 +13,8 @@ import com.google.pubsub.v1.PushConfig;
 import com.google.pubsub.v1.Subscription;
 import com.google.pubsub.v1.SubscriptionName;
 import com.google.pubsub.v1.TopicName;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
@@ -20,8 +23,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -33,6 +34,8 @@ public class PubSubSubscriber {
 
   private static final Logger LOG = LoggerFactory.getLogger(PubSubSubscriber.class.getName());
   private final int reconnectPeriodSec = 5;
+  private final int parallelPullCount;
+  private final int executorThreadCount;
 
   private VehicleRepository vehicleRepository;
 
@@ -49,8 +52,12 @@ public class PubSubSubscriber {
                           @Value("${entur.vehicle-positions.gcp.subscription.name}") String subscriptionName,
                           @Value("${entur.vehicle-positions.gcp.topic.project.name}") String topicProjectName,
                           @Value("${entur.vehicle-positions.gcp.topic.name}") String topicName,
+                          @Value("${entur.vehicle-positions.pubsub.parallel.pullcount:1}") int parallelPullCount,
+                          @Value("${entur.vehicle-positions.pubsub.parallel.executorThreadCount:5}") int executorThreadCount,
                           @Value("#{${entur.vehicle-positions.gcp.labels}}") Map<String, String> appLabels) {
     this.vehicleRepository = vehicleRepository;
+    this.parallelPullCount = parallelPullCount;
+    this.executorThreadCount = executorThreadCount;
 
     projectSubscriptionName = SubscriptionName.of(subscriptionProjectName, subscriptionName);
     topic = TopicName.of(topicProjectName, topicName);
@@ -118,7 +125,13 @@ public class PubSubSubscriber {
     while (true) {
       try {
         LOG.info("Starting subscriber");
-        subscriber = Subscriber.newBuilder(subscription.getName(), receiver).build();
+        subscriber = Subscriber.newBuilder(subscription.getName(), receiver)
+                .setParallelPullCount(parallelPullCount)
+                .setExecutorProvider(
+                        InstantiatingExecutorProvider.newBuilder()
+                                .setExecutorThreadCount(executorThreadCount)
+                                .build()
+                ).build();
         subscriber.startAsync().awaitRunning();
         LOG.info("Started subscriber");
 
