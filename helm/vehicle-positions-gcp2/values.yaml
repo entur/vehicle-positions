@@ -45,4 +45,4 @@ service:
 hpa:
   maxReplicas: 20
   minReplicas: 2
-  targetCPUUtilizationPercentage: 60
+  targetCPUUtilizationPercentage: 80
