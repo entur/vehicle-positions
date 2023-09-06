@@ -120,18 +120,22 @@ public class VehicleRepository {
       }
 
       String serviceJourneyId = null;
+      String date = null;
       if (journey.getFramedVehicleJourneyRef() != null &&
               journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef() != null) {
         serviceJourneyId = journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef().toString();
+        date = journey.getFramedVehicleJourneyRef().getDataFrameRef().toString();
       } else if (journey.getVehicleJourneyRef() != null) {
         serviceJourneyId = journey.getVehicleJourneyRef().toString();
       }
 
       if (serviceJourneyId != null) {
         try {
-          v.setServiceJourney(serviceJourneyService.getServiceJourney(serviceJourneyId));
+          ServiceJourney serviceJourney = serviceJourneyService.getServiceJourney(serviceJourneyId);
+          serviceJourney.setDate(date);
+          v.setServiceJourney(serviceJourney);
         } catch (ExecutionException e) {
-          v.setServiceJourney(new ServiceJourney(serviceJourneyId));
+          v.setServiceJourney(new ServiceJourney(serviceJourneyId, date));
         }
       }
 
@@ -155,7 +159,7 @@ public class VehicleRepository {
 
       CharSequence operatorRef = journey.getOperatorRef();
 
-      if (journey.getVehicleModes() != null && journey.getVehicleModes().size() > 0) {
+      if (containsValues(journey.getVehicleModes())) {
         v.setMode(VehicleModeEnumeration.fromValue(journey.getVehicleModes().get(0)));
       } else if (operatorRef != null) {
           v.setMode(resolveModeByOperator(operatorRef.toString()));
@@ -171,6 +175,22 @@ public class VehicleRepository {
 
       if (journey.getDirectionRef() != null) {
         v.setDirection( journey.getDirectionRef().toString());
+      }
+
+      if (containsValues(journey.getOriginNames())) {
+        v.setOriginName(journey.getOriginNames().get(0).getValue().toString());
+      }
+
+      if (journey.getOriginRef() != null) {
+        v.setOriginRef(journey.getOriginRef().toString());
+      }
+
+      if (containsValues(journey.getDestinationNames())) {
+        v.setDestinationName(journey.getDestinationNames().get(0).getValue().toString());
+      }
+
+      if (journey.getDestinationRef() != null) {
+        v.setDestinationRef(journey.getDestinationRef().toString());
       }
 
       if (journey.getOccupancy() != null) {
@@ -209,6 +229,10 @@ public class VehicleRepository {
     catch (RuntimeException e) {
       LOG.warn("Update ignored.", e);
     }
+  }
+
+  private static boolean containsValues(List list) {
+    return list != null && !list.isEmpty();
   }
 
   private VehicleModeEnumeration resolveModeByOperator(String operator) {

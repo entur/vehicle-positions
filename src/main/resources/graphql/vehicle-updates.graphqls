@@ -66,6 +66,10 @@ type VehicleUpdate {
     serviceJourney: ServiceJourney
     operator: Operator
     codespace: Codespace
+    originRef: String
+    originName: String
+    destinationRef: String
+    destinationName: String
     mode: VehicleModeEnumeration
     vehicleId: String
     vehicleRef: String @deprecated(reason: "Use 'vehicleId'.")
@@ -108,7 +112,10 @@ type Codespace {
 }
 
 type ServiceJourney {
+    # ID that defines this journey
     id: String!
+    # Date as provided when realtime-updates are referenced by ServiceJourneyId + Date
+    date: String
     serviceJourneyId: String! @deprecated(reason: "Use 'id' instead.")
     pointsOnLink: PointsOnLink  @deprecated(reason: "Experimental - should not be used with subscription")
 }

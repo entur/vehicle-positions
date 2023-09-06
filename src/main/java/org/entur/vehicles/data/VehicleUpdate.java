@@ -18,6 +18,11 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private VehicleStatusEnumeration vehicleStatus;
   private Boolean inCongestion;
 
+  private String originName;
+  private String originRef;
+  private String destinationName;
+  private String destinationRef;
+
   public String getLineRef() {
     return super.getLine().getLineRef();
   }
@@ -128,5 +133,36 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
 
   public Boolean getInCongestion() {
     return inCongestion;
+  }
+
+  public String getOriginName() {
+    return originName;
+  }
+
+  public void setOriginName(String originName) {
+    this.originName = originName;
+  }
+
+  public String getDestinationName() {
+    return destinationName;
+  }
+
+  public void setDestinationName(String destinationName) {
+    this.destinationName = destinationName;
+  }
+
+  public void setOriginRef(String originRef) {
+    this.originRef = originRef;
+  }
+
+  public void setDestinationRef(String destinationRef) {
+    this.destinationRef = destinationRef;
+  }
+
+  public String getOriginRef() {
+    return originRef;
+  }
+  public String getDestinationRef() {
+    return destinationRef;
   }
 }

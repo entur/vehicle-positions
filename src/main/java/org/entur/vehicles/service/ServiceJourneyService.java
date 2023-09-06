@@ -29,7 +29,7 @@ public class ServiceJourneyService {
                     if (serviceJourneyLookupEnabled) {
                         return lookupServiceJourney(serviceJourneyId);
                     }
-                    return new ServiceJourney(serviceJourneyId, null);
+                    return new ServiceJourney(serviceJourneyId);
                 }
             });
 
