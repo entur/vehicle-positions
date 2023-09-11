@@ -2,6 +2,7 @@ package org.entur.vehicles.repository;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.Maps;
+import com.google.transit.realtime.GtfsRealtime;
 import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.OccupancyEnumeration;
@@ -26,6 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Collection;
@@ -220,6 +222,127 @@ public class VehicleRepository {
       if (journey.getVehicleStatus() != null) {
         v.setVehicleStatus(VehicleStatusEnumeration.fromValue(journey.getVehicleStatus()));
       }
+
+      vehicles.put(key, v);
+      publisher.publishUpdate(v);
+
+      metricsService.markUpdate(1, v.getCodespace());
+    }
+    catch (RuntimeException e) {
+      LOG.warn("Update ignored.", e);
+    }
+  }
+
+  public void add(GtfsRealtime.VehiclePosition vehiclePosition) {
+
+    try {
+
+      if (!vehiclePosition.hasPosition()) {
+        // No location set - ignoring
+        return;
+      }
+
+      final Codespace codespace = Codespace.getCodespace("GTFS");
+
+      String vehicleRef = null;
+      if (vehiclePosition.hasVehicle()) {
+        vehicleRef = vehiclePosition.getVehicle().getId();
+      }
+
+      final VehicleKey key = new VehicleKey(codespace, vehicleRef);
+
+      final VehicleUpdate v = vehicles.getOrDefault(key, new VehicleUpdate());
+
+      // TODO
+      v.setCodespace(codespace);
+
+      v.setVehicleRef(vehicleRef);
+
+      if (v.getLocation() != null) {
+        v.getLocation().setLongitude(Float.valueOf(vehiclePosition.getPosition().getLongitude()).doubleValue());
+        v.getLocation().setLatitude(Float.valueOf(vehiclePosition.getPosition().getLatitude()).doubleValue());
+      } else {
+        v.setLocation(new Location(
+                Float.valueOf(vehiclePosition.getPosition().getLongitude()).doubleValue(),
+                Float.valueOf(vehiclePosition.getPosition().getLatitude()).doubleValue()
+        ));
+      }
+
+      if (vehiclePosition.getTrip().hasRouteId()) {
+        String lineRef = vehiclePosition.getTrip().getRouteId();
+        try {
+          v.setLine(lineService.getLine(lineRef));
+        } catch (ExecutionException e) {
+          v.setLine(new Line(lineRef));
+        }
+      } else {
+        v.setLine(Line.DEFAULT);
+      }
+
+      String tripId = null;
+      String date = null;
+      if (vehiclePosition.hasTrip()) {
+        if (vehiclePosition.getTrip().hasTripId()) {
+          tripId = vehiclePosition.getTrip().getTripId();
+          date = vehiclePosition.getTrip().getStartDate();
+        }
+        if (vehiclePosition.getTrip().hasDirectionId()) {
+          v.setDirection("" + vehiclePosition.getTrip().getDirectionId());
+        }
+      }
+
+      if (tripId != null) {
+        try {
+          ServiceJourney serviceJourney = serviceJourneyService.getServiceJourney(tripId);
+          serviceJourney.setDate(date);
+          v.setServiceJourney(serviceJourney);
+        } catch (ExecutionException e) {
+          v.setServiceJourney(new ServiceJourney(tripId, date));
+        }
+      }
+
+      if (vehiclePosition.hasTimestamp()) {
+        v.setLastUpdated(
+                ZonedDateTime.ofInstant(
+                        Instant.ofEpochSecond(vehiclePosition.getTimestamp()), ZoneId.systemDefault())
+        );
+      }
+
+      // TODO - maybe not relevant?
+      v.setMonitored(true);
+
+
+      if (vehiclePosition.getPosition().hasBearing()) {
+        v.setBearing(Float.valueOf(vehiclePosition.getPosition().getBearing()).doubleValue());
+      }
+      if (vehiclePosition.getPosition().hasSpeed()) {
+        v.setSpeed(Float.valueOf(vehiclePosition.getPosition().getSpeed()).doubleValue());
+      }
+
+      // TODO
+      v.setOperator(Operator.DEFAULT);
+
+      // TODO
+      v.setMode(VehicleModeEnumeration.BUS);
+
+      if (vehiclePosition.hasOccupancyStatus()) {
+        v.setOccupancy(OccupancyEnumeration.valueOf(vehiclePosition.getOccupancyStatus().toString()));
+      }
+
+      if (vehiclePosition.hasCongestionLevel()) {
+        // TODO
+        v.setInCongestion(false);
+      }
+
+      // TODO
+      v.setDelay(Duration.ZERO.getSeconds());
+
+      // TODO
+      v.setExpiration(ZonedDateTime.now().plusMinutes(10));
+
+      // TODO
+      v.setVehicleStatus(VehicleStatusEnumeration.IN_PROGRESS);
+
 
       vehicles.put(key, v);
       publisher.publishUpdate(v);

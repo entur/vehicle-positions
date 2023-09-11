@@ -93,6 +93,13 @@
 			<artifactId>google-cloud-pubsub</artifactId>
 		</dependency>
 
+		<!-- https://mvnrepository.com/artifact/io.mobilitydata.transit/gtfs-realtime-bindings -->
+		<dependency>
+			<groupId>io.mobilitydata.transit</groupId>
+			<artifactId>gtfs-realtime-bindings</artifactId>
+			<version>0.0.5</version>
+		</dependency>
+
 		<dependency>
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
