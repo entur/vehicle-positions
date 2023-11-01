@@ -27,7 +27,7 @@
 			<dependency>
 				<groupId>com.google.cloud</groupId>
 				<artifactId>libraries-bom</artifactId>
-				<version>26.19.0</version>
+				<version>26.26.0</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -65,12 +65,12 @@
 		<dependency>
 			<groupId>com.graphql-java-kickstart</groupId>
 			<artifactId>graphql-java-tools</artifactId>
-			<version>13.0.3</version>
+			<version>13.1.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.graphql-java</groupId>
 			<artifactId>graphql-java</artifactId>
-			<version>21.0</version>
+			<version>21.3</version>
 		</dependency>
 
 		<dependency>
@@ -81,12 +81,12 @@
 		<dependency>
 			<groupId>org.entur</groupId>
 			<artifactId>siri-avro-model</artifactId>
-			<version>1.0.1</version>
+			<version>1.0.3</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.avro</groupId>
 			<artifactId>avro</artifactId>
-			<version>1.11.2</version>
+			<version>1.11.3</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.cloud</groupId>
