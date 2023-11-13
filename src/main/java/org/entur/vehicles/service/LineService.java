@@ -63,16 +63,19 @@ public class LineService {
     }
 
     private Line lookupLine(String lineRef) {
-        String query = "{\"query\":\"{line(id:\\\"" + lineRef + "\\\"){lineRef:id publicCode lineName:name}}\",\"variables\":null}";
+        // No need to attempt lookup if id does not match pattern
+        if (lineRef.contains(":Line:")) {
+            String query = "{\"query\":\"{line(id:\\\"" + lineRef + "\\\"){lineRef:id publicCode lineName:name}}\",\"variables\":null}";
 
-        Data data = null;
-        try {
-            data = graphQLClient.executeQuery(query);
-        } catch (WebClientException e) {
-            // Ignore - return empty Line
-        }
-        if (data != null && data.line != null) {
-            return data.line;
+            Data data = null;
+            try {
+                data = graphQLClient.executeQuery(query);
+            } catch (WebClientException e) {
+                // Ignore - return empty Line
+            }
+            if (data != null && data.line != null) {
+                return data.line;
+            }
         }
         return new Line(lineRef);
     }
