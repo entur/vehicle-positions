@@ -40,7 +40,7 @@ public class GraphQLTests {
         repository = new VehicleRepository(
                 metricsService,
                 new LineService(false),
-                new ServiceJourneyService(),
+                new ServiceJourneyService(false),
                 new AutoPurgingMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                         180
         );

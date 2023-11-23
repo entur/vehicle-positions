@@ -14,7 +14,10 @@ import org.springframework.web.reactive.function.client.WebClientException;
 
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class LineService {
@@ -24,9 +27,21 @@ public class LineService {
     @Autowired
     private JourneyPlannerGraphQLClient graphQLClient;
 
+    @Value("${vehicle.line.concurrent.requests:2}")
+    private int concurrentRequests;
+
+    ExecutorService asyncExecutorService;
+
     private boolean lineLookupEnabled;
+
+    boolean initialized = false;
+    private AtomicInteger concurrentRequestCounter = new AtomicInteger();
+
     public LineService(@Value("${vehicle.line.lookup.enabled:false}") boolean lineLookupEnabled) {
         this.lineLookupEnabled = lineLookupEnabled;
+        if (lineLookupEnabled) {
+            asyncExecutorService = Executors.newFixedThreadPool(concurrentRequests);
+        }
     }
 
     private LoadingCache<String, Line> lineCache = CacheBuilder.newBuilder()
@@ -65,17 +80,27 @@ public class LineService {
     private Line lookupLine(String lineRef) {
         // No need to attempt lookup if id does not match pattern
         if (lineRef.contains(":Line:")) {
-            String query = "{\"query\":\"{line(id:\\\"" + lineRef + "\\\"){lineRef:id publicCode lineName:name}}\",\"variables\":null}";
 
-            Data data = null;
-            try {
-                data = graphQLClient.executeQuery(query);
-            } catch (WebClientException e) {
-                // Ignore - return empty Line
-            }
-            if (data != null && data.line != null) {
-                return data.line;
-            }
+            asyncExecutorService.submit(() -> {
+                String query = "{\"query\":\"{line(id:\\\"" + lineRef + "\\\"){lineRef:id publicCode lineName:name}}\",\"variables\":null}";
+
+                Data data = null;
+                try {
+                    data = graphQLClient.executeQuery(query);
+                } catch (WebClientException e) {
+                    // Ignore - return empty Line
+                }
+                if (data != null && data.serviceJourney != null) {
+                    lineCache.put(lineRef, data.line);
+                }
+                int waitingRequests = concurrentRequestCounter.decrementAndGet();
+                if (waitingRequests == 0) {
+                    if (!initialized) {
+                        LOG.info("Cache initialization complete");
+                        initialized = true;
+                    }
+                }
+            });
         }
         return new Line(lineRef);
     }
