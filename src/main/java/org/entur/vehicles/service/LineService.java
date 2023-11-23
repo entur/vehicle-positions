@@ -40,6 +40,9 @@ public class LineService {
     public LineService(@Value("${vehicle.line.lookup.enabled:false}") boolean lineLookupEnabled) {
         this.lineLookupEnabled = lineLookupEnabled;
         if (lineLookupEnabled) {
+            if (concurrentRequests < 1) {
+                concurrentRequests = 1;
+            }
             asyncExecutorService = Executors.newFixedThreadPool(concurrentRequests);
         }
     }

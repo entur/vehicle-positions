@@ -38,6 +38,9 @@ public class ServiceJourneyService {
     public ServiceJourneyService(@Value("${vehicle.serviceJourney.lookup.enabled:true}") boolean serviceJourneyLookupEnabled) {
         this.serviceJourneyLookupEnabled = serviceJourneyLookupEnabled;
         if (serviceJourneyLookupEnabled) {
+            if (concurrentRequests < 1) {
+                concurrentRequests = 1;
+            }
             asyncExecutorService = Executors.newFixedThreadPool(concurrentRequests);
         }
     }
