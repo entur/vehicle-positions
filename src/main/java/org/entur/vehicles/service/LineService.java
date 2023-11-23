@@ -5,6 +5,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
 import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,9 @@ public class LineService {
 
     @Autowired
     private JourneyPlannerGraphQLClient graphQLClient;
+
+    @Autowired
+    private PrometheusMetricsService metricsService;
 
     @Value("${vehicle.line.concurrent.requests:2}")
     private int concurrentRequests;
@@ -87,14 +91,16 @@ public class LineService {
             asyncExecutorService.submit(() -> {
                 String query = "{\"query\":\"{line(id:\\\"" + lineRef + "\\\"){lineRef:id publicCode lineName:name}}\",\"variables\":null}";
 
-                Data data = null;
                 try {
-                    data = graphQLClient.executeQuery(query);
+                    metricsService.markJourneyPlannerRequest("line");
+                    Data data = graphQLClient.executeQuery(query);
+
+                    if (data != null && data.serviceJourney != null) {
+                        metricsService.markJourneyPlannerResponse("line");
+                        lineCache.put(lineRef, data.line);
+                    }
                 } catch (WebClientException e) {
                     // Ignore - return empty Line
-                }
-                if (data != null && data.serviceJourney != null) {
-                    lineCache.put(lineRef, data.line);
                 }
                 int waitingRequests = concurrentRequestCounter.decrementAndGet();
                 if (waitingRequests == 0) {

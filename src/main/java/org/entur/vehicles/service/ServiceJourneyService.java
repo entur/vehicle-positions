@@ -4,6 +4,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import org.entur.vehicles.data.model.ServiceJourney;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,9 @@ public class ServiceJourneyService {
 
     @Autowired
     private JourneyPlannerGraphQLClient graphQLClient;
+
+    @Autowired
+    private PrometheusMetricsService metricsService;
 
     private boolean serviceJourneyLookupEnabled;
 
@@ -74,17 +78,21 @@ public class ServiceJourneyService {
 
                 String query = "{\"query\":\"{serviceJourney(id:\\\"" + serviceJourneyId + "\\\"){ref:id pointsOnLink{length points}}}\",\"variables\":null}";
 
-                Data data = null;
                 try {
-                    data = graphQLClient.executeQuery(query);
+                    metricsService.markJourneyPlannerRequest("serviceJourney");
+                    Data data = graphQLClient.executeQuery(query);
+
+                    if (data != null && data.serviceJourney != null) {
+
+                        metricsService.markJourneyPlannerResponse("serviceJourney");
+
+                        serviceJourneyCache.put(serviceJourneyId, data.serviceJourney);
+                        if (!initialized) {
+                            initCounter.incrementAndGet();
+                        }
+                    }
                 } catch (WebClientException e) {
                     // Ignore - return empty ServiceJourney
-                }
-                if (data != null && data.serviceJourney != null) {
-                    serviceJourneyCache.put(serviceJourneyId, data.serviceJourney);
-                    if (!initialized) {
-                        initCounter.incrementAndGet();
-                    }
                 }
                 int waitingRequests = concurrentRequestCounter.decrementAndGet();
                 if (waitingRequests == 0) {

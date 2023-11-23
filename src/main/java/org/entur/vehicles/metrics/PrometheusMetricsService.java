@@ -18,13 +18,13 @@ package org.entur.vehicles.metrics;
 import io.micrometer.core.instrument.ImmutableTag;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
+import jakarta.annotation.PreDestroy;
 import org.entur.vehicles.data.model.Codespace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,6 +37,9 @@ public class PrometheusMetricsService {
     private static final String DATA_COUNTER_NAME = METRICS_PREFIX + "data";
     private static final String QUERY_COUNTER_NAME = METRICS_PREFIX + "query";
     private static final String SUBSCRIPTION_COUNTER_NAME = METRICS_PREFIX + "subscription";
+
+    private static final String JOURNEY_PLANNER_REQUEST_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.request";
+    private static final String JOURNEY_PLANNER_RESPONSE_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.response";
     private static final String CODESPACE_TAG_NAME = "codespaceId";
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
@@ -94,6 +97,21 @@ public class PrometheusMetricsService {
     public void markSubscription() {
         prometheusMeterRegistry
                 .counter(SUBSCRIPTION_COUNTER_NAME)
+                .increment();
+    }
+
+    public void markJourneyPlannerRequest(String queryType) {
+        List<Tag> counterTags = new ArrayList<>();
+        counterTags.add(new ImmutableTag(QUERY_TYPE, queryType));
+        prometheusMeterRegistry
+                .counter(JOURNEY_PLANNER_REQUEST_COUNTER_NAME)
+                .increment();
+    }
+    public void markJourneyPlannerResponse(String queryType) {
+        List<Tag> counterTags = new ArrayList<>();
+        counterTags.add(new ImmutableTag(QUERY_TYPE, queryType));
+        prometheusMeterRegistry
+                .counter(JOURNEY_PLANNER_RESPONSE_COUNTER_NAME)
                 .increment();
     }
 
