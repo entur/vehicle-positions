@@ -29,8 +29,8 @@ data:
       
       vehicle.line.lookup.enabled=true
 
-      vehicle.serviceJourney.concurrent.requests=2
-      vehicle.line.concurrent.requests=2
+      vehicle.serviceJourney.concurrent.requests=1
+      vehicle.line.concurrent.requests=1
 
       management.endpoints.web.exposure.include=info, health, prometheus, env, metrics, loggers
       management.endpoints.prometheus.enabled=true
