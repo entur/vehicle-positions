@@ -101,17 +101,20 @@ public class PrometheusMetricsService {
     }
 
     public void markJourneyPlannerRequest(String queryType) {
-        List<Tag> counterTags = new ArrayList<>();
-        counterTags.add(new ImmutableTag(QUERY_TYPE, queryType));
+
         prometheusMeterRegistry
-                .counter(JOURNEY_PLANNER_REQUEST_COUNTER_NAME)
+                .counter(
+                        JOURNEY_PLANNER_REQUEST_COUNTER_NAME,
+                        List.of(new ImmutableTag(QUERY_TYPE, queryType))
+                )
                 .increment();
     }
     public void markJourneyPlannerResponse(String queryType) {
-        List<Tag> counterTags = new ArrayList<>();
-        counterTags.add(new ImmutableTag(QUERY_TYPE, queryType));
         prometheusMeterRegistry
-                .counter(JOURNEY_PLANNER_RESPONSE_COUNTER_NAME)
+                .counter(
+                        JOURNEY_PLANNER_RESPONSE_COUNTER_NAME,
+                        List.of(new ImmutableTag(QUERY_TYPE, queryType))
+                )
                 .increment();
     }
 
