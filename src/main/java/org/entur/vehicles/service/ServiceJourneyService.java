@@ -30,11 +30,15 @@ public class ServiceJourneyService {
     @Value("${vehicle.serviceJourney.concurrent.requests:2}")
     private int concurrentRequests;
 
+    @Value("${vehicle.serviceJourney.concurrent.sleeptime:50}")
+    private int sleepTime;
+
     private ExecutorService asyncExecutorService;
 
     private boolean initialized = false;
 
     private AtomicInteger concurrentRequestCounter = new AtomicInteger();
+
     public ServiceJourneyService(@Value("${vehicle.serviceJourney.lookup.enabled:true}") boolean serviceJourneyLookupEnabled) {
         this.serviceJourneyLookupEnabled = serviceJourneyLookupEnabled;
         if (serviceJourneyLookupEnabled) {
@@ -56,6 +60,7 @@ public class ServiceJourneyService {
                 }
             });
 
+    private AtomicInteger initCounter = new AtomicInteger();
 
     public ServiceJourney getServiceJourney(String serviceJourneyId) throws ExecutionException {
         return serviceJourneyCache.get(serviceJourneyId);
@@ -66,6 +71,7 @@ public class ServiceJourneyService {
         if (serviceJourneyId.contains(":ServiceJourney:")) {
 
             asyncExecutorService.submit(() -> {
+
                 String query = "{\"query\":\"{serviceJourney(id:\\\"" + serviceJourneyId + "\\\"){ref:id pointsOnLink{length points}}}\",\"variables\":null}";
 
                 Data data = null;
@@ -76,15 +82,28 @@ public class ServiceJourneyService {
                 }
                 if (data != null && data.serviceJourney != null) {
                     serviceJourneyCache.put(serviceJourneyId, data.serviceJourney);
+                    if (!initialized) {
+                        initCounter.incrementAndGet();
+                    }
                 }
                 int waitingRequests = concurrentRequestCounter.decrementAndGet();
                 if (waitingRequests == 0) {
                     if (!initialized) {
-                        LOG.info("Cache initialization complete");
+                        LOG.info("Cache initialization up to date - {} serviceJourneys updated", initCounter.get());
                         initialized = true;
                     }
                 }
+
+                try {
+                    // Sleeping between each execution to offload request-rate
+                    if (sleepTime > 0) {
+                        Thread.sleep(sleepTime);
+                    }
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             });
+
             concurrentRequestCounter.incrementAndGet();
         }
         return new ServiceJourney(serviceJourneyId);
