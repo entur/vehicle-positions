@@ -34,6 +34,9 @@ public class LineService {
     @Value("${vehicle.line.concurrent.requests:2}")
     private int concurrentRequests;
 
+    @Value("${vehicle.line.concurrent.sleeptime:50}")
+    private int sleepTime;
+
     ExecutorService asyncExecutorService;
 
     private boolean lineLookupEnabled;
@@ -108,6 +111,14 @@ public class LineService {
                         LOG.info("Cache initialization complete");
                         initialized = true;
                     }
+                }
+                try {
+                    // Sleeping between each execution to offload request-rate
+                    if (sleepTime > 0) {
+                        Thread.sleep(sleepTime);
+                    }
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
                 }
             });
         }
