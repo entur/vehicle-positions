@@ -21,6 +21,13 @@ configMap:
   parallel:
     streamcount: 1
     threadcount: 5
+  journeyplanner:
+    servicejourney:
+      threadpoolsize: 1
+      sleeptime: 100
+    line:
+      threadpoolsize: 1
+      sleeptime: 100
 
 secretMount:
   name: vehicle-positions

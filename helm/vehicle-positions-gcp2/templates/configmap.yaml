@@ -29,8 +29,10 @@ data:
       
       vehicle.line.lookup.enabled=true
 
-      vehicle.serviceJourney.concurrent.requests=1
-      vehicle.line.concurrent.requests=1
+      vehicle.serviceJourney.concurrent.requests={{ .Values.configMap.journeyplanner.servicejourney.threadpoolsize }}
+      vehicle.serviceJourney.concurrent.sleeptime={{ .Values.configMap.journeyplanner.servicejourney.sleeptime }}
+      vehicle.line.concurrent.requests={{ .Values.configMap.journeyplanner.line.threadpoolsize }}
+      vehicle.line.concurrent.sleeptime={{ .Values.configMap.journeyplanner.line.sleeptime }}
 
       management.endpoints.web.exposure.include=info, health, prometheus, env, metrics, loggers
       management.endpoints.prometheus.enabled=true
