@@ -64,6 +64,13 @@ spec:
             - containerPort: {{ .Values.service.http.internalPort }}
               name: http
               protocol: TCP
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep 30
           livenessProbe:
             exec:
               command:
