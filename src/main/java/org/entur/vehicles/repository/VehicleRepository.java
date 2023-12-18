@@ -197,6 +197,8 @@ public class VehicleRepository {
       if (journey.getOccupancy() != null) {
         v.setOccupancy(OccupancyEnumeration.fromValue(journey.getOccupancy()));
         v.setOccupancyStatus(OccupancyStatus.fromValue(journey.getOccupancy()));
+      } else {
+        v.setOccupancyStatus(OccupancyStatus.noData);
       }
 
       if (journey.getInCongestion() != null) {
