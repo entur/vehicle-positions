@@ -22,6 +22,7 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private String originRef;
   private String destinationName;
   private String destinationRef;
+  private OccupancyStatus occupancyStatus;
 
   public String getLineRef() {
     return super.getLine().getLineRef();
@@ -164,5 +165,13 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   }
   public String getDestinationRef() {
     return destinationRef;
+  }
+
+  public void setOccupancyStatus(OccupancyStatus occupancyStatus) {
+    this.occupancyStatus = occupancyStatus;
+  }
+
+  public OccupancyStatus getOccupancyStatus() {
+    return occupancyStatus;
   }
 }
