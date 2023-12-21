@@ -20,8 +20,8 @@ public enum OccupancyStatus {
             case UNKNOWN:
                 return noData;
             case MANY_SEATS_AVAILABLE:
-            case SEATS_AVAILABLE:
                 return manySeatsAvailable;
+            case SEATS_AVAILABLE:
             case FEW_SEATS_AVAILABLE:
                 return fewSeatsAvailable;
             case STANDING_AVAILABLE:
