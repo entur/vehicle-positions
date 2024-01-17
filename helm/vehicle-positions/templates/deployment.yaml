@@ -7,7 +7,6 @@ metadata:
     {{- include "common.labels" . | indent 4 }}
 spec:
   progressDeadlineSeconds: 600
-  replicas: {{ .Values.replicas | default .Values.default_replicas }}
   selector:
     matchLabels:
       app: {{ template "app.name" . }}
@@ -19,6 +18,7 @@ spec:
   template:
     metadata:
       annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
         prometheus.io/path: /actuator/prometheus
         prometheus.io/port: '{{ .Values.service.http.internalPort }}'
         prometheus.io/scrape: 'true'
@@ -45,24 +45,17 @@ spec:
             - name: JDK_JAVA_OPTIONS
               value: -server -Xmx{{ .Values.resources.xmx }} -XX:+UseG1GC -XX:MaxGCPauseMillis=750 -XX:ConcGCThreads=2
                 -XX:ParallelGCThreads=5
-                -Dspring.config.additional-location=/etc/application-config/application.properties
+                -Dspring.config.location=/etc/application-config/application.properties
                 -Dfile.encoding=UTF-8
             - name: TZ
               value: Europe/Oslo
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /etc/vehicle-positions/credentials.json
           resources:
             limits:
-              cpu: {{ .Values.resources.cpuLimit }}
               memory: {{ .Values.resources.memLimit }}
             requests:
               cpu: {{ .Values.resources.cpuRequest }}
               memory: {{ .Values.resources.memRequest }}
           volumeMounts:
-            - name: {{ .Values.secretMount.name }}
-              mountPath: {{ .Values.secretMount.mountPath }}
-              subPath: {{ .Values.secretMount.subPath }}
-              readOnly: {{ .Values.secretMount.readOnly }}
             - mountPath: /etc/application-config
               name: application-config
               readOnly: true
@@ -70,6 +63,13 @@ spec:
             - containerPort: {{ .Values.service.http.internalPort }}
               name: http
               protocol: TCP
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep 30
           livenessProbe:
             exec:
               command:
@@ -88,21 +88,38 @@ spec:
                 - curl --fail http://0.0.0.0:{{ .Values.service.http.internalPort }}/actuator/health
             failureThreshold: 25
             periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: [ "ALL" ]
+            seccompProfile:
+              type: RuntimeDefault
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
-      securityContext: {}
-      {{- if .Values.rbac.enabled }}
-      serviceAccount: vehicle-positions-service-account
-      serviceAccountName: vehicle-positions-service-account
-      {{- end }}
+      securityContext:
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccountName: application
       terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 3
+          topologyKey: "kubernetes.io/hostname"
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: vehicle-positions
+        - maxSkew: 5
+          topologyKey: "topology.kubernetes.io/zone"
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: vehicle-positions
       volumes:
-        - name: {{ .Values.secretMount.name }}
-          secret:
-            secretName: {{ .Values.secretMount.secretName }}
         - name: application-config
           configMap:
             name: {{ .Values.configMapMount.name }}

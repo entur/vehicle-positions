@@ -1,4 +1,3 @@
-{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -11,7 +10,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   rules:
-  - host: vehicle-positions-v1{{ .Values.ingress.vehicles.domainName }}
+  - host: vehicle-positions-v1{{ .Values.ingress.domainName }}
     http:
       paths:
         - pathType: ImplementationSpecific
@@ -21,4 +20,3 @@ spec:
               port:
                 number: {{ .Values.service.http.externalPort }}
 
-{{- end }}
