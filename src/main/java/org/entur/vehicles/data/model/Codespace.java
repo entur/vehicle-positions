@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Codespace extends ObjectRef {
 
-    private static Cache<String, Codespace> objectCache = CacheBuilder.newBuilder()
+    private static final Cache<String, Codespace> objectCache = CacheBuilder.newBuilder()
         .expireAfterAccess(3600, TimeUnit.SECONDS)
         .build();
 

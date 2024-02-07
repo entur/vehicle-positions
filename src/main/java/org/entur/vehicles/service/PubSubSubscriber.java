@@ -37,13 +37,13 @@ public class PubSubSubscriber {
   private final int parallelPullCount;
   private final int executorThreadCount;
 
-  private VehicleRepository vehicleRepository;
+  private final VehicleRepository vehicleRepository;
 
   private SubscriptionAdminClient subscriptionAdminClient;
 
-  private TopicName topic;
-  private SubscriptionName projectSubscriptionName;
-  private Map<String, String> appLabels = new HashMap<>();
+  private final TopicName topic;
+  private final SubscriptionName projectSubscriptionName;
+  private final Map<String, String> appLabels = new HashMap<>();
   @Value("${entur.vehicle-positions.shutdownhook:false}")
   private boolean addManualShutdownhook;
 

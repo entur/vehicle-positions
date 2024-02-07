@@ -46,7 +46,7 @@ public class PrometheusMetricsService {
     private int lastLoggedCount;
     private long lastLoggedCountTimeMillis = System.currentTimeMillis();
 
-    private AtomicInteger counter = new AtomicInteger(0);
+    private final AtomicInteger counter = new AtomicInteger(0);
 
     private static final String QUERY_TYPE = "queryType";
     private static final String VEHICLES = "vehicles";

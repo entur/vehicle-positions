@@ -20,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,7 +68,7 @@ public class GraphQLTests {
 
         vehicleActivityRecord.setMonitoredVehicleJourney(monitoredVehicleJourney);
 
-        repository.addAll(Arrays.asList(vehicleActivityRecord));
+        repository.addAll(List.of(vehicleActivityRecord));
     }
 
     @Test

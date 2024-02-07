@@ -45,15 +45,15 @@ public class VehicleRepository {
 
   private final AutoPurgingMap vehicles;
 
-  private LineService lineService;
+  private final LineService lineService;
 
-  private ServiceJourneyService serviceJourneyService;
+  private final ServiceJourneyService serviceJourneyService;
 
   private VehicleUpdateRxPublisher publisher;
 
   final ZoneId zone;
 
-  private long maxValidityInMinutes;
+  private final long maxValidityInMinutes;
 
   public VehicleRepository(
           @Autowired PrometheusMetricsService metricsService,
@@ -342,8 +342,7 @@ public class VehicleRepository {
     @Override
     public boolean equals(Object o) {
       if (this == o) return true;
-      if (!(o instanceof VehicleKey)) return false;
-      VehicleKey that = (VehicleKey) o;
+      if (!(o instanceof VehicleKey that)) return false;
       return Objects.equal(codespace, that.codespace) &&
           Objects.equal(vehicleRef, that.vehicleRef);
     }

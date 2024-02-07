@@ -50,8 +50,7 @@ public class Line extends ObjectRef {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Line)) return false;
-        Line line = (Line) o;
+        if (!(o instanceof Line line)) return false;
         return super.equals(o) &&
                 Objects.equal(lineName, line.lineName);
     }
