@@ -53,7 +53,7 @@ public class ServiceJourneyService {
         }
     }
     private LoadingCache<String, ServiceJourney> serviceJourneyCache = CacheBuilder.newBuilder()
-            .expireAfterWrite(6, TimeUnit.HOURS)
+            .expireAfterAccess(6, TimeUnit.HOURS)
             .build(new CacheLoader<>() {
                 @Override
                 public ServiceJourney load(String serviceJourneyId) {
