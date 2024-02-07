@@ -98,7 +98,7 @@ public class LineService {
                     metricsService.markJourneyPlannerRequest("line");
                     Data data = graphQLClient.executeQuery(query);
 
-                    if (data != null && data.serviceJourney != null) {
+                    if (data != null && data.line != null) {
                         metricsService.markJourneyPlannerResponse("line");
                         lineCache.put(lineRef, data.line);
                     }
