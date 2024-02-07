@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -36,15 +37,12 @@ public class LineService {
     @Value("${vehicle.line.concurrent.sleeptime:50}")
     private int sleepTime;
 
-    @Value("${vehicle.line.lookup.cache.maxsize:10000}")
-    private final int maximumCacheSize = 10000;
-
     ExecutorService asyncExecutorService;
 
-    private final boolean lineLookupEnabled;
+    private boolean lineLookupEnabled;
 
     boolean initialized = false;
-    private final AtomicInteger concurrentRequestCounter = new AtomicInteger();
+    private AtomicInteger concurrentRequestCounter = new AtomicInteger();
 
     public LineService(@Value("${vehicle.line.lookup.enabled:false}") boolean lineLookupEnabled) {
         this.lineLookupEnabled = lineLookupEnabled;
@@ -56,8 +54,8 @@ public class LineService {
         }
     }
 
-    private final LoadingCache<String, Line> lineCache = CacheBuilder.newBuilder()
-            .maximumSize(maximumCacheSize)
+    private LoadingCache<String, Line> lineCache = CacheBuilder.newBuilder()
+            .expireAfterWrite(6, TimeUnit.HOURS)
             .build(new CacheLoader<>() {
                 @Override
                 public Line load(String lineRef) {
