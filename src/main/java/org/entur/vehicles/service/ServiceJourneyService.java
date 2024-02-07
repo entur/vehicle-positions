@@ -15,7 +15,6 @@ import org.springframework.web.reactive.function.client.WebClientException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -29,7 +28,7 @@ public class ServiceJourneyService {
     @Autowired
     private PrometheusMetricsService metricsService;
 
-    private boolean serviceJourneyLookupEnabled;
+    private final boolean serviceJourneyLookupEnabled;
 
     @Value("${vehicle.serviceJourney.concurrent.requests:2}")
     private int concurrentRequests;
@@ -37,11 +36,14 @@ public class ServiceJourneyService {
     @Value("${vehicle.serviceJourney.concurrent.sleeptime:50}")
     private int sleepTime;
 
+    @Value("${vehicle.serviceJourney.lookup.cache.maxsize:10000}")
+    private int maximumCacheSize;
+
     private ExecutorService asyncExecutorService;
 
     private boolean initialized = false;
 
-    private AtomicInteger concurrentRequestCounter = new AtomicInteger();
+    private final AtomicInteger concurrentRequestCounter = new AtomicInteger();
 
     public ServiceJourneyService(@Value("${vehicle.serviceJourney.lookup.enabled:true}") boolean serviceJourneyLookupEnabled) {
         this.serviceJourneyLookupEnabled = serviceJourneyLookupEnabled;
@@ -52,8 +54,8 @@ public class ServiceJourneyService {
             asyncExecutorService = Executors.newFixedThreadPool(concurrentRequests);
         }
     }
-    private LoadingCache<String, ServiceJourney> serviceJourneyCache = CacheBuilder.newBuilder()
-            .expireAfterWrite(6, TimeUnit.HOURS)
+    private final LoadingCache<String, ServiceJourney> serviceJourneyCache = CacheBuilder.newBuilder()
+            .maximumSize(maximumCacheSize)
             .build(new CacheLoader<>() {
                 @Override
                 public ServiceJourney load(String serviceJourneyId) {
@@ -64,7 +66,7 @@ public class ServiceJourneyService {
                 }
             });
 
-    private AtomicInteger initCounter = new AtomicInteger();
+    private final AtomicInteger initCounter = new AtomicInteger();
 
     public ServiceJourney getServiceJourney(String serviceJourneyId) throws ExecutionException {
         return serviceJourneyCache.get(serviceJourneyId);

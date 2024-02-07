@@ -28,6 +28,10 @@ data:
       vehicle.updates.expiry.grace.period=PT10M
       
       vehicle.line.lookup.enabled=true
+      vehicle.line.lookup.cache.maxsize=10000
+      
+      vehicle.serviceJourney.lookup.enabled=true
+      vehicle.serviceJourney.lookup.cache.maxsize=10000
 
       vehicle.serviceJourney.concurrent.requests={{ .Values.configMap.journeyplanner.servicejourney.threadpoolsize }}
       vehicle.serviceJourney.concurrent.sleeptime={{ .Values.configMap.journeyplanner.servicejourney.sleeptime }}
