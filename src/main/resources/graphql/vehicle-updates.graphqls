@@ -99,6 +99,9 @@ type VehicleUpdate {
 
     # Reported status of the vehicle
     vehicleStatus: VehicleStatusEnumeration
+
+    progressBetweenStops: ProgressBetweenStops
+    monitoredCall: MonitoredCall
 }
 
 type Location {
@@ -132,6 +135,16 @@ type PointsOnLink {
 
 type Operator {
     operatorRef: String!
+}
+
+type ProgressBetweenStops {
+    linkDistance: Float
+    percentage: Float
+}
+
+type MonitoredCall {
+    stopPointRef: String
+    order: Int
 }
 
 input BoundingBox {

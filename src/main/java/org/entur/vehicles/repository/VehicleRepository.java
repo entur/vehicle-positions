@@ -13,8 +13,10 @@ import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Location;
+import org.entur.vehicles.data.model.MonitoredCall;
 import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.ProgressBetweenStops;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
@@ -107,6 +109,18 @@ public class VehicleRepository {
                 journey.getVehicleLocation().getLongitude(),
                 journey.getVehicleLocation().getLatitude()
         ));
+      }
+
+      if (vehicleActivity.getProgressBetweenStops() != null) {
+        if (vehicleActivity.getProgressBetweenStops().getLinkDistance() != null &&
+                vehicleActivity.getProgressBetweenStops().getPercentage() != null
+        ) {
+          ProgressBetweenStops progressBetweenStops = new ProgressBetweenStops(
+                  vehicleActivity.getProgressBetweenStops().getLinkDistance(),
+                  vehicleActivity.getProgressBetweenStops().getPercentage()
+          );
+          v.setProgressBetweenStops(progressBetweenStops);
+        }
       }
 
       if (journey.getLineRef() != null) {
@@ -207,6 +221,17 @@ public class VehicleRepository {
 
       if (journey.getDelay() != null) {
         v.setDelay(Duration.parse(journey.getDelay()).getSeconds());
+      }
+
+      if (journey.getMonitoredCall() != null) {
+        MonitoredCall monitoredCall = new MonitoredCall();
+        if (journey.getMonitoredCall().getStopPointRef() != null) {
+          monitoredCall.setStopPointRef(journey.getMonitoredCall().getStopPointRef().toString());
+        }
+        if (journey.getMonitoredCall().getOrder() != null) {
+          monitoredCall.setOrder(journey.getMonitoredCall().getOrder());
+        }
+        v.setMonitoredCall(monitoredCall);
       }
 
       if (vehicleActivity.getValidUntilTime() != null) {
