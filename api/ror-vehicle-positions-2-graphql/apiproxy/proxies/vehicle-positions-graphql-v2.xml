@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ProxyEndpoint name="vehicle-positions-graphql-v2">
+  <Description/>
+  <FaultRules/>
+  <Flows/>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response/>
+  </PostFlow>
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <FaultRules/>
+        <Name>flowCallout.globalIpBlacklistTeamRutedata</Name>
+      </Step>
+      <Step>
+        <Name>extractVariable.etClientHeaders</Name>
+      </Step>
+      <Step>
+        <Name>collectStatisticsEtHeader</Name>
+      </Step>
+      <Step>
+        <FaultRules/>
+        <Name>spikeArrest</Name>
+      </Step>
+      <Step>
+        <FaultRules/>
+        <Name>flowCallout.getEnvironmentConfiguration</Name>
+      </Step>
+    </Request>
+    <Response/>
+  </PreFlow>
+  <HTTPProxyConnection>
+    <BasePath>/realtime/v2/vehicles</BasePath>
+    <Properties/>
+    <VirtualHost>entur</VirtualHost>
+  </HTTPProxyConnection>
+  <RouteRule name="vehicle-positions-graphql-v2">
+    <TargetEndpoint>vehicle-positions-graphql-v2</TargetEndpoint>
+  </RouteRule>
+</ProxyEndpoint>
