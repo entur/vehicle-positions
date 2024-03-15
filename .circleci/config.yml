@@ -108,4 +108,4 @@ workflows:
             - build
           filters:
             branches:
-              only: main
+              only: 1.x
