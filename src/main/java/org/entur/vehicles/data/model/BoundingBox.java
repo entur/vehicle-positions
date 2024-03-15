@@ -1,7 +1,10 @@
 package org.entur.vehicles.data.model;
 
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
+
 import java.util.StringJoiner;
 
+@SchemaMapping
 public class BoundingBox {
   private Double minLat, minLon, maxLat, maxLon;
 

@@ -1,6 +1,5 @@
 package org.entur.vehicles.graphql;
 
-import graphql.kickstart.tools.GraphQLQueryResolver;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
@@ -14,7 +13,9 @@ import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.stereotype.Component;
+import org.springframework.graphql.data.method.annotation.Argument;
+import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.stereotype.Controller;
 
 import java.util.Collection;
 import java.util.List;
@@ -22,8 +23,8 @@ import java.util.UUID;
 
 import static org.entur.vehicles.graphql.Constants.TRACING_HEADER_NAME;
 
-@Component
-class Query implements GraphQLQueryResolver {
+@Controller
+class Query {
     private static final Logger LOG = LoggerFactory.getLogger(Query.class);
 
     private final VehicleRepository repository;
@@ -36,8 +37,16 @@ class Query implements GraphQLQueryResolver {
         this.metricsService = metricsService;
     }
 
-    Collection<VehicleUpdate> getVehicles(String serviceJourneyId, String operator,
-                                          String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
+    @QueryMapping(name = "vehicles")
+    Collection<VehicleUpdate> getVehicles(@Argument String serviceJourneyId,
+                                          @Argument String operator,
+                                          @Argument String codespaceId,
+                                          @Argument VehicleModeEnumeration mode,
+                                          @Argument String vehicleId,
+                                          @Argument String lineRef,
+                                          @Argument String lineName,
+                                          @Argument Boolean monitored,
+                                          @Argument BoundingBox boundingBox) {
 
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
 
@@ -52,16 +61,18 @@ class Query implements GraphQLQueryResolver {
         return vehicles;
     }
 
-    List<Line> lines(String codespace) {
+    @QueryMapping
+    List<Line> lines(@Argument String codespaceId) {
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
         final long start = System.currentTimeMillis();
-        final List<Line> lines = repository.getLines(codespace);
+        final List<Line> lines = repository.getLines(codespaceId);
         LOG.info("Returning {} lines in {} ms", lines.size(), System.currentTimeMillis() - start);
         MDC.remove(TRACING_HEADER_NAME);
         metricsService.markLinesQuery();
         return lines;
     }
 
+    @QueryMapping
     List<Codespace> codespaces() {
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
         final long start = System.currentTimeMillis();
@@ -74,6 +85,7 @@ class Query implements GraphQLQueryResolver {
         return codespaces;
     }
 
+    @QueryMapping
     List<Operator> operators(String codespaceId) {
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
         final long start = System.currentTimeMillis();
@@ -86,6 +98,7 @@ class Query implements GraphQLQueryResolver {
         return operators;
     }
 
+    @QueryMapping
     List<ServiceJourney> serviceJourneys(String lineRef) {
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
         final long start = System.currentTimeMillis();
@@ -98,6 +111,7 @@ class Query implements GraphQLQueryResolver {
         return serviceJourneys;
     }
 
+    @QueryMapping
     ServiceJourney serviceJourney(String id) {
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
         final long start = System.currentTimeMillis();

@@ -2,10 +2,11 @@ package org.entur.vehicles.data.model;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-
+@SchemaMapping
 public class Codespace extends ObjectRef {
 
     private static final Cache<String, Codespace> objectCache = CacheBuilder.newBuilder()

@@ -1,7 +1,9 @@
 package org.entur.vehicles.data;
 
 import org.entur.avro.realtime.siri.model.OccupancyEnum;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
+@SchemaMapping
 public enum OccupancyStatus {
 
     noData,

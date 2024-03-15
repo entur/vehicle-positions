@@ -7,9 +7,11 @@ import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.util.StringJoiner;
 
+@SchemaMapping
 public class VehicleUpdateFilter extends AbstractVehicleUpdate {
 
   private BoundingBox boundingBox;
