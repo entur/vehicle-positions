@@ -145,6 +145,7 @@ type ProgressBetweenStops {
 type MonitoredCall {
     stopPointRef: String
     order: Int
+    vehicleAtStop: Boolean
 }
 
 input BoundingBox {

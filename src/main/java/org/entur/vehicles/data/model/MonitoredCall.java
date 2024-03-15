@@ -7,6 +7,8 @@ public class MonitoredCall {
     String stopPointRef;
     Integer order;
 
+    Boolean vehicleAtStop;
+
     public String getStopPointRef() {
         return stopPointRef;
     }
@@ -21,5 +23,13 @@ public class MonitoredCall {
 
     public void setOrder(Integer order) {
         this.order = order;
+    }
+
+    public Boolean getVehicleAtStop() {
+        return vehicleAtStop;
+    }
+
+    public void setVehicleAtStop(Boolean vehicleAtStop) {
+        this.vehicleAtStop = vehicleAtStop;
     }
 }

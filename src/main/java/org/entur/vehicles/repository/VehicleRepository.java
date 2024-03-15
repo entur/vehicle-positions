@@ -231,6 +231,9 @@ public class VehicleRepository {
         if (journey.getMonitoredCall().getOrder() != null) {
           monitoredCall.setOrder(journey.getMonitoredCall().getOrder());
         }
+        if (journey.getMonitoredCall().getVehicleAtStop() != null) {
+          monitoredCall.setVehicleAtStop(journey.getMonitoredCall().getVehicleAtStop());
+        }
         v.setMonitoredCall(monitoredCall);
       }
 
