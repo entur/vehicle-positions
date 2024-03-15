@@ -43,7 +43,5 @@ data:
       graphql.servlet.actuator-metrics=false
       graphql.servlet.tracing-enabled=false
       
-      graphiql.enabled={{ .Values.configMap.graphiqlEnabled }}
-      graphiql.static.basePath=/realtime/v1/vehicles/
-      graphiql.endpoint.graphql=/realtime/v1/vehicles/graphql
-      graphiql.endpoint.subscriptions=/realtime/v1/vehicles/subscriptions
+      # spring.graphql.graphiql.enabled={{ .Values.configMap.graphiqlEnabled }}
+      spring.graphql.websocket.path=/subscriptions
