@@ -1,5 +1,9 @@
 
 scalar DateTime
+scalar String
+scalar Boolean
+scalar Int
+scalar Float
 
 schema {
     query: Query

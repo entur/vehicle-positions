@@ -2,9 +2,11 @@ package org.entur.vehicles.data;
 
 import com.google.common.base.Objects;
 import org.entur.vehicles.data.model.Location;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.time.ZonedDateTime;
 
+@SchemaMapping
 public class VehicleUpdate extends AbstractVehicleUpdate {
 
   private String direction;

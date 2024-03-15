@@ -1,9 +1,11 @@
 package org.entur.vehicles.data.model;
 
 import com.google.common.base.Objects;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.util.StringJoiner;
 
+@SchemaMapping
 public class Line extends ObjectRef {
     private String lineName;
     private String publicCode;

@@ -1,6 +1,7 @@
 package org.entur.vehicles.graphql.scalars;
 
 import graphql.language.StringValue;
+import graphql.scalars.ExtendedScalars;
 import graphql.schema.Coercing;
 import graphql.schema.CoercingParseLiteralException;
 import graphql.schema.CoercingParseValueException;
@@ -8,6 +9,7 @@ import graphql.schema.CoercingSerializeException;
 import graphql.schema.GraphQLScalarType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -15,6 +17,12 @@ import java.time.format.DateTimeParseException;
 
 @Configuration
 public class DateScalarConfiguration  {
+
+    @Bean
+    public RuntimeWiringConfigurer runtimeWiringConfigurer() {
+        return wiringBuilder -> wiringBuilder
+                .scalar(ExtendedScalars.DateTime);
+    }
 
     @Bean
     public GraphQLScalarType dateScalar() {

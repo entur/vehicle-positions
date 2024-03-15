@@ -1,5 +1,8 @@
 package org.entur.vehicles.data.model;
 
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
+
+@SchemaMapping
 public class PointsOnLink {
     private int length;
     private String points;
