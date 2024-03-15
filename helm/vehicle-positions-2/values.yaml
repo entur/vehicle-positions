@@ -39,7 +39,7 @@ secretMount:
 
 
 configMapMount:
-  name: vehicle-positions-config
+  name: vehicle-positions-config-2
 
 image:
   identifier: <+artifacts.primary.image>
