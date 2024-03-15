@@ -6,11 +6,11 @@ metadata:
     traffic-type: api
   annotations:
     kubernetes.io/ingress.class: traefik
-  name: vehicle-positions-v1
+  name: {{ template "app.name" . }}
   namespace: {{ .Release.Namespace }}
 spec:
   rules:
-  - host: vehicle-positions-v1{{ .Values.ingress.domainName }}
+  - host: vehicle-positions-v2{{ .Values.ingress.domainName }}
     http:
       paths:
         - pathType: ImplementationSpecific
