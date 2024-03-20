@@ -62,12 +62,14 @@ public class VehicleRepository {
           @Autowired LineService lineService,
           @Autowired ServiceJourneyService serviceJourneyService,
           @Autowired AutoPurgingMap vehicles,
-          @Value("${vehicle.updates.max.validity.minutes}") long maxValidityInMinutes) {
+          @Value("${vehicle.updates.max.validity.minutes}") long maxValidityInMinutes,
+          @Autowired VehicleUpdateRxPublisher publisher) {
     this.metricsService = metricsService;
     this.lineService = lineService;
     this.serviceJourneyService = serviceJourneyService;
     this.vehicles = vehicles;
     this.maxValidityInMinutes = maxValidityInMinutes;
+    this.publisher = publisher;
     zone = ZonedDateTime.now().getZone();
   }
 
@@ -292,10 +294,6 @@ public class VehicleRepository {
     }
 
     return vehicleUpdates.values();
-  }
-
-  public void addUpdateListener(VehicleUpdateRxPublisher publisher) {
-    this.publisher = publisher;
   }
 
   public List<Line> getLines(String codespace) {

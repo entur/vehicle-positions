@@ -16,7 +16,6 @@ import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -28,10 +27,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GraphQLTests {
 
-    @Autowired
     VehicleRepository repository;
 
     Query queryService;
+    private VehicleUpdateRxPublisher publisher = new VehicleUpdateRxPublisher();
 
     @BeforeEach
     public void initData() {
@@ -41,9 +40,10 @@ public class GraphQLTests {
                 new LineService(false),
                 new ServiceJourneyService(false),
                 new AutoPurgingMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
-                        180
+                        180,
+                publisher
         );
-        repository.addUpdateListener(new VehicleUpdateRxPublisher(repository));
+        publisher = new VehicleUpdateRxPublisher();
         queryService = new Query(repository, metricsService);
 
         VehicleActivityRecord vehicleActivityRecord = new VehicleActivityRecord();
