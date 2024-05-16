@@ -38,6 +38,7 @@ public class PubSubSubscriber {
   private final int executorThreadCount;
 
   private final VehicleRepository vehicleRepository;
+  private final boolean enabled;
 
   private SubscriptionAdminClient subscriptionAdminClient;
 
@@ -48,6 +49,7 @@ public class PubSubSubscriber {
   private boolean addManualShutdownhook;
 
   public PubSubSubscriber(@Autowired VehicleRepository vehicleRepository,
+                          @Value("${entur.vehicle-positions.gcp.enabled:true}") boolean enabled,
                           @Value("${entur.vehicle-positions.gcp.subscription.project.name}") String subscriptionProjectName,
                           @Value("${entur.vehicle-positions.gcp.subscription.name}") String subscriptionName,
                           @Value("${entur.vehicle-positions.gcp.topic.project.name}") String topicProjectName,
@@ -59,22 +61,27 @@ public class PubSubSubscriber {
     this.parallelPullCount = parallelPullCount;
     this.executorThreadCount = executorThreadCount;
 
+    this.enabled = enabled;
+
     projectSubscriptionName = SubscriptionName.of(subscriptionProjectName, subscriptionName);
     topic = TopicName.of(topicProjectName, topicName);
-    this.appLabels.putAll(appLabels);
 
-    if (System.getenv("HOSTNAME") != null) {
-      this.appLabels.put("pod", System.getenv("HOSTNAME"));
-    }
+    if (enabled) {
+      this.appLabels.putAll(appLabels);
 
-    try {
-      subscriptionAdminClient = SubscriptionAdminClient.create();
-      if (addManualShutdownhook) {
-        addShutdownHook();
+      if (System.getenv("HOSTNAME") != null) {
+        this.appLabels.put("pod", System.getenv("HOSTNAME"));
       }
 
-    } catch (IOException e) {
-      e.printStackTrace();
+      try {
+        subscriptionAdminClient = SubscriptionAdminClient.create();
+        if (addManualShutdownhook) {
+          addShutdownHook();
+        }
+
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
     }
   }
 
@@ -90,6 +97,10 @@ public class PubSubSubscriber {
   private void subscribe()
   {
 
+    if (!enabled) {
+      LOG.info("PubSub NOT enabled");
+      return;
+    }
     if (subscriptionAdminClient == null) {
       throw new NullPointerException("Unable to initialize application");
     }
