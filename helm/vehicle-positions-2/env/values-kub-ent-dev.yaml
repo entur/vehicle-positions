@@ -1,0 +1,10 @@
+ingress:
+  domainName: -gcp2.dev.entur.io
+
+
+configMap:
+  subscriptionProjectId: ent-vpos-dev
+  topicProjectId: ent-anshar-dev
+  journeyPlannerUrl: https://api.dev.entur.io/journey-planner/v3/graphql
+  EtClientName: ror.vehicle-positions.graphql
+  serviceJourneyLookupEnabled: true

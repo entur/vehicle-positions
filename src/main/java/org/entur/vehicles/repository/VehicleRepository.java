@@ -6,6 +6,7 @@ import com.google.transit.realtime.GtfsRealtime;
 import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.OccupancyEnumeration;
+import org.entur.vehicles.data.OccupancyStatus;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleStatusEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
@@ -13,8 +14,10 @@ import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Location;
+import org.entur.vehicles.data.model.MonitoredCall;
 import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.ProgressBetweenStops;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
@@ -46,27 +49,29 @@ public class VehicleRepository {
 
   private final AutoPurgingMap vehicles;
 
-  private LineService lineService;
+  private final LineService lineService;
 
-  private ServiceJourneyService serviceJourneyService;
+  private final ServiceJourneyService serviceJourneyService;
 
   private VehicleUpdateRxPublisher publisher;
 
   final ZoneId zone;
 
-  private long maxValidityInMinutes;
+  private final long maxValidityInMinutes;
 
   public VehicleRepository(
           @Autowired PrometheusMetricsService metricsService,
           @Autowired LineService lineService,
           @Autowired ServiceJourneyService serviceJourneyService,
           @Autowired AutoPurgingMap vehicles,
-          @Value("${vehicle.updates.max.validity.minutes}") long maxValidityInMinutes) {
+          @Value("${vehicle.updates.max.validity.minutes}") long maxValidityInMinutes,
+          @Autowired VehicleUpdateRxPublisher publisher) {
     this.metricsService = metricsService;
     this.lineService = lineService;
     this.serviceJourneyService = serviceJourneyService;
     this.vehicles = vehicles;
     this.maxValidityInMinutes = maxValidityInMinutes;
+    this.publisher = publisher;
     zone = ZonedDateTime.now().getZone();
   }
 
@@ -108,6 +113,18 @@ public class VehicleRepository {
                 journey.getVehicleLocation().getLongitude(),
                 journey.getVehicleLocation().getLatitude()
         ));
+      }
+
+      if (vehicleActivity.getProgressBetweenStops() != null) {
+        if (vehicleActivity.getProgressBetweenStops().getLinkDistance() != null &&
+                vehicleActivity.getProgressBetweenStops().getPercentage() != null
+        ) {
+          ProgressBetweenStops progressBetweenStops = new ProgressBetweenStops(
+                  vehicleActivity.getProgressBetweenStops().getLinkDistance(),
+                  vehicleActivity.getProgressBetweenStops().getPercentage()
+          );
+          v.setProgressBetweenStops(progressBetweenStops);
+        }
       }
 
       if (journey.getLineRef() != null) {
@@ -197,6 +214,9 @@ public class VehicleRepository {
 
       if (journey.getOccupancy() != null) {
         v.setOccupancy(OccupancyEnumeration.fromValue(journey.getOccupancy()));
+        v.setOccupancyStatus(OccupancyStatus.fromValue(journey.getOccupancy()));
+      } else {
+        v.setOccupancyStatus(OccupancyStatus.noData);
       }
 
       if (journey.getInCongestion() != null) {
@@ -205,6 +225,20 @@ public class VehicleRepository {
 
       if (journey.getDelay() != null) {
         v.setDelay(Duration.parse(journey.getDelay()).getSeconds());
+      }
+
+      if (journey.getMonitoredCall() != null) {
+        MonitoredCall monitoredCall = new MonitoredCall();
+        if (journey.getMonitoredCall().getStopPointRef() != null) {
+          monitoredCall.setStopPointRef(journey.getMonitoredCall().getStopPointRef().toString());
+        }
+        if (journey.getMonitoredCall().getOrder() != null) {
+          monitoredCall.setOrder(journey.getMonitoredCall().getOrder());
+        }
+        if (journey.getMonitoredCall().getVehicleAtStop() != null) {
+          monitoredCall.setVehicleAtStop(journey.getMonitoredCall().getVehicleAtStop());
+        }
+        v.setMonitoredCall(monitoredCall);
       }
 
       if (vehicleActivity.getValidUntilTime() != null) {
@@ -385,10 +419,6 @@ public class VehicleRepository {
     return vehicleUpdates.values();
   }
 
-  public void addUpdateListener(VehicleUpdateRxPublisher publisher) {
-    this.publisher = publisher;
-  }
-
   public List<Line> getLines(String codespace) {
     return vehicles.values()
             .stream()
@@ -461,8 +491,7 @@ public class VehicleRepository {
     @Override
     public boolean equals(Object o) {
       if (this == o) return true;
-      if (!(o instanceof VehicleKey)) return false;
-      VehicleKey that = (VehicleKey) o;
+      if (!(o instanceof VehicleKey that)) return false;
       return Objects.equal(codespace, that.codespace) &&
           Objects.equal(vehicleRef, that.vehicleRef);
     }

@@ -5,7 +5,6 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ServiceJourney;
-import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -37,7 +36,6 @@ public class JourneyPlannerGraphQLClient {
                 .build();
     }
 
-    @Nullable
     Data executeQuery(String query) {
         Response graphqlResponse = webClient.post()
                 .contentType(MediaType.APPLICATION_JSON)

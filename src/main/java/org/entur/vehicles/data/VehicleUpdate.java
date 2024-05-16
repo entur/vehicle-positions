@@ -2,9 +2,13 @@ package org.entur.vehicles.data;
 
 import com.google.common.base.Objects;
 import org.entur.vehicles.data.model.Location;
+import org.entur.vehicles.data.model.MonitoredCall;
+import org.entur.vehicles.data.model.ProgressBetweenStops;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.time.ZonedDateTime;
 
+@SchemaMapping
 public class VehicleUpdate extends AbstractVehicleUpdate {
 
   private String direction;
@@ -22,6 +26,11 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   private String originRef;
   private String destinationName;
   private String destinationRef;
+  private OccupancyStatus occupancyStatus;
+
+  private ProgressBetweenStops progressBetweenStops;
+
+  private MonitoredCall monitoredCall;
 
   public String getLineRef() {
     return super.getLine().getLineRef();
@@ -164,5 +173,29 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
   }
   public String getDestinationRef() {
     return destinationRef;
+  }
+
+  public void setOccupancyStatus(OccupancyStatus occupancyStatus) {
+    this.occupancyStatus = occupancyStatus;
+  }
+
+  public OccupancyStatus getOccupancyStatus() {
+    return occupancyStatus;
+  }
+
+  public ProgressBetweenStops getProgressBetweenStops() {
+    return progressBetweenStops;
+  }
+
+  public void setProgressBetweenStops(ProgressBetweenStops progressBetweenStops) {
+    this.progressBetweenStops = progressBetweenStops;
+  }
+
+  public MonitoredCall getMonitoredCall() {
+    return monitoredCall;
+  }
+
+  public void setMonitoredCall(MonitoredCall monitoredCall) {
+    this.monitoredCall = monitoredCall;
   }
 }

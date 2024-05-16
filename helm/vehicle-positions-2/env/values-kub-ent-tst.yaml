@@ -1,0 +1,9 @@
+ingress:
+  domainName: -gcp2.staging.entur.io
+
+configMap:
+  subscriptionProjectId: ent-vpos-tst
+  topicProjectId: ent-anshar-tst
+  journeyPlannerUrl: https://api.staging.entur.io/journey-planner/v3/graphql
+  EtClientName: ror.vehicle-positions.graphql
+  serviceJourneyLookupEnabled: true

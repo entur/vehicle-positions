@@ -2,14 +2,16 @@ package org.entur.vehicles.data.model;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+@SchemaMapping
 public class Operator extends ObjectRef {
 
     public static final Operator DEFAULT = new Operator("");
-    private static Cache<String, Operator> objectCache = CacheBuilder.newBuilder()
+    private static final Cache<String, Operator> objectCache = CacheBuilder.newBuilder()
         .expireAfterAccess(3600, TimeUnit.SECONDS)
         .build();
 

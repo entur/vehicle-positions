@@ -1,0 +1,56 @@
+default_replicas: 4
+
+resources:
+  memLimit: 8G
+  cpuRequest: '2'
+  memRequest: 6G
+  xmx: 5G
+
+rollingUpdate:
+  maxSurge: 1
+  maxUnavailable: 0
+
+PodDisruptionBudget:
+  minAvailable: 50%
+
+configMap:
+  graphiqlEnabled: false
+  topicName: avro.vehicle_monitoring
+  journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
+  EtClientName: ror.vehicle-positions.graphql
+  serviceJourneyLookupEnabled: false
+  parallel:
+    streamcount: 1
+    threadcount: 5
+  journeyplanner:
+    servicejourney:
+      threadpoolsize: 1
+      sleeptime: 100
+    line:
+      threadpoolsize: 1
+      sleeptime: 100
+
+secretMount:
+  name: vehicle-positions
+  mountPath: /etc/vehicle-positions/credentials.json
+  subPath: credentials.json
+  secretName: ror-vehicle-positions-sa-key
+  readOnly: true
+
+
+configMapMount:
+  name: vehicle-positions-2-config
+
+image:
+  identifier: <+artifacts.primary.image>
+  imagePullPolicy: Always
+
+service:
+  http:
+    externalPort: 80
+    internalPort: 8080
+
+hpa:
+  maxReplicas: 20
+  minReplicas: 2
+  targetCPUUtilizationPercentage: 80

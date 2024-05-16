@@ -20,14 +20,16 @@ public abstract class ObjectRef {
         this.ref = ref;
     }
     public boolean matches(ObjectRef other) {
+        if (other == null) {
+            return false;
+        }
         return getRef().matches(other.getRef());
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof ObjectRef)) return false;
-        ObjectRef codespace = (ObjectRef) o;
+        if (!(o instanceof ObjectRef codespace)) return false;
         return Objects.equal(ref, codespace.ref);
     }
 

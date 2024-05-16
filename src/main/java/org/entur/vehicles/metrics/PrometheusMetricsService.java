@@ -18,13 +18,13 @@ package org.entur.vehicles.metrics;
 import io.micrometer.core.instrument.ImmutableTag;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
+import jakarta.annotation.PreDestroy;
 import org.entur.vehicles.data.model.Codespace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,13 +37,16 @@ public class PrometheusMetricsService {
     private static final String DATA_COUNTER_NAME = METRICS_PREFIX + "data";
     private static final String QUERY_COUNTER_NAME = METRICS_PREFIX + "query";
     private static final String SUBSCRIPTION_COUNTER_NAME = METRICS_PREFIX + "subscription";
+
+    private static final String JOURNEY_PLANNER_REQUEST_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.request";
+    private static final String JOURNEY_PLANNER_RESPONSE_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.response";
     private static final String CODESPACE_TAG_NAME = "codespaceId";
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
     private int lastLoggedCount;
     private long lastLoggedCountTimeMillis = System.currentTimeMillis();
 
-    private AtomicInteger counter = new AtomicInteger(0);
+    private final AtomicInteger counter = new AtomicInteger(0);
 
     private static final String QUERY_TYPE = "queryType";
     private static final String VEHICLES = "vehicles";
@@ -94,6 +97,24 @@ public class PrometheusMetricsService {
     public void markSubscription() {
         prometheusMeterRegistry
                 .counter(SUBSCRIPTION_COUNTER_NAME)
+                .increment();
+    }
+
+    public void markJourneyPlannerRequest(String queryType) {
+
+        prometheusMeterRegistry
+                .counter(
+                        JOURNEY_PLANNER_REQUEST_COUNTER_NAME,
+                        List.of(new ImmutableTag(QUERY_TYPE, queryType))
+                )
+                .increment();
+    }
+    public void markJourneyPlannerResponse(String queryType) {
+        prometheusMeterRegistry
+                .counter(
+                        JOURNEY_PLANNER_RESPONSE_COUNTER_NAME,
+                        List.of(new ImmutableTag(QUERY_TYPE, queryType))
+                )
                 .increment();
     }
 

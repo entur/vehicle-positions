@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TargetEndpoint name="vehicle-positions-graphql-v2">
+  <DefaultFaultRule name="DefaultFaultRule">
+    <Step>
+      <FaultRules/>
+      <Name>flowCallout.generalSecurityHeaders</Name>
+    </Step>
+    <AlwaysEnforce>false</AlwaysEnforce>
+  </DefaultFaultRule>
+  <Description/>
+  <FaultRules/>
+  <Flows/>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response>
+      <Step>
+        <FaultRules/>
+        <Name>flowCallout.generalSecurityHeaders</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <FaultRules/>
+        <Name>flowCallout.replaceTargetUrl</Name>
+      </Step>
+    </Request>
+    <Response>
+      <Step>
+        <FaultRules/>
+        <Name>assignMessage.addCors</Name>
+      </Step>
+    </Response>
+  </PreFlow>
+  <HTTPTargetConnection>
+    <Properties/>
+    <URL>https://vehicle-positions-v2-gcp2.INGRESS_ENVIRONMENT/</URL>
+  </HTTPTargetConnection>
+</TargetEndpoint>
