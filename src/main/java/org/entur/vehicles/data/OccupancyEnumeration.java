@@ -6,8 +6,9 @@ public enum OccupancyEnumeration {
 
     UNKNOWN, MANY_SEATS_AVAILABLE, SEATS_AVAILABLE, FEW_SEATS_AVAILABLE, STANDING_AVAILABLE, FULL, NOT_ACCEPTING_PASSENGERS;
 
-    public static OccupancyEnumeration fromValue(OccupancyEnum occupancy) {
-        switch (occupancy) {
+    public static OccupancyEnumeration fromValue(String occupancy) {
+        OccupancyEnum occupancyEnum = OccupancyEnum.valueOf(occupancy);
+        switch (occupancyEnum) {
             case UNKNOWN:
                 return UNKNOWN;
             case MANY_SEATS_AVAILABLE:

@@ -161,7 +161,7 @@ public class VehicleRepository {
       CharSequence operatorRef = journey.getOperatorRef();
 
       if (containsValues(journey.getVehicleModes())) {
-        v.setMode(VehicleModeEnumeration.fromValue(journey.getVehicleModes().get(0)));
+        v.setMode(VehicleModeEnumeration.fromValue( journey.getVehicleModes().get(0).toString()));
       } else if (operatorRef != null) {
           v.setMode(resolveModeByOperator(operatorRef.toString()));
       } else {
@@ -195,8 +195,8 @@ public class VehicleRepository {
       }
 
       if (journey.getOccupancy() != null) {
-        v.setOccupancy(OccupancyEnumeration.fromValue(journey.getOccupancy()));
-        v.setOccupancyStatus(OccupancyStatus.fromValue(journey.getOccupancy()));
+        v.setOccupancy(OccupancyEnumeration.fromValue(journey.getOccupancy().toString()));
+        v.setOccupancyStatus(OccupancyStatus.fromValue(journey.getOccupancy().toString()));
       } else {
         v.setOccupancyStatus(OccupancyStatus.noData);
       }
@@ -222,7 +222,7 @@ public class VehicleRepository {
       }
 
       if (journey.getVehicleStatus() != null) {
-        v.setVehicleStatus(VehicleStatusEnumeration.fromValue(journey.getVehicleStatus()));
+        v.setVehicleStatus(VehicleStatusEnumeration.fromValue(journey.getVehicleStatus().toString()));
       }
 
       vehicles.put(key, v);

@@ -15,7 +15,7 @@ import com.google.pubsub.v1.SubscriptionName;
 import com.google.pubsub.v1.TopicName;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
+import org.entur.avro.realtime.siri.helper.JsonReader;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -187,7 +187,7 @@ public class PubSubSubscriber {
 
       try {
         vehicleRepository.add(
-                VehicleActivityRecord.fromByteBuffer(pubsubMessage.getData().asReadOnlyByteBuffer())
+                JsonReader.readVehicleActivity(pubsubMessage.getData().toStringUtf8())
         );
       } catch (IOException e) {
         throw new RuntimeException(e);

@@ -6,8 +6,9 @@ public enum VehicleStatusEnumeration {
 
     ASSIGNED, AT_ORIGIN, CANCELLED, COMPLETED, IN_PROGRESS, OFF_ROUTE;
 
-    public static VehicleStatusEnumeration fromValue(VehicleStatusEnum vehicleStatus) {
-        switch (vehicleStatus) {
+    public static VehicleStatusEnumeration fromValue(String vehicleStatus) {
+        VehicleStatusEnum vehicleStatusEnum = VehicleStatusEnum.valueOf(vehicleStatus);
+        switch (vehicleStatusEnum) {
             case ASSIGNED:
                 return ASSIGNED;
             case AT_ORIGIN:
