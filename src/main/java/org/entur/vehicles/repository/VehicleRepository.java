@@ -214,6 +214,7 @@ public class VehicleRepository {
         v.setOccupancy(OccupancyEnumeration.fromValue(journey.getOccupancy().toString()));
         v.setOccupancyStatus(OccupancyStatus.fromValue(journey.getOccupancy().toString()));
       } else {
+        v.setOccupancy(OccupancyEnumeration.UNKNOWN);
         v.setOccupancyStatus(OccupancyStatus.noData);
       }
 
