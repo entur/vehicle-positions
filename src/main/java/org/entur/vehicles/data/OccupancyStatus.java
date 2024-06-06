@@ -15,8 +15,9 @@ public enum OccupancyStatus {
     full,
     notAcceptingPassengers;
 
-    public static OccupancyStatus fromValue(OccupancyEnum occupancy) {
-        switch (occupancy) {
+    public static OccupancyStatus fromValue(String occupancy) {
+        OccupancyEnum occupancyEnum = OccupancyEnum.valueOf(occupancy);
+        switch (occupancyEnum) {
             case EMPTY:
                 return empty;
             case UNKNOWN:
