@@ -22,12 +22,15 @@ import jakarta.annotation.PreDestroy;
 import org.entur.vehicles.data.model.Codespace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.entur.vehicles.graphql.Constants.CLIENT_HEADER_KEY;
 
 @Service
 public class PrometheusMetricsService {
@@ -96,7 +99,9 @@ public class PrometheusMetricsService {
 
     public void markSubscription() {
         prometheusMeterRegistry
-                .counter(SUBSCRIPTION_COUNTER_NAME)
+                .counter(SUBSCRIPTION_COUNTER_NAME,
+                        List.of(new ImmutableTag(CLIENT_HEADER_KEY, getClientNameIfExists()))
+                )
                 .increment();
     }
 
@@ -121,10 +126,16 @@ public class PrometheusMetricsService {
     private void markQuery(String queryType) {
         List<Tag> counterTags = new ArrayList<>();
         counterTags.add(new ImmutableTag(QUERY_TYPE, queryType));
+        counterTags.add(new ImmutableTag(CLIENT_HEADER_KEY, getClientNameIfExists()));
 
         prometheusMeterRegistry
                 .counter(QUERY_COUNTER_NAME, counterTags)
                 .increment();
+    }
+
+    private static String getClientNameIfExists() {
+        String clientName = MDC.get(CLIENT_HEADER_KEY);
+        return clientName != null ? clientName:"";
     }
 
     public void markVehicleQuery() {

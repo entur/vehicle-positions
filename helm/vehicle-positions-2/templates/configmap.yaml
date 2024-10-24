@@ -45,3 +45,5 @@ data:
       
       # spring.graphql.graphiql.enabled={{ .Values.configMap.graphiqlEnabled }}
       spring.graphql.websocket.path=/subscriptions
+      
+      entur.vehicle-positions.client.name.header.name=Et-Client-Name
