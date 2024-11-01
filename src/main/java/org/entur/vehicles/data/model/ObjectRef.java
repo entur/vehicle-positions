@@ -29,8 +29,8 @@ public abstract class ObjectRef {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof ObjectRef codespace)) return false;
-        return Objects.equal(ref, codespace.ref);
+        if (!(o instanceof ObjectRef other)) return false;
+        return Objects.equal(ref, other.ref);
     }
 
     @Override
