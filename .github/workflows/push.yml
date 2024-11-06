@@ -49,3 +49,5 @@ jobs:
     if: github.repository_owner == 'entur' && github.event_name == 'push'
     needs: [docker-build]
     uses: entur/gha-docker/.github/workflows/push.yml@v1
+    with:
+      image_name: vehicle-positions-2
