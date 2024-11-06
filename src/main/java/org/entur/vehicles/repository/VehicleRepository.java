@@ -11,6 +11,7 @@ import org.entur.vehicles.data.VehicleStatusEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Location;
 import org.entur.vehicles.data.model.MonitoredCall;
@@ -137,22 +138,36 @@ public class VehicleRepository {
       }
 
       String serviceJourneyId = null;
+      String datedServiceJourneyId = null;
       String date = null;
       if (journey.getFramedVehicleJourneyRef() != null &&
               journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef() != null) {
         serviceJourneyId = journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef().toString();
         date = journey.getFramedVehicleJourneyRef().getDataFrameRef().toString();
-      } else if (journey.getVehicleJourneyRef() != null) {
-        serviceJourneyId = journey.getVehicleJourneyRef().toString();
+      }
+      if (journey.getVehicleJourneyRef() != null) {
+        datedServiceJourneyId = journey.getVehicleJourneyRef().toString();
       }
 
       if (serviceJourneyId != null) {
         try {
           ServiceJourney serviceJourney = serviceJourneyService.getServiceJourney(serviceJourneyId);
-          serviceJourney.setDate(date);
-          v.setServiceJourney(serviceJourney);
+          if (serviceJourney != null) {
+            serviceJourney.setDate(date);
+            v.setServiceJourney(serviceJourney);
+          }
         } catch (ExecutionException e) {
           v.setServiceJourney(new ServiceJourney(serviceJourneyId, date));
+        }
+      }
+      if (datedServiceJourneyId != null) {
+        try {
+          DatedServiceJourney datedServiceJourney = serviceJourneyService.getDatedServiceJourney(datedServiceJourneyId);
+          if (datedServiceJourney != null) {
+            v.setDatedServiceJourney(datedServiceJourney);
+          }
+        } catch (ExecutionException e) {
+          v.setDatedServiceJourney(new DatedServiceJourney(datedServiceJourneyId, new ServiceJourney(datedServiceJourneyId)));
         }
       }
 
@@ -345,7 +360,9 @@ public class VehicleRepository {
   public ServiceJourney getServiceJourney(String id) {
     Optional<ServiceJourney> serviceJourney = vehicles.values()
             .stream()
-            .filter(vehicleUpdate -> isMatch(vehicleUpdate.getServiceJourney(), id))
+            .filter(vehicleUpdate ->
+                    isMatch(vehicleUpdate.getServiceJourney(), id) ||
+                    isMatch(vehicleUpdate.getDatedServiceJourney(), id))
             .map(vehicleUpdate -> vehicleUpdate.getServiceJourney())
             .findAny();
     if (serviceJourney.isEmpty()) {

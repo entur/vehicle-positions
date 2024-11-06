@@ -24,8 +24,8 @@ configMap:
     threadcount: 5
   journeyplanner:
     servicejourney:
-      threadpoolsize: 1
-      sleeptime: 100
+      threadpoolsize: 2
+      sleeptime: 50
     line:
       threadpoolsize: 1
       sleeptime: 100

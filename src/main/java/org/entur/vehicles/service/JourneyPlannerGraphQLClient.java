@@ -3,6 +3,7 @@ package org.entur.vehicles.service;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,6 +63,8 @@ class Data {
     Line line;
     List<Line> lines;
     ServiceJourney serviceJourney;
+
+    DatedServiceJourney datedServiceJourney;
     Data() {}
     public void setLine(Line line) {
         this.line = line;
@@ -73,5 +76,9 @@ class Data {
 
     public void setServiceJourney(ServiceJourney serviceJourney) {
         this.serviceJourney = serviceJourney;
+    }
+
+    public void setDatedServiceJourney(DatedServiceJourney datedServiceJourney) {
+        this.datedServiceJourney = datedServiceJourney;
     }
 }

@@ -3,6 +3,7 @@ package org.entur.vehicles.service;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ public class ServiceJourneyService {
     private PrometheusMetricsService metricsService;
 
     private boolean serviceJourneyLookupEnabled;
+    private boolean datedServiceJourneyLookupEnabled;
 
     @Value("${vehicle.serviceJourney.concurrent.requests:2}")
     private int concurrentRequests;
@@ -41,11 +43,14 @@ public class ServiceJourneyService {
 
     private boolean initialized = false;
 
-    private AtomicInteger concurrentRequestCounter = new AtomicInteger();
+    private AtomicInteger concurrentServiceJourneyRequestCounter = new AtomicInteger();
+    private AtomicInteger concurrentDatedServiceJourneyRequestCounter = new AtomicInteger();
 
-    public ServiceJourneyService(@Value("${vehicle.serviceJourney.lookup.enabled:true}") boolean serviceJourneyLookupEnabled) {
+    public ServiceJourneyService(@Value("${vehicle.serviceJourney.lookup.enabled:true}") boolean serviceJourneyLookupEnabled,
+                                 @Value("${vehicle.datedserviceJourney.lookup.enabled:true}") boolean datedServiceJourneyLookupEnabled) {
         this.serviceJourneyLookupEnabled = serviceJourneyLookupEnabled;
-        if (serviceJourneyLookupEnabled) {
+        this.datedServiceJourneyLookupEnabled = datedServiceJourneyLookupEnabled;
+        if (serviceJourneyLookupEnabled || datedServiceJourneyLookupEnabled) {
             if (concurrentRequests < 1) {
                 concurrentRequests = 1;
             }
@@ -63,11 +68,25 @@ public class ServiceJourneyService {
                     return new ServiceJourney(serviceJourneyId);
                 }
             });
+    private LoadingCache<String, DatedServiceJourney> datedServiceJourneyCache = CacheBuilder.newBuilder()
+            .expireAfterAccess(1, TimeUnit.HOURS)
+            .build(new CacheLoader<>() {
+                @Override
+                public DatedServiceJourney load(String datedServiceJourneyId) {
+                    if (datedServiceJourneyLookupEnabled) {
+                        return lookupDatedServiceJourney(datedServiceJourneyId);
+                    }
+                    return new DatedServiceJourney(datedServiceJourneyId, new ServiceJourney(datedServiceJourneyId));
+                }
+            });
 
     private AtomicInteger initCounter = new AtomicInteger();
 
     public ServiceJourney getServiceJourney(String serviceJourneyId) throws ExecutionException {
         return serviceJourneyCache.get(serviceJourneyId);
+    }
+    public DatedServiceJourney getDatedServiceJourney(String datedServiceJourneyId) throws ExecutionException {
+        return datedServiceJourneyCache.get(datedServiceJourneyId);
     }
 
     private ServiceJourney lookupServiceJourney(String serviceJourneyId) {
@@ -87,17 +106,15 @@ public class ServiceJourneyService {
                         metricsService.markJourneyPlannerResponse("serviceJourney");
 
                         serviceJourneyCache.put(serviceJourneyId, data.serviceJourney);
-                        if (!initialized) {
-                            initCounter.incrementAndGet();
-                        }
+
                     }
                 } catch (WebClientException e) {
                     // Ignore - return empty ServiceJourney
                 }
-                int waitingRequests = concurrentRequestCounter.decrementAndGet();
+                int waitingRequests = concurrentServiceJourneyRequestCounter.decrementAndGet();
                 if (waitingRequests == 0) {
                     if (!initialized) {
-                        LOG.info("Cache initialization up to date - {} serviceJourneys updated", initCounter.get());
+                        LOG.info("Cache initialization up to date - {} serviceJourneys updated", serviceJourneyCache.size());
                         initialized = true;
                     }
                 }
@@ -112,8 +129,52 @@ public class ServiceJourneyService {
                 }
             });
 
-            concurrentRequestCounter.incrementAndGet();
+            concurrentServiceJourneyRequestCounter.incrementAndGet();
         }
         return new ServiceJourney(serviceJourneyId);
+    }
+
+    private DatedServiceJourney lookupDatedServiceJourney(String datedServiceJourneyId) {
+        // No need to attempt lookup if id does not match pattern
+        if (datedServiceJourneyId.contains(":DatedServiceJourney:")) {
+
+            asyncExecutorService.submit(() -> {
+
+                String query = "{\"query\":\"{datedServiceJourney(id:\\\"" + datedServiceJourneyId + "\\\"){ref:id serviceJourney {ref:id pointsOnLink{length points}}}}\",\"variables\":null}";
+
+                try {
+                    metricsService.markJourneyPlannerRequest("datedServiceJourney");
+                    Data data = graphQLClient.executeQuery(query);
+
+                    if (data != null && data.datedServiceJourney != null) {
+
+                        metricsService.markJourneyPlannerResponse("datedServiceJourney");
+                        datedServiceJourneyCache.put(datedServiceJourneyId, data.datedServiceJourney);
+                    }
+
+                } catch (WebClientException e) {
+                    // Ignore - return empty DatedServiceJourney
+                }
+
+                int waitingRequests = concurrentDatedServiceJourneyRequestCounter.decrementAndGet();
+                if (waitingRequests == 0) {
+                    if (!initialized) {
+                        LOG.info("Cache initialization up to date - {} datedServiceJourneys updated", datedServiceJourneyCache.size());
+                        initialized = true;
+                    }
+                }
+
+                try {
+                    // Sleeping between each execution to offload request-rate
+                    if (sleepTime > 0) {
+                        Thread.sleep(sleepTime);
+                    }
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            concurrentDatedServiceJourneyRequestCounter.incrementAndGet();
+        }
+        return new DatedServiceJourney(datedServiceJourneyId, new ServiceJourney(datedServiceJourneyId));
     }
 }

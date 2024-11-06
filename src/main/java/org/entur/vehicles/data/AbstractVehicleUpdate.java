@@ -2,6 +2,7 @@ package org.entur.vehicles.data;
 
 import com.google.common.base.Objects;
 import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
@@ -9,6 +10,7 @@ import org.entur.vehicles.data.model.ServiceJourney;
 abstract class AbstractVehicleUpdate {
 
   protected ServiceJourney serviceJourney;
+  protected DatedServiceJourney datedServiceJourney;
   protected Operator operator;
   protected Codespace codespace;
   protected VehicleModeEnumeration mode;
@@ -17,11 +19,22 @@ abstract class AbstractVehicleUpdate {
   protected Boolean monitored;
 
   public ServiceJourney getServiceJourney() {
+    if (datedServiceJourney != null) {
+      return datedServiceJourney.getServiceJourney();
+    }
     return serviceJourney;
   }
 
   public void setServiceJourney(ServiceJourney serviceJourney) {
     this.serviceJourney = serviceJourney;
+  }
+
+  public void setDatedServiceJourney(DatedServiceJourney datedServiceJourney) {
+    this.datedServiceJourney = datedServiceJourney;
+  }
+
+  public DatedServiceJourney getDatedServiceJourney() {
+    return datedServiceJourney;
   }
 
   public Operator getOperator() {

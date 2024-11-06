@@ -39,6 +39,7 @@ class Query {
 
     @QueryMapping(name = "vehicles")
     Collection<VehicleUpdate> getVehicles(@Argument String serviceJourneyId,
+                                          @Argument String datedServiceJourneyId,
                                           @Argument String operator,
                                           @Argument String codespaceId,
                                           @Argument VehicleModeEnumeration mode,
@@ -50,7 +51,7 @@ class Query {
 
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
 
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
         LOG.debug("Requesting vehicles with filter: {}", filter);
         final long start = System.currentTimeMillis();
         final Collection<VehicleUpdate> vehicles = repository.getVehicles(filter);

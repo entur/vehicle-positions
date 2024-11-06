@@ -35,6 +35,7 @@ class Subscription {
 
     @SubscriptionMapping
     Publisher<List<VehicleUpdate>> vehicles(@Argument String serviceJourneyId,
+                                       @Argument String datedServiceJourneyId,
                                        @Argument String operator,
                                        @Argument String codespaceId,
                                        @Argument VehicleModeEnumeration mode,
@@ -47,7 +48,7 @@ class Subscription {
                                        @Argument Integer bufferTime) {
         final String uuid = UUID.randomUUID().toString();
         MDC.put(TRACING_HEADER_NAME, uuid);
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
         LOG.debug("Creating new subscription with filter: {}", filter);
         MDC.remove(TRACING_HEADER_NAME);
         metricsService.markSubscription();
@@ -55,11 +56,11 @@ class Subscription {
     }
 
     @SubscriptionMapping
-    Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String operator,
+    Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String datedServiceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleRef, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
 
         metricsService.markSubscription();
-        return vehicles(serviceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
+        return vehicles(serviceJourneyId, datedServiceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
     }
 
 }

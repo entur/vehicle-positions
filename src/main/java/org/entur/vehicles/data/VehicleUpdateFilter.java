@@ -3,6 +3,7 @@ package org.entur.vehicles.data;
 
 import org.entur.vehicles.data.model.BoundingBox;
 import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.Operator;
@@ -20,18 +21,21 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   private int bufferTimeMillis;
 
   public VehicleUpdateFilter (
-      String serviceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
+      String serviceJourneyId, String datedServiceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
-    this(serviceJourneyId, operatorRef, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, null, null);
+    this(serviceJourneyId, datedServiceJourneyId, operatorRef, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, null, null);
   }
 
   public VehicleUpdateFilter(
-      String serviceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
+      String serviceJourneyId, String datedServiceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
   ) {
     if (serviceJourneyId != null) {
       this.serviceJourney = new ServiceJourney(serviceJourneyId);
+    }
+    if (datedServiceJourneyId != null) {
+      this.datedServiceJourney = new DatedServiceJourney(datedServiceJourneyId);
     }
     if (operatorRef != null) {
       this.operator = Operator.getOperator(operatorRef);
@@ -92,7 +96,17 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       isCompleteMatch = isCompleteMatch & boundingBox.contains(vehicleUpdate.getLocation());
     }
     if (isCompleteMatch && serviceJourney != null) {
-      isCompleteMatch = isCompleteMatch & matches(serviceJourney, vehicleUpdate.getServiceJourney());
+      if (vehicleUpdate.getDatedServiceJourney() == null) {
+        isCompleteMatch = isCompleteMatch & matches(serviceJourney, vehicleUpdate.getServiceJourney());
+      } else {
+        isCompleteMatch = isCompleteMatch & (
+                        matches(serviceJourney, vehicleUpdate.getDatedServiceJourney()) ||
+                        matches(serviceJourney, vehicleUpdate.getDatedServiceJourney().getServiceJourney())
+        );
+      }
+    }
+    if (isCompleteMatch && datedServiceJourney != null && vehicleUpdate.getDatedServiceJourney() != null) {
+      isCompleteMatch = isCompleteMatch & matches(datedServiceJourney, vehicleUpdate.getDatedServiceJourney());
     }
     if (isCompleteMatch && operator != null) {
       isCompleteMatch = isCompleteMatch & matches(operator, vehicleUpdate.getOperator());
