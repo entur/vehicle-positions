@@ -34,6 +34,7 @@ jobs:
     with:
       build_artifact_name: artifact
       build_artifact_path: target
+      image_name: vehicle-positions-2
   docker-push:
     if: github.repository_owner == 'entur' && github.event_name == 'push'
     needs: [docker-build]
