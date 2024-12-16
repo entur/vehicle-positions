@@ -8,15 +8,12 @@ import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.SubscriptionMapping;
 import org.springframework.stereotype.Controller;
 
 import java.util.List;
 import java.util.UUID;
-
-import static org.entur.vehicles.graphql.Constants.TRACING_HEADER_NAME;
 
 @Controller
 class Subscription {
@@ -47,11 +44,9 @@ class Subscription {
                                        @Argument Integer bufferSize,
                                        @Argument Integer bufferTime) {
         final String uuid = UUID.randomUUID().toString();
-        MDC.put(TRACING_HEADER_NAME, uuid);
+
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
         LOG.debug("Creating new subscription with filter: {}", filter);
-        MDC.remove(TRACING_HEADER_NAME);
-        metricsService.markSubscription();
         return vehicleUpdater.getPublisher(filter, uuid);
     }
 
@@ -59,7 +54,6 @@ class Subscription {
     Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String datedServiceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleRef, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
 
-        metricsService.markSubscription();
         return vehicles(serviceJourneyId, datedServiceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
     }
 

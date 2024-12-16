@@ -40,6 +40,7 @@ public class PrometheusMetricsService {
     private static final String DATA_COUNTER_NAME = METRICS_PREFIX + "data";
     private static final String QUERY_COUNTER_NAME = METRICS_PREFIX + "query";
     private static final String SUBSCRIPTION_COUNTER_NAME = METRICS_PREFIX + "subscription";
+    private static final String SUBSCRIPTION_GAUGE_NAME = METRICS_PREFIX + "subscription.gauge";
 
     private static final String JOURNEY_PLANNER_REQUEST_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.request";
     private static final String JOURNEY_PLANNER_RESPONSE_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.response";
@@ -103,6 +104,26 @@ public class PrometheusMetricsService {
                         List.of(new ImmutableTag(CLIENT_HEADER_KEY, getClientNameIfExists()))
                 )
                 .increment();
+    }
+
+    AtomicInteger subscriptionCounter = new AtomicInteger(0);
+
+    public void markSubscriptionStart() {
+        prometheusMeterRegistry
+                .gauge(
+                        SUBSCRIPTION_GAUGE_NAME,
+                        subscriptionCounter.incrementAndGet()
+                );
+    }
+    public void markSubscriptionEnd() {
+        prometheusMeterRegistry
+                .gauge(SUBSCRIPTION_GAUGE_NAME,
+                        subscriptionCounter.decrementAndGet()
+                );
+        if (subscriptionCounter.get() < 0) {
+            LOG.warn("Subscription counter is negative. Resetting to 0");
+            subscriptionCounter.set(0);
+        }
     }
 
     public void markJourneyPlannerRequest(String queryType) {
