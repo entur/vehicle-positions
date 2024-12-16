@@ -49,12 +49,11 @@ class HeaderWebsocketInterceptor implements WebSocketGraphQlInterceptor {
         try {
             String header = sessionInfo.getHeaders().getFirst(CLIENT_HEADER_NAME);
             MDC.put(CLIENT_HEADER_KEY, header != null ? header : "");
-            metricsService.markSubscription();
+            metricsService.markSubscriptionStarted();
         } finally {
             MDC.remove(CLIENT_HEADER_KEY);
         }
 
-        metricsService.markSubscriptionStart();
         return WebSocketGraphQlInterceptor.super.handleConnectionInitialization(sessionInfo, connectionInitPayload);
     }
 
@@ -68,7 +67,7 @@ class HeaderWebsocketInterceptor implements WebSocketGraphQlInterceptor {
     @Override
     public void handleConnectionClosed(WebSocketSessionInfo sessionInfo, int statusCode, Map<String, Object> connectionInitPayload) {
         LOG.info("Subscription closed.");
-        metricsService.markSubscriptionEnd();
+        metricsService.markSubscriptionEnded();
         WebSocketGraphQlInterceptor.super.handleConnectionClosed(sessionInfo, statusCode, connectionInitPayload);
     }
 }

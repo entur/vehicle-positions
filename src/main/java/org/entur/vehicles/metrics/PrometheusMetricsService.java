@@ -40,7 +40,8 @@ public class PrometheusMetricsService {
     private static final String DATA_COUNTER_NAME = METRICS_PREFIX + "data";
     private static final String QUERY_COUNTER_NAME = METRICS_PREFIX + "query";
     private static final String SUBSCRIPTION_COUNTER_NAME = METRICS_PREFIX + "subscription";
-    private static final String SUBSCRIPTION_GAUGE_NAME = METRICS_PREFIX + "subscription.gauge";
+    private static final String SUBSCRIPTION_STARTED_NAME = METRICS_PREFIX + "subscription.started";
+    private static final String SUBSCRIPTION_ENDED_NAME = METRICS_PREFIX + "subscription.ended";
 
     private static final String JOURNEY_PLANNER_REQUEST_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.request";
     private static final String JOURNEY_PLANNER_RESPONSE_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.response";
@@ -108,22 +109,21 @@ public class PrometheusMetricsService {
 
     AtomicInteger subscriptionCounter = new AtomicInteger(0);
 
-    public void markSubscriptionStart() {
+    public void markSubscriptionStarted() {
         prometheusMeterRegistry
-                .gauge(
-                        SUBSCRIPTION_GAUGE_NAME,
-                        subscriptionCounter.incrementAndGet()
-                );
+                .counter(
+                        SUBSCRIPTION_STARTED_NAME,
+                        List.of(new ImmutableTag(CLIENT_HEADER_KEY, getClientNameIfExists()))
+                )
+                .increment();
     }
-    public void markSubscriptionEnd() {
+    public void markSubscriptionEnded() {
         prometheusMeterRegistry
-                .gauge(SUBSCRIPTION_GAUGE_NAME,
-                        subscriptionCounter.decrementAndGet()
-                );
-        if (subscriptionCounter.get() < 0) {
-            LOG.warn("Subscription counter is negative. Resetting to 0");
-            subscriptionCounter.set(0);
-        }
+                .counter(
+                        SUBSCRIPTION_ENDED_NAME,
+                        List.of(new ImmutableTag(CLIENT_HEADER_KEY, getClientNameIfExists()))
+                )
+                .increment();
     }
 
     public void markJourneyPlannerRequest(String queryType) {
