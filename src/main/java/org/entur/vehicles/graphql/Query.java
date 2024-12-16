@@ -1,6 +1,8 @@
 package org.entur.vehicles.graphql;
 
 import graphql.kickstart.tools.GraphQLQueryResolver;
+import graphql.schema.DataFetchingEnvironment;
+import jakarta.servlet.http.HttpServletRequest;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
@@ -20,6 +22,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+import static org.entur.vehicles.graphql.Constants.CLIENT_HEADER_KEY;
 import static org.entur.vehicles.graphql.Constants.TRACING_HEADER_NAME;
 
 @Component
@@ -37,7 +40,10 @@ class Query implements GraphQLQueryResolver {
     }
 
     Collection<VehicleUpdate> getVehicles(String serviceJourneyId, String operator,
-                                          String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox) {
+                                          String codespaceId, VehicleModeEnumeration mode, String vehicleId, String lineRef,
+                                          String lineName, Boolean monitored, BoundingBox boundingBox,
+                                          DataFetchingEnvironment environment) {
+        setClientHeader(environment);
 
         MDC.put(TRACING_HEADER_NAME, UUID.randomUUID().toString());
 
@@ -49,7 +55,24 @@ class Query implements GraphQLQueryResolver {
 
         MDC.remove(TRACING_HEADER_NAME);
         metricsService.markVehicleQuery();
+        clearClientHeader();
         return vehicles;
+    }
+
+    private void clearClientHeader() {
+        MDC.remove(CLIENT_HEADER_KEY);
+    }
+
+    private void setClientHeader(DataFetchingEnvironment environment) {
+        if (environment != null) {
+            final HttpServletRequest httpServletRequest = environment.getGraphQlContext().get(HttpServletRequest.class);
+            if (httpServletRequest != null) {
+                String clientHeader = httpServletRequest.getHeader("Et-Client-Name");
+                if (clientHeader != null) {
+                    MDC.put(CLIENT_HEADER_KEY, clientHeader);
+                }
+            }
+        }
     }
 
     List<Line> lines(String codespace) {
