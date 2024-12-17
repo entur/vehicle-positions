@@ -135,15 +135,15 @@ public class GraphQLTests {
         assertEquals("DSJ:Line:321", lines.get(0).getLineRef());
 
         // ServiceJourneys
-        List<ServiceJourney> serviceJourneys = queryService.serviceJourneys(null);
+        List<ServiceJourney> serviceJourneys = queryService.serviceJourneys(null, null);
         assertFalse(serviceJourneys.isEmpty());
         assertTrue(serviceJourneys.stream().anyMatch(sj -> sj.getServiceJourneyId().equals("TST:ServiceJourney:1234567890")));
         assertTrue(serviceJourneys.stream().anyMatch(sj -> sj.getServiceJourneyId().equals("DSJ:ServiceJourney:1234567890")));
 
-        serviceJourneys = queryService.serviceJourneys("BAH:Line:321");
+        serviceJourneys = queryService.serviceJourneys("BAH:Line:321", null);
         assertTrue(serviceJourneys.isEmpty());
 
-        serviceJourneys = queryService.serviceJourneys("TST:Line:123");
+        serviceJourneys = queryService.serviceJourneys("TST:Line:123", null);
         assertFalse(serviceJourneys.isEmpty());
         assertEquals("TST:ServiceJourney:1234567890", serviceJourneys.get(0).getServiceJourneyId());
 
