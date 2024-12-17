@@ -29,7 +29,7 @@ type Query {
 
     serviceJourney(id: String!) : ServiceJourney
 
-    serviceJourneys(lineRef: String!) : [ServiceJourney]
+    serviceJourneys(lineRef: String, codespaceId: String) : [ServiceJourney]
 
     operators(codespaceId: String!) : [Operator]
 }

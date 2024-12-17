@@ -76,7 +76,7 @@ class Query {
     }
 
     @QueryMapping
-    List<Operator> operators(String codespaceId) {
+    List<Operator> operators(@Argument String codespaceId) {
         final long start = System.currentTimeMillis();
 
         final List<Operator> operators = repository.getOperators(codespaceId);
@@ -87,10 +87,10 @@ class Query {
     }
 
     @QueryMapping
-    List<ServiceJourney> serviceJourneys(String lineRef) {
+    List<ServiceJourney> serviceJourneys(@Argument String lineRef, @Argument String codespaceId) {
         final long start = System.currentTimeMillis();
 
-        final List<ServiceJourney> serviceJourneys = repository.getServiceJourneys(lineRef);
+        final List<ServiceJourney> serviceJourneys = repository.getServiceJourneys(lineRef, codespaceId);
         LOG.info("Returning {} serviceJourneys in {} ms", serviceJourneys.size(), System.currentTimeMillis() - start);
 
         metricsService.markServiceJourneysQuery();
@@ -98,7 +98,7 @@ class Query {
     }
 
     @QueryMapping
-    ServiceJourney serviceJourney(String id) {
+    ServiceJourney serviceJourney(@Argument String id) {
         final long start = System.currentTimeMillis();
 
         final ServiceJourney serviceJourney = repository.getServiceJourney(id);

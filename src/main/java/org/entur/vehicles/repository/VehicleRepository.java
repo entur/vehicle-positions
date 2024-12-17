@@ -342,10 +342,13 @@ public class VehicleRepository {
         .collect(Collectors.toList());
   }
 
-  public List<ServiceJourney> getServiceJourneys(String lineRef) {
+  public List<ServiceJourney> getServiceJourneys(String lineRef, String codespaceId) {
     return vehicles.values()
         .stream()
-        .filter(vehicleUpdate -> lineRef == null || isMatch(vehicleUpdate.getLine(), lineRef))
+        .filter(vehicleUpdate ->
+                (lineRef == null || isMatch(vehicleUpdate.getLine(), lineRef) ) &&
+                        (codespaceId == null || isMatch(vehicleUpdate.getCodespace(), codespaceId))
+        )
         .map(vehicleUpdate -> vehicleUpdate.getServiceJourney())
         .distinct()
         .sorted(Comparator.comparing(ServiceJourney::getServiceJourneyId))
