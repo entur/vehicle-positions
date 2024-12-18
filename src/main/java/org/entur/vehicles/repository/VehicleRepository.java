@@ -71,6 +71,7 @@ public class VehicleRepository {
     this.vehicles = vehicles;
     this.maxValidityInMinutes = maxValidityInMinutes;
     this.publisher = publisher;
+    this.publisher.setRepository(this);
     zone = ZonedDateTime.now().getZone();
   }
 
