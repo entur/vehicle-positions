@@ -45,7 +45,7 @@ class HeaderWebsocketInterceptor implements WebSocketGraphQlInterceptor {
 
     @Override
     public Mono<Object> handleConnectionInitialization(WebSocketSessionInfo sessionInfo, Map<String, Object> connectionInitPayload) {
-        LOG.info("Subscription started");
+        LOG.debug("Subscription started");
         try {
             String header = sessionInfo.getHeaders().getFirst(CLIENT_HEADER_NAME);
             MDC.put(CLIENT_HEADER_KEY, header != null ? header : "");
@@ -59,14 +59,14 @@ class HeaderWebsocketInterceptor implements WebSocketGraphQlInterceptor {
 
     @Override
     public Mono<Void> handleCancelledSubscription(WebSocketSessionInfo sessionInfo, String subscriptionId) {
-        LOG.info("Subscription cancelled properly.");
+        LOG.debug("Subscription cancelled properly.");
 
         return WebSocketGraphQlInterceptor.super.handleCancelledSubscription(sessionInfo, subscriptionId);
     }
 
     @Override
     public void handleConnectionClosed(WebSocketSessionInfo sessionInfo, int statusCode, Map<String, Object> connectionInitPayload) {
-        LOG.info("Subscription closed.");
+        LOG.debug("Subscription closed.");
         metricsService.markSubscriptionEnded();
         WebSocketGraphQlInterceptor.super.handleConnectionClosed(sessionInfo, statusCode, connectionInitPayload);
     }
