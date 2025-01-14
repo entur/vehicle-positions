@@ -4,7 +4,7 @@ import org.entur.avro.realtime.siri.model.VehicleModeEnum;
 
 public enum VehicleModeEnumeration {
     
-    AIR, BUS, RAIL, TRAM, COACH, FERRY, METRO;
+    AIR, BUS, COACH, FERRY, METRO, RAIL, TAXI, TRAM;
 
     public static VehicleModeEnumeration fromValue(String mode) {
         VehicleModeEnum vehicleModeEnum = VehicleModeEnum.valueOf(mode);
@@ -13,16 +13,18 @@ public enum VehicleModeEnumeration {
                 return AIR;
             case BUS:
                 return BUS;
-            case RAIL:
-                return RAIL;
-            case TRAM:
-                return TRAM;
             case COACH:
                 return COACH;
             case FERRY:
                 return FERRY;
             case METRO:
                 return METRO;
+            case RAIL:
+                return RAIL;
+            case TAXI:
+                return TAXI;
+            case TRAM:
+                return TRAM;
         }
         return null;
     }

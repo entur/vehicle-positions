@@ -167,11 +167,12 @@ input BoundingBox {
 enum VehicleModeEnumeration {
     AIR
     BUS
-    RAIL
-    TRAM
     COACH
     FERRY
     METRO
+    TAXI
+    TRAM
+    RAIL
 }
 
 enum OccupancyEnumeration {
