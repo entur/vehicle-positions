@@ -13,6 +13,8 @@ schema {
 type Query {
 
     vehicles(serviceJourneyId: String
+        # Date as in "Operating date" when realtime-updates are referenced by ServiceJourneyId + Date
+        date: String
         datedServiceJourneyId: String
            operatorRef: String
            codespaceId: String
@@ -52,6 +54,9 @@ type Subscription {
                    ) : [VehicleUpdate] @deprecated(reason: "Use 'vehicles'.")
 
     vehicles(serviceJourneyId: String
+                   # Date as in "Operating date" when realtime-updates are referenced by ServiceJourneyId + Date
+                   date: String
+                   datedServiceJourneyId: String
                    operatorRef: String
                    codespaceId: String
                    mode: VehicleModeEnumeration

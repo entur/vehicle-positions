@@ -35,6 +35,7 @@ class Query {
 
     @QueryMapping(name = "vehicles")
     Collection<VehicleUpdate> getVehicles(@Argument String serviceJourneyId,
+                                          @Argument String date,
                                           @Argument String datedServiceJourneyId,
                                           @Argument String operator,
                                           @Argument String codespaceId,
@@ -45,7 +46,7 @@ class Query {
                                           @Argument Boolean monitored,
                                           @Argument BoundingBox boundingBox) {
 
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, date, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
         LOG.debug("Requesting vehicles with filter: {}", filter);
         final long start = System.currentTimeMillis();
         final Collection<VehicleUpdate> vehicles = repository.getVehicles(filter);

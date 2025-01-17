@@ -21,18 +21,22 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   private int bufferTimeMillis;
 
   public VehicleUpdateFilter (
-      String serviceJourneyId, String datedServiceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
+      String serviceJourneyId, String date, String datedServiceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
-    this(serviceJourneyId, datedServiceJourneyId, operatorRef, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, null, null);
+    this(serviceJourneyId, date, datedServiceJourneyId, operatorRef, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, null, null);
   }
 
   public VehicleUpdateFilter(
-      String serviceJourneyId, String datedServiceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
+      String serviceJourneyId,  String date, String datedServiceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
   ) {
     if (serviceJourneyId != null) {
-      this.serviceJourney = new ServiceJourney(serviceJourneyId);
+      if (date != null) {
+        this.serviceJourney = new ServiceJourney(serviceJourneyId, date);
+      } else {
+        this.serviceJourney = new ServiceJourney(serviceJourneyId);
+      }
     }
     if (datedServiceJourneyId != null) {
       this.datedServiceJourney = new DatedServiceJourney(datedServiceJourneyId);
@@ -97,6 +101,10 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     }
     if (isCompleteMatch && serviceJourney != null) {
       if (vehicleUpdate.getDatedServiceJourney() == null) {
+        isCompleteMatch = isCompleteMatch & matches(serviceJourney, vehicleUpdate.getServiceJourney());
+        if (serviceJourney.getDate() != null) {
+          isCompleteMatch = isCompleteMatch & matches(serviceJourney.getDate(), vehicleUpdate.getServiceJourney().getDate());
+        }
         isCompleteMatch = isCompleteMatch & matches(serviceJourney, vehicleUpdate.getServiceJourney());
       } else {
         isCompleteMatch = isCompleteMatch & (

@@ -18,6 +18,7 @@ class VehicleUpdateFilterTest {
         null,
         null,
         null,
+        null,
         "TST:Line:123",
         null,
         null,
@@ -42,6 +43,7 @@ class VehicleUpdateFilterTest {
         null,
         null,
         null,
+        null,
         ".*123.*",
         null,
         null,
@@ -60,6 +62,7 @@ class VehicleUpdateFilterTest {
   @Test
   void testMultipleCriteriaMatch() {
     VehicleUpdateFilter filter = new VehicleUpdateFilter(
+        null,
         null,
         null,
         null,

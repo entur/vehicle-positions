@@ -32,6 +32,7 @@ class Subscription {
 
     @SubscriptionMapping
     Publisher<List<VehicleUpdate>> vehicles(@Argument String serviceJourneyId,
+                                       @Argument String date,
                                        @Argument String datedServiceJourneyId,
                                        @Argument String operator,
                                        @Argument String codespaceId,
@@ -45,16 +46,16 @@ class Subscription {
                                        @Argument Integer bufferTime) {
         final String uuid = UUID.randomUUID().toString();
 
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, date, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
         LOG.debug("Creating new subscription with filter: {}", filter);
         return vehicleUpdater.getPublisher(filter, uuid);
     }
 
     @SubscriptionMapping
-    Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String datedServiceJourneyId, String operator,
+    Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String date, String datedServiceJourneyId, String operator,
         String codespaceId, VehicleModeEnumeration mode, String vehicleRef, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
-
-        return vehicles(serviceJourneyId, datedServiceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
+        LOG.warn("Deprecated method vehicleUpdates called");
+        return vehicles(serviceJourneyId, date, datedServiceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
     }
 
 }
