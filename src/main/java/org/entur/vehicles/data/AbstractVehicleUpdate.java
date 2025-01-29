@@ -14,7 +14,7 @@ abstract class AbstractVehicleUpdate {
   protected Operator operator;
   protected Codespace codespace;
   protected VehicleModeEnumeration mode;
-  protected String vehicleRef;
+
   protected Line line;
   protected Boolean monitored;
 
@@ -61,28 +61,6 @@ abstract class AbstractVehicleUpdate {
     this.mode = mode;
   }
 
-  public String getVehicleRef() {
-    return vehicleRef;
-  }
-
-  public void setVehicleRef(String vehicleRef) {
-    this.vehicleRef = vehicleRef;
-  }
-
-  /**
-   * @deprecated
-   */
-  public String getVehicleId() {
-    return getVehicleRef();
-  }
-
-  /**
-   * @deprecated
-   */
-  public void setVehicleId(String vehicleRef) {
-    setVehicleRef(vehicleRef);
-  }
-
   public Line getLine() {
     return line;
   }
@@ -100,13 +78,12 @@ abstract class AbstractVehicleUpdate {
         Objects.equal(operator, that.operator) &&
         Objects.equal(codespace, that.codespace) &&
         Objects.equal(mode, that.mode) &&
-        Objects.equal(vehicleRef, that.vehicleRef) &&
         Objects.equal(line, that.line);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(serviceJourney, operator, codespace, mode, vehicleRef, line);
+    return Objects.hashCode(serviceJourney, operator, codespace, mode, line);
   }
 
 

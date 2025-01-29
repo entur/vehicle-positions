@@ -10,6 +10,7 @@ import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
+import java.util.Set;
 import java.util.StringJoiner;
 
 @SchemaMapping
@@ -20,15 +21,19 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   private int bufferSize;
   private int bufferTimeMillis;
 
+  private Set<String> vehicleIds;
+
   public VehicleUpdateFilter (
-      String serviceJourneyId, String date, String datedServiceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
+      String serviceJourneyId, String date, String datedServiceJourneyId, String operatorRef,
+      String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
-    this(serviceJourneyId, date, datedServiceJourneyId, operatorRef, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, null, null);
+    this(serviceJourneyId, date, datedServiceJourneyId, operatorRef, codespaceId, mode, vehicleIds, lineRef, lineName, monitored, boundingBox, null, null);
   }
 
   public VehicleUpdateFilter(
-      String serviceJourneyId,  String date, String datedServiceJourneyId, String operatorRef, String codespaceId, VehicleModeEnumeration mode, String vehicleId,
+      String serviceJourneyId,  String date, String datedServiceJourneyId, String operatorRef,
+      String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
   ) {
     if (serviceJourneyId != null) {
@@ -48,7 +53,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       this.codespace = Codespace.getCodespace(codespaceId);
     }
     this.mode = mode;
-    this.vehicleRef = vehicleId;
+    this.vehicleIds = vehicleIds;
     if (lineRef != null | lineName != null) {
       this.line = new Line(lineRef, lineName);
     }
@@ -125,8 +130,8 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     if (isCompleteMatch && mode != null) {
       isCompleteMatch = isCompleteMatch & matches(mode, vehicleUpdate.getMode());
     }
-    if (isCompleteMatch && vehicleRef != null) {
-      isCompleteMatch = isCompleteMatch & matches(vehicleRef, vehicleUpdate.getVehicleRef());
+    if (isCompleteMatch && vehicleIds != null) {
+      isCompleteMatch = isCompleteMatch & matches(vehicleIds, vehicleUpdate.getVehicleRef());
     }
     if (isCompleteMatch && line != null) {
       isCompleteMatch = isCompleteMatch & matches(line.getLineRef(), vehicleUpdate.getLine().getLineRef());
@@ -156,6 +161,19 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     return true;
   }
 
+  private boolean matches(Set<String> template, String value) {
+
+    if (template != null) {
+
+      if (value == null) {
+        // If a template-value is set, null-values does not match
+        return false;
+      }
+      return template.contains(value);
+    }
+    return true;
+  }
+
   private boolean matches(VehicleModeEnumeration template, VehicleModeEnumeration value) {
 
     if (template != null) {
@@ -176,7 +194,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
         .add("operator='" + operator + "'")
         .add("line=" + line)
         .add("serviceJourneyId='" + serviceJourney + "'")
-        .add("vehicleId='" + vehicleRef + "'")
+        .add("vehicleIds='" + vehicleIds + "'")
         .add("boundingBox=" + boundingBox)
         .add("mode=" + mode)
         .add("bufferSize=" + bufferSize)

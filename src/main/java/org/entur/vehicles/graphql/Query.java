@@ -18,6 +18,7 @@ import org.springframework.stereotype.Controller;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 @Controller
 class Query {
@@ -41,12 +42,33 @@ class Query {
                                           @Argument String codespaceId,
                                           @Argument VehicleModeEnumeration mode,
                                           @Argument String vehicleId,
+                                          @Argument Set<String> vehicleIds,
                                           @Argument String lineRef,
                                           @Argument String lineName,
                                           @Argument Boolean monitored,
                                           @Argument BoundingBox boundingBox) {
 
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, date, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox);
+        if (vehicleId != null) {
+            if (vehicleIds == null) {
+                vehicleIds = Set.of(vehicleId);
+            } else {
+                vehicleIds.add(vehicleId);
+            }
+        }
+
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(
+                serviceJourneyId,
+                date,
+                datedServiceJourneyId,
+                operator,
+                codespaceId,
+                mode,
+                vehicleIds,
+                lineRef,
+                lineName,
+                monitored,
+                boundingBox
+        );
         LOG.debug("Requesting vehicles with filter: {}", filter);
         final long start = System.currentTimeMillis();
         final Collection<VehicleUpdate> vehicles = repository.getVehicles(filter);

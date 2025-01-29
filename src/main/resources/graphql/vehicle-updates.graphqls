@@ -20,6 +20,7 @@ type Query {
            codespaceId: String
            mode: VehicleModeEnumeration
            vehicleId: String
+           vehicleIds: [String]
            lineRef: String
            lineName: String
            monitored: Boolean
@@ -37,21 +38,6 @@ type Query {
 }
 
 type Subscription {
-    vehicleUpdates(serviceJourneyId: String
-                   datedServiceJourneyId: String
-                   operatorRef: String
-                   codespaceId: String
-                   mode: VehicleModeEnumeration
-                   vehicleId: String
-                   lineRef: String
-                   lineName: String
-                   monitored: Boolean
-                   boundingBox: BoundingBox,
-                   # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
-                   bufferSize: Int = 20
-                   # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
-                   bufferTime: Int = 250
-                   ) : [VehicleUpdate] @deprecated(reason: "Use 'vehicles'.")
 
     vehicles(serviceJourneyId: String
                    # Date as in "Operating date" when realtime-updates are referenced by ServiceJourneyId + Date
@@ -61,6 +47,7 @@ type Subscription {
                    codespaceId: String
                    mode: VehicleModeEnumeration
                    vehicleId: String
+                   vehicleIds: [String]
                    lineRef: String
                    lineName: String
                    monitored: Boolean

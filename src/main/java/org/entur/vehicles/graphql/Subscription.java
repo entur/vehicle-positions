@@ -13,6 +13,7 @@ import org.springframework.graphql.data.method.annotation.SubscriptionMapping;
 import org.springframework.stereotype.Controller;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Controller
@@ -38,6 +39,7 @@ class Subscription {
                                        @Argument String codespaceId,
                                        @Argument VehicleModeEnumeration mode,
                                        @Argument String vehicleId,
+                                       @Argument Set<String> vehicleIds,
                                        @Argument String lineRef,
                                        @Argument String lineName,
                                        @Argument Boolean monitored,
@@ -46,16 +48,30 @@ class Subscription {
                                        @Argument Integer bufferTime) {
         final String uuid = UUID.randomUUID().toString();
 
-        final VehicleUpdateFilter filter = new VehicleUpdateFilter(serviceJourneyId, date, datedServiceJourneyId, operator, codespaceId, mode, vehicleId, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
+        if (vehicleId != null) {
+            if (vehicleIds == null) {
+                vehicleIds = Set.of(vehicleId);
+            } else {
+                vehicleIds.add(vehicleId);
+            }
+        }
+
+        final VehicleUpdateFilter filter = new VehicleUpdateFilter(
+                serviceJourneyId,
+                date,
+                datedServiceJourneyId,
+                operator,
+                codespaceId,
+                mode,
+                vehicleIds,
+                lineRef,
+                lineName,
+                monitored,
+                boundingBox,
+                bufferSize,
+                bufferTime
+        );
         LOG.debug("Creating new subscription with filter: {}", filter);
         return vehicleUpdater.getPublisher(filter, uuid);
     }
-
-    @SubscriptionMapping
-    Publisher<List<VehicleUpdate>> vehicleUpdates(String serviceJourneyId, String date, String datedServiceJourneyId, String operator,
-        String codespaceId, VehicleModeEnumeration mode, String vehicleRef, String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTime) {
-        LOG.warn("Deprecated method vehicleUpdates called");
-        return vehicles(serviceJourneyId, date, datedServiceJourneyId, operator, codespaceId, mode, vehicleRef, lineRef, lineName, monitored, boundingBox, bufferSize, bufferTime);
-    }
-
 }
