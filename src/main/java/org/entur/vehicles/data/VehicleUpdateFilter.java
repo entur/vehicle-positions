@@ -131,7 +131,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       isCompleteMatch = isCompleteMatch & matches(mode, vehicleUpdate.getMode());
     }
     if (isCompleteMatch && vehicleIds != null) {
-      isCompleteMatch = isCompleteMatch & matches(vehicleIds, vehicleUpdate.getVehicleRef());
+      isCompleteMatch = isCompleteMatch & matches(vehicleIds, vehicleUpdate.getVehicleId());
     }
     if (isCompleteMatch && line != null) {
       isCompleteMatch = isCompleteMatch & matches(line.getLineRef(), vehicleUpdate.getLine().getLineRef());

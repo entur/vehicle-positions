@@ -103,7 +103,7 @@ public class VehicleRepository {
 
       v.setCodespace(codespace);
 
-      v.setVehicleRef(vehicleRef);
+      v.setVehicleId(vehicleRef);
 
       if (v.getLocation() != null) {
         v.getLocation().setLongitude(journey.getVehicleLocation().getLongitude());

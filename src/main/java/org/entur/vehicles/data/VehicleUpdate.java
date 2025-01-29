@@ -11,7 +11,7 @@ import java.time.ZonedDateTime;
 @SchemaMapping
 public class VehicleUpdate extends AbstractVehicleUpdate {
 
-  private String vehicleRef;
+  private String vehicleId;
   private String direction;
   private ZonedDateTime lastUpdated;
   private ZonedDateTime expiration;
@@ -32,12 +32,12 @@ public class VehicleUpdate extends AbstractVehicleUpdate {
 
   private MonitoredCall monitoredCall;
 
-  public String getVehicleRef() {
-    return vehicleRef;
+  public String getVehicleId() {
+    return vehicleId;
   }
 
-  public void setVehicleRef(String vehicleRef) {
-    this.vehicleRef = vehicleRef;
+  public void setVehicleId(String vehicleId) {
+    this.vehicleId = vehicleId;
   }
 
   public String getLineRef() {
