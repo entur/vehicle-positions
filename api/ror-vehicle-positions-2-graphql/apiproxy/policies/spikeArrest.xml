@@ -4,6 +4,6 @@
   <Identifier ref="etClientHeaders.name"/>
   <FaultRules/>
   <Properties/>
-  <Rate>600pm</Rate>
+  <Rate>1200pm</Rate>
   <UseEffectiveCount>false</UseEffectiveCount>
 </SpikeArrest>
