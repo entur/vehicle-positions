@@ -165,6 +165,9 @@ public class VehicleRepository {
         try {
           DatedServiceJourney datedServiceJourney = serviceJourneyService.getDatedServiceJourney(datedServiceJourneyId);
           if (datedServiceJourney != null) {
+            if (v.getServiceJourney() != null) {
+              datedServiceJourney.setServiceJourney(v.getServiceJourney());
+            }
             v.setDatedServiceJourney(datedServiceJourney);
           }
         } catch (ExecutionException e) {

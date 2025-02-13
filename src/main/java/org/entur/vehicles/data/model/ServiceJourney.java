@@ -1,5 +1,6 @@
 package org.entur.vehicles.data.model;
 
+import com.google.common.base.Objects;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 @SchemaMapping
@@ -42,5 +43,10 @@ public class ServiceJourney extends ObjectRef {
 
     public void setDate(String date) {
         this.date = date;
+    }
+
+    public boolean matches(ServiceJourney other) {
+        return Objects.equal(this.getId(), other.getId()) &&
+                (date == null || Objects.equal(date, other.date));
     }
 }

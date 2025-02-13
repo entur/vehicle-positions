@@ -9,8 +9,8 @@ import org.entur.vehicles.data.model.ServiceJourney;
 
 abstract class AbstractVehicleUpdate {
 
-  protected ServiceJourney serviceJourney;
-  protected DatedServiceJourney datedServiceJourney;
+  private ServiceJourney serviceJourney;
+  private DatedServiceJourney datedServiceJourney;
   protected Operator operator;
   protected Codespace codespace;
   protected VehicleModeEnumeration mode;

@@ -8,8 +8,10 @@ import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
+import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.StringJoiner;
 
@@ -22,29 +24,41 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   private int bufferTimeMillis;
 
   private Set<String> vehicleIds;
+  private Set<DatedServiceJourney> datedServiceJourneyIds;
+  private Set<ServiceJourney> serviceJourneys;
 
   public VehicleUpdateFilter (
-      String serviceJourneyId, String date, String datedServiceJourneyId, String operatorRef,
+      Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
-    this(serviceJourneyId, date, datedServiceJourneyId, operatorRef, codespaceId, mode, vehicleIds, lineRef, lineName, monitored, boundingBox, null, null);
+    this(serviceJourneyIdAndDates, datedServiceJourneyIds, operatorRef, codespaceId, mode, vehicleIds, lineRef,
+            lineName, monitored, boundingBox, null, null);
   }
 
   public VehicleUpdateFilter(
-      String serviceJourneyId,  String date, String datedServiceJourneyId, String operatorRef,
+          Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
   ) {
-    if (serviceJourneyId != null) {
-      if (date != null) {
-        this.serviceJourney = new ServiceJourney(serviceJourneyId, date);
-      } else {
-        this.serviceJourney = new ServiceJourney(serviceJourneyId);
+    if (serviceJourneyIdAndDates != null) {
+      this.serviceJourneys = new HashSet<>();
+      for (ServiceJourneyIdAndDate idAndDate : serviceJourneyIdAndDates) {
+        String serviceJourneyId = idAndDate.getId();
+        String date = idAndDate.getDate();
+
+        if (date != null) {
+          this.serviceJourneys.add(new ServiceJourney(serviceJourneyId, date));
+        } else {
+          this.serviceJourneys.add(new ServiceJourney(serviceJourneyId));
+        }
       }
     }
-    if (datedServiceJourneyId != null) {
-      this.datedServiceJourney = new DatedServiceJourney(datedServiceJourneyId);
+    if (datedServiceJourneyIds != null) {
+      this.datedServiceJourneyIds = new HashSet<>();
+      for (String datedServiceJourneyId : datedServiceJourneyIds) {
+        this.datedServiceJourneyIds.add(new DatedServiceJourney(datedServiceJourneyId));
+      }
     }
     if (operatorRef != null) {
       this.operator = Operator.getOperator(operatorRef);
@@ -104,22 +118,20 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     if (boundingBox != null) {
       isCompleteMatch = isCompleteMatch & boundingBox.contains(vehicleUpdate.getLocation());
     }
-    if (isCompleteMatch && serviceJourney != null) {
+    if (isCompleteMatch && serviceJourneys != null) {
       if (vehicleUpdate.getDatedServiceJourney() == null) {
-        isCompleteMatch = isCompleteMatch & matches(serviceJourney, vehicleUpdate.getServiceJourney());
-        if (serviceJourney.getDate() != null) {
-          isCompleteMatch = isCompleteMatch & matches(serviceJourney.getDate(), vehicleUpdate.getServiceJourney().getDate());
-        }
-        isCompleteMatch = isCompleteMatch & matches(serviceJourney, vehicleUpdate.getServiceJourney());
+        isCompleteMatch = isCompleteMatch & matches(serviceJourneys, vehicleUpdate.getServiceJourney());
+
       } else {
         isCompleteMatch = isCompleteMatch & (
-                        matches(serviceJourney, vehicleUpdate.getDatedServiceJourney()) ||
-                        matches(serviceJourney, vehicleUpdate.getDatedServiceJourney().getServiceJourney())
+                        matches(serviceJourneys, vehicleUpdate.getServiceJourney())
         );
       }
     }
-    if (isCompleteMatch && datedServiceJourney != null && vehicleUpdate.getDatedServiceJourney() != null) {
-      isCompleteMatch = isCompleteMatch & matches(datedServiceJourney, vehicleUpdate.getDatedServiceJourney());
+    if (isCompleteMatch && datedServiceJourneyIds != null) {
+      isCompleteMatch = isCompleteMatch & (
+              matches(datedServiceJourneyIds, vehicleUpdate.getDatedServiceJourney())
+      );
     }
     if (isCompleteMatch && operator != null) {
       isCompleteMatch = isCompleteMatch & matches(operator, vehicleUpdate.getOperator());
@@ -142,6 +154,26 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     }
 
     return isCompleteMatch;
+  }
+
+  private boolean matches(Set<DatedServiceJourney> datedServiceJourneyIds, DatedServiceJourney targetId) {
+    if (targetId != null) {
+      for (DatedServiceJourney datedServiceJourneyId : datedServiceJourneyIds) {
+        if (datedServiceJourneyId.matches(targetId) || datedServiceJourneyId.matches(targetId.getServiceJourney())) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private boolean matches(Set<ServiceJourney> serviceJourneyIds, ServiceJourney target) {
+    for (ServiceJourney serviceJourney : serviceJourneyIds) {
+      if (serviceJourney.matches(target)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private boolean matches(ObjectRef identifiedObj, ObjectRef objectRef_2) {
@@ -193,7 +225,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
         .add("codespaceId='" + codespace + "'")
         .add("operator='" + operator + "'")
         .add("line=" + line)
-        .add("serviceJourneyId='" + serviceJourney + "'")
+        .add("serviceJourneyIds='" + serviceJourneys + "'")
         .add("vehicleIds='" + vehicleIds + "'")
         .add("boundingBox=" + boundingBox)
         .add("mode=" + mode)

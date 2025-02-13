@@ -4,6 +4,7 @@ import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.data.model.BoundingBox;
+import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
@@ -34,7 +35,9 @@ class Subscription {
     @SubscriptionMapping
     Publisher<List<VehicleUpdate>> vehicles(@Argument String serviceJourneyId,
                                        @Argument String date,
+                                       @Argument Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates,
                                        @Argument String datedServiceJourneyId,
+                                       @Argument Set<String> datedServiceJourneyIds,
                                        @Argument String operator,
                                        @Argument String codespaceId,
                                        @Argument VehicleModeEnumeration mode,
@@ -55,11 +58,24 @@ class Subscription {
                 vehicleIds.add(vehicleId);
             }
         }
+        if (serviceJourneyId != null) {
+            if (serviceJourneyIdAndDates == null) {
+                serviceJourneyIdAndDates = Set.of(new ServiceJourneyIdAndDate(serviceJourneyId, date));
+            }
+        }
+
+        if (datedServiceJourneyId != null) {
+            if (datedServiceJourneyIds == null) {
+                datedServiceJourneyIds = Set.of(datedServiceJourneyId);
+            } else {
+                datedServiceJourneyIds.add(datedServiceJourneyId);
+            }
+        }
+
 
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(
-                serviceJourneyId,
-                date,
-                datedServiceJourneyId,
+                serviceJourneyIdAndDates,
+                datedServiceJourneyIds,
                 operator,
                 codespaceId,
                 mode,

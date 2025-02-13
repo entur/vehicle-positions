@@ -15,7 +15,9 @@ type Query {
     vehicles(serviceJourneyId: String
         # Date as in "Operating date" when realtime-updates are referenced by ServiceJourneyId + Date
         date: String
+        serviceJourneyIdAndDates: [ServiceJourneyIdAndDate]
         datedServiceJourneyId: String
+        datedServiceJourneyIds: [String]
            operatorRef: String
            codespaceId: String
            mode: VehicleModeEnumeration
@@ -42,7 +44,9 @@ type Subscription {
     vehicles(serviceJourneyId: String
                    # Date as in "Operating date" when realtime-updates are referenced by ServiceJourneyId + Date
                    date: String
+                   serviceJourneyIdAndDates: [ServiceJourneyIdAndDate]
                    datedServiceJourneyId: String
+                   datedServiceJourneyIds: [String]
                    operatorRef: String
                    codespaceId: String
                    mode: VehicleModeEnumeration
@@ -147,6 +151,13 @@ type MonitoredCall {
     stopPointRef: String
     order: Int
     vehicleAtStop: Boolean
+}
+
+input ServiceJourneyIdAndDate {
+    # ServiceJourneyId as referenced in planned data
+    id: String!
+    # Date as in "Operating date" when realtime-updates are referenced by ServiceJourneyId + Date.
+    date: String
 }
 
 input BoundingBox {
