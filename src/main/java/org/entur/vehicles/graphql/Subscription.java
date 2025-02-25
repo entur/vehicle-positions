@@ -38,7 +38,7 @@ class Subscription {
                                        @Argument Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates,
                                        @Argument String datedServiceJourneyId,
                                        @Argument Set<String> datedServiceJourneyIds,
-                                       @Argument String operator,
+                                       @Argument String operatorRef,
                                        @Argument String codespaceId,
                                        @Argument VehicleModeEnumeration mode,
                                        @Argument String vehicleId,
@@ -76,7 +76,7 @@ class Subscription {
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(
                 serviceJourneyIdAndDates,
                 datedServiceJourneyIds,
-                operator,
+                operatorRef,
                 codespaceId,
                 mode,
                 vehicleIds,
