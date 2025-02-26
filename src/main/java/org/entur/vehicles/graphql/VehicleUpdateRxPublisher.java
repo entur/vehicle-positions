@@ -29,7 +29,7 @@ public class VehicleUpdateRxPublisher {
     public Flux<List<VehicleUpdate>> getPublisher(VehicleUpdateFilter template, String uuid) {
         List<VehicleUpdate> initialdata = new ArrayList<>();
         if (repository != null) {
-            initialdata.addAll(repository.getVehicles(template));
+            initialdata.addAll(repository.getVehicles(null));
         }
 
         return sink.asFlux()

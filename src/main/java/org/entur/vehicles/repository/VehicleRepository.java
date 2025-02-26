@@ -305,15 +305,20 @@ public class VehicleRepository {
 
   public Collection<VehicleUpdate> getVehicles(VehicleUpdateFilter filter) {
 
-    final long filteringStart = System.currentTimeMillis();
-    final Map<VehicleKey, VehicleUpdate> vehicleUpdates = Maps.filterValues(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
-    final long filteringDone = System.currentTimeMillis();
+    if (filter != null) {
+      final long filteringStart = System.currentTimeMillis();
 
-    if (filteringDone - filteringStart > 50) {
-      LOG.info("Filtering vehicles took {} ms", (filteringDone - filteringStart));
+      final Map<VehicleKey, VehicleUpdate> vehicleUpdates = Maps.filterValues(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
+      final long filteringDone = System.currentTimeMillis();
+
+      if (filteringDone - filteringStart > 50) {
+        LOG.info("Filtering vehicles took {} ms", (filteringDone - filteringStart));
+      }
+      metricsService.markQueryFilterMatch(vehicleUpdates.size());
+      return vehicleUpdates.values();
     }
 
-    return vehicleUpdates.values();
+    return vehicles.values();
   }
 
   public List<Line> getLines(String codespace) {

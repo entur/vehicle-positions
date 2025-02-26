@@ -74,6 +74,7 @@ class Subscription {
 
 
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(
+                metricsService,
                 serviceJourneyIdAndDates,
                 datedServiceJourneyIds,
                 operatorRef,

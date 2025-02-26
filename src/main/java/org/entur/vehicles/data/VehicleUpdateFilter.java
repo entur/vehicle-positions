@@ -9,6 +9,7 @@ import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.util.HashSet;
@@ -18,6 +19,7 @@ import java.util.StringJoiner;
 @SchemaMapping
 public class VehicleUpdateFilter extends AbstractVehicleUpdate {
 
+  private PrometheusMetricsService metricsService;
   private BoundingBox boundingBox;
 
   private int bufferSize;
@@ -32,15 +34,16 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
-    this(serviceJourneyIdAndDates, datedServiceJourneyIds, operatorRef, codespaceId, mode, vehicleIds, lineRef,
+    this(null, serviceJourneyIdAndDates, datedServiceJourneyIds, operatorRef, codespaceId, mode, vehicleIds, lineRef,
             lineName, monitored, boundingBox, null, null);
   }
 
-  public VehicleUpdateFilter(
+  public VehicleUpdateFilter(PrometheusMetricsService metricsService,
           Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
   ) {
+    this.metricsService = metricsService;
     if (serviceJourneyIdAndDates != null) {
       this.serviceJourneys = new HashSet<>();
       for (ServiceJourneyIdAndDate idAndDate : serviceJourneyIdAndDates) {
@@ -153,6 +156,9 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       isCompleteMatch = isCompleteMatch & monitored.equals(vehicleUpdate.isMonitored());
     }
 
+    if (metricsService != null && isCompleteMatch) {
+      metricsService.markSubscriptionFilterMatch();
+    }
     return isCompleteMatch;
   }
 
