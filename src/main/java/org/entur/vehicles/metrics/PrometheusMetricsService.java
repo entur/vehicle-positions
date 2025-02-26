@@ -49,7 +49,7 @@ public class PrometheusMetricsService {
 
     private static final String JOURNEY_PLANNER_REQUEST_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.request";
     private static final String JOURNEY_PLANNER_RESPONSE_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.response";
-    private static final String RETURNED_VEHICLE_UPDATE_COUNTER_NAME = METRICS_PREFIX + "response.count";
+    private static final String RETURNED_VEHICLE_UPDATE_COUNTER_NAME = METRICS_PREFIX + "client.response";
     private static final String CODESPACE_TAG_NAME = "codespaceId";
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
