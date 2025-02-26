@@ -16,6 +16,8 @@ class VehicleUpdateFilterTest {
   @Test
   void testEqualMatch() {
     VehicleUpdateFilter filter = new VehicleUpdateFilter(
+            null,
+            MetricType.QUERY,
         null,
         null,
         null,
@@ -40,6 +42,8 @@ class VehicleUpdateFilterTest {
   @Test
   void testContainsMatch() {
     VehicleUpdateFilter filter = new VehicleUpdateFilter(
+            null,
+            MetricType.QUERY,
         null,
         null,
         null,
@@ -64,6 +68,8 @@ class VehicleUpdateFilterTest {
   @Test
   void testMultipleCriteriaMatch() {
     VehicleUpdateFilter filter = new VehicleUpdateFilter(
+            null,
+            MetricType.QUERY,
             null,
             null,
             null,
@@ -97,6 +103,8 @@ class VehicleUpdateFilterTest {
             );
 
     VehicleUpdateFilter filter = new VehicleUpdateFilter(
+            null,
+            MetricType.QUERY,
             serviceJourneyIdAndDates,
             null,
             null,

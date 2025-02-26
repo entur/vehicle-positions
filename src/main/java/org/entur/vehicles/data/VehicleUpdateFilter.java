@@ -16,6 +16,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.StringJoiner;
 
+import static org.entur.vehicles.data.MetricType.UNDEFINED;
+
 @SchemaMapping
 public class VehicleUpdateFilter extends AbstractVehicleUpdate {
 
@@ -29,16 +31,19 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   private Set<DatedServiceJourney> datedServiceJourneyIds;
   private Set<ServiceJourney> serviceJourneys;
 
+  private MetricType metricType = UNDEFINED;
+
   public VehicleUpdateFilter (
-      Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
+          PrometheusMetricsService metricsService, MetricType metricType,
+          Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
   ) {
-    this(null, serviceJourneyIdAndDates, datedServiceJourneyIds, operatorRef, codespaceId, mode, vehicleIds, lineRef,
+    this(metricsService, metricType, serviceJourneyIdAndDates, datedServiceJourneyIds, operatorRef, codespaceId, mode, vehicleIds, lineRef,
             lineName, monitored, boundingBox, null, null);
   }
 
-  public VehicleUpdateFilter(PrometheusMetricsService metricsService,
+  public VehicleUpdateFilter(PrometheusMetricsService metricsService, MetricType metricType,
           Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
       String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
@@ -81,6 +86,9 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     }
     if (bufferTimeMillis != null) {
       this.bufferTimeMillis = bufferTimeMillis;
+    }
+    if (metricType != null) {
+      this.metricType = metricType;
     }
   }
 
@@ -157,7 +165,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     }
 
     if (metricsService != null && isCompleteMatch) {
-      metricsService.markSubscriptionFilterMatch();
+      metricsService.markFilterMatch(vehicleUpdate.getCodespace(), metricType);
     }
     return isCompleteMatch;
   }

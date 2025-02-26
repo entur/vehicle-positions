@@ -1,5 +1,6 @@
 package org.entur.vehicles.graphql;
 
+import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.VehicleUpdateFilter;
@@ -75,6 +76,7 @@ class Subscription {
 
         final VehicleUpdateFilter filter = new VehicleUpdateFilter(
                 metricsService,
+                MetricType.SUBSCRIPTION,
                 serviceJourneyIdAndDates,
                 datedServiceJourneyIds,
                 operatorRef,

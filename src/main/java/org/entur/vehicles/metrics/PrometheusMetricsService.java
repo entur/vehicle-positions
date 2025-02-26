@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.ImmutableTag;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import jakarta.annotation.PreDestroy;
+import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.model.Codespace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,8 +39,11 @@ public class PrometheusMetricsService {
 
     private static final String METRICS_PREFIX = "app.vehicles.";
     private static final String DATA_COUNTER_NAME = METRICS_PREFIX + "data";
-    private static final String QUERY_COUNTER_NAME = METRICS_PREFIX + "query";
-    private static final String SUBSCRIPTION_COUNTER_NAME = METRICS_PREFIX + "subscription";
+
+    private static final String QUERY_TYPE_LABEL = "query";
+    private static final String SUBSCRIPTION_TYPE_LABEL = "subscription";
+    private static final String QUERY_COUNTER_NAME = METRICS_PREFIX + QUERY_TYPE_LABEL;
+    private static final String SUBSCRIPTION_COUNTER_NAME = METRICS_PREFIX + SUBSCRIPTION_TYPE_LABEL;
     private static final String SUBSCRIPTION_STARTED_NAME = METRICS_PREFIX + "subscription.started";
     private static final String SUBSCRIPTION_ENDED_NAME = METRICS_PREFIX + "subscription.ended";
 
@@ -145,27 +149,17 @@ public class PrometheusMetricsService {
                 .increment();
     }
 
-    public void markSubscriptionFilterMatch() {
+    public void markFilterMatch(Codespace codespace, MetricType metricType) {
         prometheusMeterRegistry
                 .counter(
                         RETURNED_VEHICLE_UPDATE_COUNTER_NAME,
                         List.of(
                                 new ImmutableTag(CLIENT_HEADER_KEY, getClientNameIfExists()),
-                                new ImmutableTag(QUERY_TYPE, "Subscription")
+                                new ImmutableTag(CODESPACE_TAG_NAME, codespace.getCodespaceId()),
+                                new ImmutableTag(QUERY_TYPE, metricType.name())
                         )
                 )
                 .increment();
-    }
-    public void markQueryFilterMatch(int count) {
-        prometheusMeterRegistry
-                .counter(
-                        RETURNED_VEHICLE_UPDATE_COUNTER_NAME,
-                        List.of(
-                                new ImmutableTag(CLIENT_HEADER_KEY, getClientNameIfExists()),
-                                new ImmutableTag(QUERY_TYPE, "Query")
-                        )
-                )
-                .increment(count);
     }
 
     private void markQuery(String queryType) {

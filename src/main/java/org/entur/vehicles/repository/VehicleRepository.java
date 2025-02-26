@@ -314,7 +314,6 @@ public class VehicleRepository {
       if (filteringDone - filteringStart > 50) {
         LOG.info("Filtering vehicles took {} ms", (filteringDone - filteringStart));
       }
-      metricsService.markQueryFilterMatch(vehicleUpdates.size());
       return vehicleUpdates.values();
     }
 
