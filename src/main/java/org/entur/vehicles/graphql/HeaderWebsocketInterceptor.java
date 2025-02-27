@@ -45,10 +45,12 @@ class HeaderWebsocketInterceptor implements WebSocketGraphQlInterceptor {
 
     @Override
     public Mono<Object> handleConnectionInitialization(WebSocketSessionInfo sessionInfo, Map<String, Object> connectionInitPayload) {
-        LOG.debug("Subscription started");
         try {
-            String header = sessionInfo.getHeaders().getFirst(CLIENT_HEADER_NAME);
-            MDC.put(CLIENT_HEADER_KEY, header != null ? header : "");
+            Object headers = connectionInitPayload.get("headers");
+            if (headers instanceof Map) {
+                String clientNameHeader = (String) ((Map) headers).get(CLIENT_HEADER_NAME);
+                MDC.put(CLIENT_HEADER_KEY, clientNameHeader != null ? clientNameHeader : "");
+            }
             metricsService.markSubscriptionStarted();
         } finally {
             MDC.remove(CLIENT_HEADER_KEY);
