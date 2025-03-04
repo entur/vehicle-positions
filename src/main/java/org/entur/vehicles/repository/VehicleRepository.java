@@ -96,8 +96,24 @@ public class VehicleRepository {
       if (journey.getVehicleRef() != null) {
         vehicleRef = journey.getVehicleRef().toString();
       }
+      String lineRef = null;
+      if (journey.getLineRef() != null) {
+        lineRef = journey.getLineRef().toString();
+      }
 
-      final VehicleKey key = new VehicleKey(codespace, vehicleRef);
+      String serviceJourneyId = null;
+      String datedServiceJourneyId = null;
+      String date = null;
+      if (journey.getFramedVehicleJourneyRef() != null &&
+              journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef() != null) {
+        serviceJourneyId = journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef().toString();
+        date = journey.getFramedVehicleJourneyRef().getDataFrameRef().toString();
+      }
+      if (journey.getVehicleJourneyRef() != null) {
+        datedServiceJourneyId = journey.getVehicleJourneyRef().toString();
+      }
+
+      final VehicleKey key = new VehicleKey(codespace, vehicleRef, lineRef, serviceJourneyId, datedServiceJourneyId);
 
       final VehicleUpdate v = vehicles.getOrDefault(key, new VehicleUpdate());
 
@@ -127,8 +143,7 @@ public class VehicleRepository {
         }
       }
 
-      if (journey.getLineRef() != null) {
-        String lineRef = journey.getLineRef().toString();
+      if (lineRef != null) {
         try {
           v.setLine(lineService.getLine(lineRef));
         } catch (ExecutionException e) {
@@ -136,18 +151,6 @@ public class VehicleRepository {
         }
       } else {
         v.setLine(Line.DEFAULT);
-      }
-
-      String serviceJourneyId = null;
-      String datedServiceJourneyId = null;
-      String date = null;
-      if (journey.getFramedVehicleJourneyRef() != null &&
-              journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef() != null) {
-        serviceJourneyId = journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef().toString();
-        date = journey.getFramedVehicleJourneyRef().getDataFrameRef().toString();
-      }
-      if (journey.getVehicleJourneyRef() != null) {
-        datedServiceJourneyId = journey.getVehicleJourneyRef().toString();
       }
 
       if (serviceJourneyId != null) {
@@ -384,14 +387,20 @@ public class VehicleRepository {
   }
 
   static class VehicleKey {
-    Codespace codespace;
-    String vehicleRef;
+    private final Codespace codespace;
+    private final String vehicleRef;
+    private final String lineRef;
+    private final String serviceJourneyId;
+    private final String datedServiceJourneyId;
     int hashCode = -1;
 
-    public VehicleKey(Codespace codespace, String vehicleRef) {
+    public VehicleKey(Codespace codespace, String vehicleRef, String lineRef, String serviceJourneyId, String datedServiceJourneyId) {
       this.codespace = codespace;
       this.vehicleRef = vehicleRef;
-      hashCode = Objects.hashCode(codespace, vehicleRef);
+      this.lineRef = lineRef;
+      this.serviceJourneyId = serviceJourneyId;
+      this.datedServiceJourneyId = datedServiceJourneyId;
+      hashCode = Objects.hashCode(codespace, vehicleRef, lineRef, serviceJourneyId, datedServiceJourneyId);
     }
 
     @Override
@@ -399,7 +408,10 @@ public class VehicleRepository {
       if (this == o) return true;
       if (!(o instanceof VehicleKey that)) return false;
       return Objects.equal(codespace, that.codespace) &&
-          Objects.equal(vehicleRef, that.vehicleRef);
+              Objects.equal(vehicleRef, that.vehicleRef) &&
+              Objects.equal(lineRef, that.lineRef) &&
+              Objects.equal(serviceJourneyId, that.serviceJourneyId) &&
+              Objects.equal(datedServiceJourneyId, that.datedServiceJourneyId);
     }
 
     @Override
