@@ -60,14 +60,14 @@ public class LineService {
                 @Override
                 public Line load(String lineRef) {
                     if (lineLookupEnabled) {
-                        return lookupLine(lineRef);
+                        return lookup(lineRef);
                     }
                     return new Line(lineRef);
                 }
             });
 
     @PostConstruct
-    private void warmUpLineCache() {
+    private void warmUpCache() {
         if (lineLookupEnabled) {
             try {
                 final List<Line> allLines = getAllLines();
@@ -87,7 +87,7 @@ public class LineService {
         return lineCache.get(lineRef);
     }
 
-    private Line lookupLine(String lineRef) {
+    private Line lookup(String lineRef) {
         // No need to attempt lookup if id does not match pattern
         if (lineRef.contains(":Line:")) {
 

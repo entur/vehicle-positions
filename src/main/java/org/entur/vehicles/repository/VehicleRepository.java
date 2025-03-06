@@ -22,6 +22,7 @@ import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.OperatorService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -207,7 +208,7 @@ public class VehicleRepository {
       }
 
       if (operatorRef != null) {
-        v.setOperator(Operator.getOperator(operatorRef.toString()));
+        v.setOperator(OperatorService.getOperator(operatorRef.toString()));
       }else {
         v.setOperator(Operator.DEFAULT);
       }

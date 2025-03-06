@@ -5,6 +5,7 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -63,8 +64,11 @@ class Data {
     Line line;
     List<Line> lines;
     ServiceJourney serviceJourney;
-
     DatedServiceJourney datedServiceJourney;
+
+    Operator operator;
+
+    List<Operator> operators;
     Data() {}
     public void setLine(Line line) {
         this.line = line;
@@ -80,5 +84,13 @@ class Data {
 
     public void setDatedServiceJourney(DatedServiceJourney datedServiceJourney) {
         this.datedServiceJourney = datedServiceJourney;
+    }
+
+    public void setOperator(Operator operator) {
+        this.operator = operator;
+    }
+
+    public void setOperators(List<Operator> operators) {
+        this.operators = operators;
     }
 }

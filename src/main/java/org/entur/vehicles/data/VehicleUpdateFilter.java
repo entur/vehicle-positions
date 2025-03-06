@@ -6,10 +6,10 @@ import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ObjectRef;
-import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.OperatorService;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.time.Duration;
@@ -74,7 +74,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       }
     }
     if (operatorRef != null) {
-      this.operator = Operator.getOperator(operatorRef);
+      this.operator = OperatorService.getOperator(operatorRef);
     }
     if (codespaceId != null) {
       this.codespace = Codespace.getCodespace(codespaceId);

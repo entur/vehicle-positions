@@ -145,6 +145,7 @@ type PointsOnLink {
 
 type Operator {
     operatorRef: String!
+    name: String
 }
 
 type ProgressBetweenStops {

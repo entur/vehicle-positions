@@ -29,6 +29,7 @@ data:
       
       vehicle.line.lookup.enabled=true
       vehicle.serviceJourney.lookup.enabled=true
+      vehicle.operator.lookup.enabled=true
 
       vehicle.serviceJourney.concurrent.requests={{ .Values.configMap.journeyplanner.servicejourney.threadpoolsize }}
       vehicle.serviceJourney.concurrent.sleeptime={{ .Values.configMap.journeyplanner.servicejourney.sleeptime }}
