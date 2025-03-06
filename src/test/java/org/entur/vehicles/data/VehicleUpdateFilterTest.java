@@ -27,7 +27,8 @@ class VehicleUpdateFilterTest {
         "TST:Line:123",
         null,
         null,
-        null
+        null,
+            null
     );
 
     VehicleUpdate update = new VehicleUpdate();
@@ -53,7 +54,8 @@ class VehicleUpdateFilterTest {
         ".*123.*",
         null,
         null,
-        null
+        null,
+            null
     );
 
     VehicleUpdate update = new VehicleUpdate();
@@ -77,6 +79,7 @@ class VehicleUpdateFilterTest {
             null,
             null,
             "TST:Line:123",
+            null,
             null,
             null,
             null
@@ -106,6 +109,7 @@ class VehicleUpdateFilterTest {
             null,
             MetricType.QUERY,
             serviceJourneyIdAndDates,
+            null,
             null,
             null,
             null,

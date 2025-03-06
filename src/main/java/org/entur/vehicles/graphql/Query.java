@@ -18,6 +18,7 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -50,7 +51,8 @@ class Query {
                                           @Argument String lineRef,
                                           @Argument String lineName,
                                           @Argument Boolean monitored,
-                                          @Argument BoundingBox boundingBox) {
+                                          @Argument BoundingBox boundingBox,
+                                          @Argument Duration maxDataAge) {
 
         if (vehicleId != null) {
             if (vehicleIds == null) {
@@ -87,7 +89,8 @@ class Query {
                 lineRef,
                 lineName,
                 monitored,
-                boundingBox
+                boundingBox,
+                maxDataAge
         );
         LOG.debug("Requesting vehicles with filter: {}", filter);
         final long start = System.currentTimeMillis();

@@ -14,6 +14,7 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.SubscriptionMapping;
 import org.springframework.stereotype.Controller;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -48,6 +49,7 @@ class Subscription {
                                        @Argument String lineName,
                                        @Argument Boolean monitored,
                                        @Argument BoundingBox boundingBox,
+                                       @Argument Duration maxDataAge,
                                        @Argument Integer bufferSize,
                                        @Argument Integer bufferTime) {
         final String uuid = UUID.randomUUID().toString();
@@ -87,6 +89,7 @@ class Subscription {
                 lineName,
                 monitored,
                 boundingBox,
+                maxDataAge,
                 bufferSize,
                 bufferTime
         );

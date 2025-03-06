@@ -12,6 +12,8 @@ import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
+import java.time.Duration;
+import java.time.ZonedDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.StringJoiner;
@@ -31,22 +33,25 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
   private Set<DatedServiceJourney> datedServiceJourneyIds;
   private Set<ServiceJourney> serviceJourneys;
 
+  private ZonedDateTime maxDataAge;
+
   private MetricType metricType = UNDEFINED;
 
   public VehicleUpdateFilter (
           PrometheusMetricsService metricsService, MetricType metricType,
           Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
-      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox
+      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Duration maxDataAge
   ) {
     this(metricsService, metricType, serviceJourneyIdAndDates, datedServiceJourneyIds, operatorRef, codespaceId, mode, vehicleIds, lineRef,
-            lineName, monitored, boundingBox, null, null);
+            lineName, monitored, boundingBox, maxDataAge, null, null);
   }
 
   public VehicleUpdateFilter(PrometheusMetricsService metricsService, MetricType metricType,
           Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
-      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Integer bufferSize, Integer bufferTimeMillis
+      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Duration maxDataAge,
+                             Integer bufferSize, Integer bufferTimeMillis
   ) {
     this.metricsService = metricsService;
     if (serviceJourneyIdAndDates != null) {
@@ -81,6 +86,11 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     }
     this.monitored = monitored;
     this.boundingBox = boundingBox;
+
+    if (maxDataAge != null) {
+      this.maxDataAge = ZonedDateTime.now().minus(maxDataAge);
+    }
+
     if (bufferSize != null) {
       this.bufferSize = bufferSize;
     }
@@ -162,6 +172,9 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     }
     if (isCompleteMatch && monitored != null) {
       isCompleteMatch = isCompleteMatch & monitored.equals(vehicleUpdate.isMonitored());
+    }
+    if (isCompleteMatch && maxDataAge != null) {
+      isCompleteMatch = isCompleteMatch & vehicleUpdate.getLastUpdated().isAfter(maxDataAge);
     }
 
     if (metricsService != null && isCompleteMatch) {

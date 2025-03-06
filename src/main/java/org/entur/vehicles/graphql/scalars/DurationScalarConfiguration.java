@@ -7,46 +7,44 @@ import graphql.schema.CoercingParseValueException;
 import graphql.schema.CoercingSerializeException;
 import graphql.schema.GraphQLScalarType;
 
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Duration;
 import java.time.format.DateTimeParseException;
 
+public class DurationScalarConfiguration {
 
-public class DateScalarConfiguration  {
-
-    public static GraphQLScalarType dateScalar() {
+    public static GraphQLScalarType durationScalar() {
         return GraphQLScalarType.newScalar()
-            .name("DateTime")
-            .description("Java ZonedDateTime as scalar.")
-            .coercing(new Coercing<ZonedDateTime, String>() {
+            .name("Duration")
+            .description("Java Duration as scalar - e.g. \"PT1M\".")
+            .coercing(new Coercing<Duration, String>() {
                 @Override
                 public String serialize(final Object dataFetcherResult) {
-                    if (dataFetcherResult instanceof ZonedDateTime) {
-                        return ((ZonedDateTime) dataFetcherResult).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+                    if (dataFetcherResult instanceof Duration) {
+                        return ((Duration) dataFetcherResult).toString();
                     } else {
-                        throw new CoercingSerializeException("Expected a ZonedDateTime object.");
+                        throw new CoercingSerializeException("Expected a Duration object.");
                     }
                 }
 
                 @Override
-                public ZonedDateTime parseValue(final Object input) {
+                public Duration parseValue(final Object input) {
                     try {
                         if (input instanceof String) {
-                            return ZonedDateTime.parse((String) input);
+                            return Duration.parse((String) input);
                         } else {
                             throw new CoercingParseValueException("Expected a String");
                         }
                     } catch (DateTimeParseException e) {
-                        throw new CoercingParseValueException(String.format("Not a valid date: '%s'.", input), e
+                        throw new CoercingParseValueException(String.format("Not a valid Duration: '%s'.", input), e
                         );
                     }
                 }
 
                 @Override
-                public ZonedDateTime parseLiteral(final Object input) {
+                public Duration parseLiteral(final Object input) {
                     if (input instanceof StringValue) {
                         try {
-                            return ZonedDateTime.parse(((StringValue) input).getValue());
+                            return Duration.parse(((StringValue) input).getValue());
                         } catch (DateTimeParseException e) {
                             throw new CoercingParseLiteralException(e);
                         }
