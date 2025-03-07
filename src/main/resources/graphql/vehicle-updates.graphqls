@@ -59,7 +59,7 @@ type Subscription {
                    lineName: String
                    monitored: Boolean
                    boundingBox: BoundingBox,
-                   # Maximum age of data in the response as Duration (e.g. `PT1M`). If lastUpdated is older than this, it will not be included in the response.
+                   # Maximum age of data in the response as Duration (e.g. `PT1M`). If lastUpdated is older than this, it will not be included in the initial response.
                    maxDataAge: Duration,
                    # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
                    bufferSize: Int = 20
