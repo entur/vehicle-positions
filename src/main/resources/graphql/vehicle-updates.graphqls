@@ -39,7 +39,7 @@ type Query {
 
     serviceJourneys(lineRef: String, codespaceId: String) : [ServiceJourney]
 
-    operators(codespaceId: String!) : [Operator]
+    operators(codespaceId: String) : [Operator]
 }
 
 type Subscription {

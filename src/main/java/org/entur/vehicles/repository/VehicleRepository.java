@@ -349,6 +349,7 @@ public class VehicleRepository {
         .stream()
         .filter(vehicleUpdate -> codespace == null || isMatch(vehicleUpdate.getCodespace(), codespace))
         .map(vehicleUpdate -> vehicleUpdate.getOperator())
+        .filter(operator -> operator != null && !operator.getOperatorRef().equals(""))
         .distinct()
         .sorted(Comparator.comparing(Operator::getOperatorRef))
         .collect(Collectors.toList());
