@@ -46,6 +46,9 @@ public class ServiceJourney extends ObjectRef {
     }
 
     public boolean matches(ServiceJourney other) {
+        if (other == null) {
+            return false;
+        }
         return Objects.equal(this.getId(), other.getId()) &&
                 (date == null || Objects.equal(date, other.date));
     }
