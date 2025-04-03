@@ -24,11 +24,10 @@ data:
       vehicle.journeyplanner.url={{ .Values.configMap.journeyPlannerUrl }}
       vehicle.journeyplanner.EtClientName={{ .Values.configMap.EtClientName }}
       vehicle.serviceJourney.lookup.enabled={{ .Values.configMap.serviceJourneyLookupEnabled }}
-      vehicle.updates.max.validity.minutes=1440
+      vehicle.updates.max.validity.minutes=60
       vehicle.updates.expiry.grace.period=PT10M
       
       vehicle.line.lookup.enabled=true
-      vehicle.serviceJourney.lookup.enabled=true
       vehicle.operator.lookup.enabled=true
 
       vehicle.serviceJourney.concurrent.requests={{ .Values.configMap.journeyplanner.servicejourney.threadpoolsize }}
