@@ -6,6 +6,7 @@ import org.springframework.graphql.data.method.annotation.SchemaMapping;
 public class DatedServiceJourney extends ObjectRef {
 
     private ServiceJourney serviceJourney;
+    private String operatingDay;
 
     public DatedServiceJourney() {super("");}
     public DatedServiceJourney(String id) {
@@ -26,5 +27,13 @@ public class DatedServiceJourney extends ObjectRef {
 
     public void setServiceJourney(ServiceJourney serviceJourney) {
         this.serviceJourney = serviceJourney;
+    }
+
+    public String getOperatingDay() {
+        return operatingDay;
+    }
+
+    public void setOperatingDay(String operatingDay) {
+        this.operatingDay = operatingDay;
     }
 }

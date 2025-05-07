@@ -138,42 +138,25 @@ public class ServiceJourneyService {
         // No need to attempt lookup if id does not match pattern
         if (datedServiceJourneyId.contains(":DatedServiceJourney:")) {
 
-            asyncExecutorService.submit(() -> {
+            String query = "{\"query\":\"{datedServiceJourney(id:\\\"" + datedServiceJourneyId + "\\\"){ref:id operatingDay serviceJourney {ref:id pointsOnLink{length points}}}}\",\"variables\":null}";
 
-                String query = "{\"query\":\"{datedServiceJourney(id:\\\"" + datedServiceJourneyId + "\\\"){ref:id serviceJourney {ref:id pointsOnLink{length points}}}}\",\"variables\":null}";
+            try {
+                metricsService.markJourneyPlannerRequest("datedServiceJourney");
+                Data data = graphQLClient.executeQuery(query);
 
-                try {
-                    metricsService.markJourneyPlannerRequest("datedServiceJourney");
-                    Data data = graphQLClient.executeQuery(query);
+                if (data != null && data.datedServiceJourney != null) {
 
-                    if (data != null && data.datedServiceJourney != null) {
-
-                        metricsService.markJourneyPlannerResponse("datedServiceJourney");
-                        datedServiceJourneyCache.put(datedServiceJourneyId, data.datedServiceJourney);
+                    if (data.datedServiceJourney.getServiceJourney() != null) {
+                        data.datedServiceJourney.getServiceJourney().setDate(data.datedServiceJourney.getOperatingDay());
                     }
 
-                } catch (WebClientException e) {
-                    // Ignore - return empty DatedServiceJourney
+                    metricsService.markJourneyPlannerResponse("datedServiceJourney");
+                    return data.datedServiceJourney;
                 }
 
-                int waitingRequests = concurrentDatedServiceJourneyRequestCounter.decrementAndGet();
-                if (waitingRequests == 0) {
-                    if (!initialized) {
-                        LOG.info("Cache initialization up to date - {} datedServiceJourneys updated", datedServiceJourneyCache.size());
-                        initialized = true;
-                    }
-                }
-
-                try {
-                    // Sleeping between each execution to offload request-rate
-                    if (sleepTime > 0) {
-                        Thread.sleep(sleepTime);
-                    }
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            concurrentDatedServiceJourneyRequestCounter.incrementAndGet();
+            } catch (WebClientException e) {
+                // Ignore - return empty DatedServiceJourney
+            }
         }
         return new DatedServiceJourney(datedServiceJourneyId, new ServiceJourney(datedServiceJourneyId));
     }
