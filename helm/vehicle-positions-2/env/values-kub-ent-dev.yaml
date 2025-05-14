@@ -3,6 +3,7 @@ ingress:
 
 
 configMap:
+  graphiqlEnabled: true
   subscriptionProjectId: ent-vpos-dev
   topicProjectId: ent-anshar-dev
   journeyPlannerUrl: https://api.dev.entur.io/journey-planner/v3/graphql
