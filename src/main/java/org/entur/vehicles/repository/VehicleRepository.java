@@ -1,15 +1,14 @@
 package org.entur.vehicles.repository;
 
-import com.google.common.base.Objects;
 import com.google.common.collect.Maps;
 import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.OccupancyEnumeration;
 import org.entur.vehicles.data.OccupancyStatus;
+import org.entur.vehicles.data.QueryFilter;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleStatusEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
-import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
@@ -19,8 +18,9 @@ import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ProgressBetweenStops;
 import org.entur.vehicles.data.model.ServiceJourney;
-import org.entur.vehicles.graphql.VehicleUpdateRxPublisher;
+import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.repository.helpers.Util;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.OperatorService;
 import org.entur.vehicles.service.ServiceJourneyService;
@@ -31,7 +31,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Collection;
 import java.util.Comparator;
@@ -41,13 +40,16 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import static org.entur.vehicles.repository.helpers.Util.containsValues;
+import static org.entur.vehicles.repository.helpers.Util.convert;
+
 @Repository
 public class VehicleRepository {
 
   private static final Logger LOG = LoggerFactory.getLogger(VehicleRepository.class);
   private final PrometheusMetricsService metricsService;
 
-  private final AutoPurgingMap vehicles;
+  private final AutoPurgingVehicleMap vehicles;
 
   private final LineService lineService;
 
@@ -55,15 +57,13 @@ public class VehicleRepository {
 
   private VehicleUpdateRxPublisher publisher;
 
-  final ZoneId zone;
-
   private final long maxValidityInMinutes;
 
   public VehicleRepository(
           @Autowired PrometheusMetricsService metricsService,
           @Autowired LineService lineService,
           @Autowired ServiceJourneyService serviceJourneyService,
-          @Autowired AutoPurgingMap vehicles,
+          @Autowired AutoPurgingVehicleMap vehicles,
           @Value("${vehicle.updates.max.validity.minutes}") long maxValidityInMinutes,
           @Autowired VehicleUpdateRxPublisher publisher) {
     this.metricsService = metricsService;
@@ -73,7 +73,6 @@ public class VehicleRepository {
     this.maxValidityInMinutes = maxValidityInMinutes;
     this.publisher = publisher;
     this.publisher.setRepository(this);
-    zone = ZonedDateTime.now().getZone();
   }
 
   public void addAll(List<VehicleActivityRecord> vehicleList) {
@@ -114,7 +113,7 @@ public class VehicleRepository {
         datedServiceJourneyId = journey.getVehicleJourneyRef().toString();
       }
 
-      final VehicleKey key = new VehicleKey(codespace, vehicleRef, lineRef, serviceJourneyId, datedServiceJourneyId);
+      final StorageKey key = new StorageKey(codespace, vehicleRef, lineRef, serviceJourneyId, datedServiceJourneyId);
 
       final VehicleUpdate v = vehicles.getOrDefault(key, new VehicleUpdate());
 
@@ -202,7 +201,7 @@ public class VehicleRepository {
       if (containsValues(journey.getVehicleModes())) {
         v.setMode(VehicleModeEnumeration.fromValue( journey.getVehicleModes().get(0).toString()));
       } else if (operatorRef != null) {
-          v.setMode(resolveModeByOperator(operatorRef.toString()));
+          v.setMode(Util.resolveModeByOperator(operatorRef.toString()));
       } else {
         v.setMode(VehicleModeEnumeration.BUS);
       }
@@ -282,37 +281,19 @@ public class VehicleRepository {
       vehicles.put(key, v);
       publisher.publishUpdate(v);
 
-      metricsService.markUpdate(1, v.getCodespace());
+      metricsService.markVehicleUpdate(1, v.getCodespace());
     }
     catch (RuntimeException e) {
       LOG.warn("Update ignored.", e);
     }
   }
 
-  private static boolean containsValues(List list) {
-    return list != null && !list.isEmpty();
-  }
-
-  private VehicleModeEnumeration resolveModeByOperator(String operator) {
-    switch (operator) {
-      case "Sporvognsdrift":
-        return VehicleModeEnumeration.TRAM;
-      case "Tide_sjø_AS":
-        return VehicleModeEnumeration.FERRY;
-    }
-    return VehicleModeEnumeration.BUS;
-   }
-
-  private ZonedDateTime convert(CharSequence timestamp) {
-    return ZonedDateTime.parse(timestamp);
-  }
-
-  public Collection<VehicleUpdate> getVehicles(VehicleUpdateFilter filter) {
+  public Collection<VehicleUpdate> getVehicles(QueryFilter filter) {
 
     if (filter != null) {
       final long filteringStart = System.currentTimeMillis();
 
-      final Map<VehicleKey, VehicleUpdate> vehicleUpdates = Maps.filterValues(vehicles, vehicleUpdate -> filter.isMatch(vehicleUpdate));
+      final Map<StorageKey, VehicleUpdate> vehicleUpdates = Maps.filterValues(vehicles, filter::isMatch);
       final long filteringDone = System.currentTimeMillis();
 
       if (filteringDone - filteringStart > 50) {
@@ -349,7 +330,7 @@ public class VehicleRepository {
         .stream()
         .filter(vehicleUpdate -> codespace == null || isMatch(vehicleUpdate.getCodespace(), codespace))
         .map(vehicleUpdate -> vehicleUpdate.getOperator())
-        .filter(operator -> operator != null && !operator.getOperatorRef().equals(""))
+        .filter(operator -> operator != null && !operator.getOperatorRef().isEmpty())
         .distinct()
         .sorted(Comparator.comparing(Operator::getOperatorRef))
         .collect(Collectors.toList());
@@ -381,44 +362,6 @@ public class VehicleRepository {
                     isMatch(vehicleUpdate.getDatedServiceJourney(), id))
             .map(vehicleUpdate -> vehicleUpdate.getServiceJourney())
             .findAny();
-    if (serviceJourney.isEmpty()) {
-      return null;
-    } else {
-      return serviceJourney.get();
-    }
-  }
-
-  static class VehicleKey {
-    private final Codespace codespace;
-    private final String vehicleRef;
-    private final String lineRef;
-    private final String serviceJourneyId;
-    private final String datedServiceJourneyId;
-    int hashCode = -1;
-
-    public VehicleKey(Codespace codespace, String vehicleRef, String lineRef, String serviceJourneyId, String datedServiceJourneyId) {
-      this.codespace = codespace;
-      this.vehicleRef = vehicleRef;
-      this.lineRef = lineRef;
-      this.serviceJourneyId = serviceJourneyId;
-      this.datedServiceJourneyId = datedServiceJourneyId;
-      hashCode = Objects.hashCode(codespace, vehicleRef, lineRef, serviceJourneyId, datedServiceJourneyId);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (!(o instanceof VehicleKey that)) return false;
-      return Objects.equal(codespace, that.codespace) &&
-              Objects.equal(vehicleRef, that.vehicleRef) &&
-              Objects.equal(lineRef, that.lineRef) &&
-              Objects.equal(serviceJourneyId, that.serviceJourneyId) &&
-              Objects.equal(datedServiceJourneyId, that.datedServiceJourneyId);
-    }
-
-    @Override
-    public int hashCode() {
-      return hashCode;
-    }
+      return serviceJourney.orElse(null);
   }
 }

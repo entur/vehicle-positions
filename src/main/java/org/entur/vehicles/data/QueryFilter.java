@@ -21,9 +21,9 @@ import java.util.StringJoiner;
 import static org.entur.vehicles.data.MetricType.UNDEFINED;
 
 @SchemaMapping
-public class VehicleUpdateFilter extends AbstractVehicleUpdate {
+public class QueryFilter extends AbstractUpdate {
 
-  private PrometheusMetricsService metricsService;
+  private final PrometheusMetricsService metricsService;
   private BoundingBox boundingBox;
 
   private int bufferSize;
@@ -37,21 +37,21 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
 
   private MetricType metricType = UNDEFINED;
 
-  public VehicleUpdateFilter (
+  public QueryFilter(
           PrometheusMetricsService metricsService, MetricType metricType,
           Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
       String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
-      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Duration maxDataAge
+      String lineRef, String lineName, Boolean monitored,Boolean cancellation, BoundingBox boundingBox, Duration maxDataAge
   ) {
     this(metricsService, metricType, serviceJourneyIdAndDates, datedServiceJourneyIds, operatorRef, codespaceId, mode, vehicleIds, lineRef,
-            lineName, monitored, boundingBox, maxDataAge, null, null);
+            lineName, monitored, cancellation, boundingBox, maxDataAge, null, null);
   }
 
-  public VehicleUpdateFilter(PrometheusMetricsService metricsService, MetricType metricType,
-          Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
-      String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
-      String lineRef, String lineName, Boolean monitored, BoundingBox boundingBox, Duration maxDataAge,
-                             Integer bufferSize, Integer bufferTimeMillis
+  public QueryFilter(PrometheusMetricsService metricsService, MetricType metricType,
+                     Set<ServiceJourneyIdAndDate> serviceJourneyIdAndDates, Set<String> datedServiceJourneyIds, String operatorRef,
+                     String codespaceId, VehicleModeEnumeration mode, Set<String> vehicleIds,
+                     String lineRef, String lineName, Boolean monitored, Boolean cancellation, BoundingBox boundingBox, Duration maxDataAge,
+                     Integer bufferSize, Integer bufferTimeMillis
   ) {
     this.metricsService = metricsService;
     if (serviceJourneyIdAndDates != null) {
@@ -85,6 +85,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
       this.line = new Line(lineRef, lineName);
     }
     this.monitored = monitored;
+    this.cancellation = cancellation;
     this.boundingBox = boundingBox;
 
     if (maxDataAge != null) {
@@ -110,75 +111,106 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
     return bufferTimeMillis;
   }
 
-  public BoundingBox getBoundingBox() {
-    return boundingBox;
-  }
-
-  public void setBoundingBox(BoundingBox boundingBox) {
-    this.boundingBox = boundingBox;
-  }
-
-  public void setLineRef(String lineRef) {
-    if (this.getLine() == null) {
-      setLine(new Line(null, null));
-    }
-    this.getLine().setLineRef(lineRef);
-  }
-
-  public void setLineName(String lineName) {
-    if (this.getLine() == null) {
-      setLine(new Line(null, null));
-    }
-    this.getLine().setLineName(lineName);
-  }
-
   public boolean isMatch(VehicleUpdate vehicleUpdate) {
 
     boolean isCompleteMatch = true;
 
     if (boundingBox != null) {
-      isCompleteMatch = isCompleteMatch & boundingBox.contains(vehicleUpdate.getLocation());
+      isCompleteMatch = boundingBox.contains(vehicleUpdate.getLocation());
     }
     if (isCompleteMatch && serviceJourneys != null) {
       if (vehicleUpdate.getDatedServiceJourney() == null) {
-        isCompleteMatch = isCompleteMatch & matches(serviceJourneys, vehicleUpdate.getServiceJourney());
+        isCompleteMatch = matches(serviceJourneys, vehicleUpdate.getServiceJourney());
 
       } else {
-        isCompleteMatch = isCompleteMatch & (
+        isCompleteMatch = (
                         matches(serviceJourneys, vehicleUpdate.getServiceJourney())
         );
       }
     }
     if (isCompleteMatch && datedServiceJourneyIds != null) {
-      isCompleteMatch = isCompleteMatch & (
+      isCompleteMatch = (
               matches(datedServiceJourneyIds, vehicleUpdate.getDatedServiceJourney())
       );
     }
     if (isCompleteMatch && operator != null) {
-      isCompleteMatch = isCompleteMatch & matches(operator, vehicleUpdate.getOperator());
+      isCompleteMatch = matches(operator, vehicleUpdate.getOperator());
     }
     if (isCompleteMatch && codespace != null) {
-      isCompleteMatch = isCompleteMatch & matches(codespace, vehicleUpdate.getCodespace());
+      isCompleteMatch = matches(codespace, vehicleUpdate.getCodespace());
     }
     if (isCompleteMatch && mode != null) {
-      isCompleteMatch = isCompleteMatch & matches(mode, vehicleUpdate.getMode());
+      isCompleteMatch = matches(mode, vehicleUpdate.getMode());
     }
     if (isCompleteMatch && vehicleIds != null) {
-      isCompleteMatch = isCompleteMatch & matches(vehicleIds, vehicleUpdate.getVehicleId());
+      isCompleteMatch = matches(vehicleIds, vehicleUpdate.getVehicleId());
     }
     if (isCompleteMatch && line != null) {
-      isCompleteMatch = isCompleteMatch & matches(line.getLineRef(), vehicleUpdate.getLine().getLineRef());
+      isCompleteMatch = matches(line.getLineRef(), vehicleUpdate.getLine().getLineRef());
       isCompleteMatch = isCompleteMatch & matches(line.getLineName(), vehicleUpdate.getLine().getLineName());
     }
     if (isCompleteMatch && monitored != null) {
-      isCompleteMatch = isCompleteMatch & monitored.equals(vehicleUpdate.isMonitored());
+      isCompleteMatch = monitored.equals(vehicleUpdate.isMonitored());
     }
     if (isCompleteMatch && maxDataAge != null) {
-      isCompleteMatch = isCompleteMatch & vehicleUpdate.getLastUpdated().isAfter(maxDataAge);
+      isCompleteMatch = vehicleUpdate.getLastUpdated().isAfter(maxDataAge);
     }
 
     if (metricsService != null && isCompleteMatch) {
       metricsService.markFilterMatch(vehicleUpdate.getCodespace(), metricType);
+    }
+    return isCompleteMatch;
+  }
+
+  public boolean isMatch(EstimatedTimetableUpdate timetableUpdate) {
+
+    boolean isCompleteMatch = true;
+
+    if (serviceJourneys != null) {
+      if (timetableUpdate.getDatedServiceJourney() == null) {
+        isCompleteMatch = matches(serviceJourneys, timetableUpdate.getServiceJourney());
+
+      } else {
+        isCompleteMatch = (
+                        matches(serviceJourneys, timetableUpdate.getServiceJourney())
+        );
+      }
+    }
+    if (isCompleteMatch && datedServiceJourneyIds != null) {
+      isCompleteMatch = (
+              matches(datedServiceJourneyIds, timetableUpdate.getDatedServiceJourney())
+      );
+    }
+    if (isCompleteMatch && operator != null) {
+      isCompleteMatch = matches(operator, timetableUpdate.getOperator());
+    }
+    if (isCompleteMatch && codespace != null) {
+      isCompleteMatch = matches(codespace, timetableUpdate.getCodespace());
+    }
+    if (isCompleteMatch && mode != null) {
+      isCompleteMatch = matches(mode, timetableUpdate.getMode());
+    }
+    if (isCompleteMatch && vehicleIds != null) {
+      isCompleteMatch = matches(vehicleIds, timetableUpdate.getVehicleId());
+    }
+    if (isCompleteMatch && line != null) {
+      isCompleteMatch = matches(line.getLineRef(), timetableUpdate.getLine().getLineRef());
+      isCompleteMatch = isCompleteMatch & matches(line.getLineName(), timetableUpdate.getLine().getLineName());
+    }
+    if (isCompleteMatch && monitored != null) {
+      isCompleteMatch = monitored.equals(timetableUpdate.isMonitored());
+    }
+    if (isCompleteMatch && cancellation != null) {
+      boolean isCancellation = timetableUpdate.isCancellation() != null && timetableUpdate.isCancellation();
+      isCompleteMatch = cancellation.equals(isCancellation);
+    }
+
+    if (isCompleteMatch && maxDataAge != null) {
+      isCompleteMatch = timetableUpdate.getLastUpdated().isAfter(maxDataAge);
+    }
+
+    if (metricsService != null && isCompleteMatch) {
+      metricsService.markFilterMatch(timetableUpdate.getCodespace(), metricType);
     }
     return isCompleteMatch;
   }
@@ -248,7 +280,7 @@ public class VehicleUpdateFilter extends AbstractVehicleUpdate {
 
   @Override
   public String toString() {
-    return new StringJoiner(", ", VehicleUpdateFilter.class.getSimpleName() + "[", "]")
+    return new StringJoiner(", ", QueryFilter.class.getSimpleName() + "[", "]")
         .add("codespaceId='" + codespace + "'")
         .add("operator='" + operator + "'")
         .add("line=" + line)

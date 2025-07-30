@@ -1,36 +1,28 @@
 package org.entur.vehicles.data;
 
 import com.google.common.base.Objects;
-import org.entur.vehicles.data.model.Location;
-import org.entur.vehicles.data.model.MonitoredCall;
-import org.entur.vehicles.data.model.ProgressBetweenStops;
+import org.entur.vehicles.data.model.Call;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @SchemaMapping
-public class VehicleUpdate extends AbstractUpdate {
+public class EstimatedTimetableUpdate extends AbstractUpdate {
 
   private String vehicleId;
   private String direction;
   private ZonedDateTime lastUpdated;
   private ZonedDateTime expiration;
-  private Location location;
-  private Double speed;
-  private Double bearing;
   private long delay;
   private OccupancyEnumeration occupancy;
-  private VehicleStatusEnumeration vehicleStatus;
-  private Boolean inCongestion;
   private String originName;
   private String originRef;
   private String destinationName;
   private String destinationRef;
   private OccupancyStatus occupancyStatus;
-
-  private ProgressBetweenStops progressBetweenStops;
-
-  private MonitoredCall monitoredCall;
+  private List<Call> calls;
 
   public String getVehicleId() {
     return vehicleId;
@@ -46,15 +38,6 @@ public class VehicleUpdate extends AbstractUpdate {
 
   public String getLineName() {
     return super.getLine().getLineName();
-  }
-
-
-  public Location getLocation() {
-    return location;
-  }
-
-  public void setLocation(Location location) {
-    this.location = location;
   }
 
   public String getDirection() {
@@ -81,33 +64,8 @@ public class VehicleUpdate extends AbstractUpdate {
     return expiration;
   }
 
-  public long getExpirationEpochSecond() {
-    return expiration.toEpochSecond();
-  }
-
   public void setExpiration(ZonedDateTime expiration) {
     this.expiration = expiration;
-  }
-
-  public Double getSpeed() {
-    return speed;
-  }
-
-  public void setSpeed(Double speed) {
-    this.speed = speed;
-  }
-
-  public Double getBearing() {
-    return bearing;
-  }
-
-  public void setBearing(Double bearing) {
-    this.bearing = bearing;
-  }
-
-  @Deprecated
-  public Double getHeading() {
-    return bearing;
   }
 
   public OccupancyEnumeration getOccupancy() {
@@ -134,22 +92,6 @@ public class VehicleUpdate extends AbstractUpdate {
   @Override
   public int hashCode() {
     return Objects.hashCode(super.hashCode());
-  }
-
-    public void setVehicleStatus(VehicleStatusEnumeration vehicleStatus) {
-        this.vehicleStatus = vehicleStatus;
-    }
-
-    public VehicleStatusEnumeration getVehicleStatus() {
-        return vehicleStatus;
-    }
-
-  public void setInCongestion(Boolean inCongestion) {
-    this.inCongestion = inCongestion;
-  }
-
-  public Boolean getInCongestion() {
-    return inCongestion;
   }
 
   public String getOriginName() {
@@ -191,19 +133,16 @@ public class VehicleUpdate extends AbstractUpdate {
     return occupancyStatus;
   }
 
-  public ProgressBetweenStops getProgressBetweenStops() {
-    return progressBetweenStops;
+  public List<Call> getCalls() {
+      return calls;
   }
 
-  public void setProgressBetweenStops(ProgressBetweenStops progressBetweenStops) {
-    this.progressBetweenStops = progressBetweenStops;
+  public void addCall(Call calls) {
+      if (this.calls == null) {
+          this.calls = new ArrayList<>();
+      }
+          this.calls.add(calls);
   }
 
-  public MonitoredCall getMonitoredCall() {
-    return monitoredCall;
-  }
-
-  public void setMonitoredCall(MonitoredCall monitoredCall) {
-    this.monitoredCall = monitoredCall;
-  }
+  public enum CallType { RECORDED, ESTIMATED}
 }

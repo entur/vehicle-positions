@@ -5,13 +5,13 @@
 	<parent>
 		<groupId>org.entur.ror</groupId>
 		<artifactId>superpom</artifactId>
-		<version>2.14</version>
+		<version>2.17</version>
 	</parent>
 	<groupId>org.entur.vehicles</groupId>
 	<artifactId>vehicle-positions</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>vehicle-positions</name>
-	<description>GraphQL-service for Vehicle-updates</description>
+	<description>GraphQL-service for realtime-data</description>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -23,7 +23,7 @@
 			<dependency>
 				<groupId>com.google.cloud</groupId>
 				<artifactId>libraries-bom</artifactId>
-				<version>26.59.0</version>
+				<version>26.61.0</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -55,16 +55,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-graphql</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.graphql-java</groupId>
-			<artifactId>graphql-java</artifactId>
-			<version>23.1</version>
-		</dependency>
-		<dependency>
-			<groupId>com.graphql-java</groupId>
-			<artifactId>graphql-java-extended-scalars</artifactId>
-			<version>22.0</version>
 		</dependency>
 
 		<dependency>

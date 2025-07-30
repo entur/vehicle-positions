@@ -7,8 +7,9 @@ import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
 
-abstract class AbstractVehicleUpdate {
+abstract class AbstractUpdate {
 
+  protected Boolean cancellation;
   private ServiceJourney serviceJourney;
   private DatedServiceJourney datedServiceJourney;
   protected Operator operator;
@@ -72,7 +73,7 @@ abstract class AbstractVehicleUpdate {
   @Override
   public boolean equals(Object o) {
     if (this == o) { return true; }
-    AbstractVehicleUpdate that = (AbstractVehicleUpdate) o;
+    AbstractUpdate that = (AbstractUpdate) o;
     return
         Objects.equal(serviceJourney, that.serviceJourney) &&
         Objects.equal(operator, that.operator) &&
@@ -93,5 +94,8 @@ abstract class AbstractVehicleUpdate {
 
   public Boolean isMonitored() {
     return monitored;
+  }
+  public Boolean isCancellation() {
+    return cancellation;
   }
 }

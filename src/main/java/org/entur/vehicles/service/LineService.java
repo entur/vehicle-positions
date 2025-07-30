@@ -6,6 +6,7 @@ import com.google.common.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.graphql.Data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

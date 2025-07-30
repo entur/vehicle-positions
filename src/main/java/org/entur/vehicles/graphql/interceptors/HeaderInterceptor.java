@@ -1,4 +1,4 @@
-package org.entur.vehicles.graphql;
+package org.entur.vehicles.graphql.interceptors;
 
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,8 +10,8 @@ import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
-import static org.entur.vehicles.graphql.Constants.CLIENT_HEADER_KEY;
-import static org.entur.vehicles.graphql.Constants.TRACING_HEADER_NAME;
+import static org.entur.vehicles.graphql.interceptors.Constants.CLIENT_HEADER_KEY;
+import static org.entur.vehicles.graphql.interceptors.Constants.TRACING_HEADER_NAME;
 
 @Component
 class HeaderInterceptor implements WebGraphQlInterceptor {

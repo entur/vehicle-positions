@@ -31,6 +31,16 @@ type Query {
         # Maximum age of data in the response as Duration (e.g. `PT1M`). If lastUpdated is older than this, it will not be included in the response.
         maxDataAge: Duration,) : [VehicleUpdate]
 
+
+    timetables(
+        serviceJourneyIdAndDates: [ServiceJourneyIdAndDate]
+        datedServiceJourneyIds: [String]
+        codespaceId: String
+        mode: VehicleModeEnumeration
+        lineRef: String
+        monitored: Boolean
+        cancellation: Boolean) : [EstimatedTimetableUpdate] @deprecated(reason: "Experimental.")
+
     lines(codespaceId: String) : [Line]
 
     codespaces : [Codespace]
@@ -66,6 +76,19 @@ type Subscription {
                    # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
                    bufferTime: Int = 250
                    ) : [VehicleUpdate]
+
+    timetables(
+        serviceJourneyIdAndDates: [ServiceJourneyIdAndDate]
+        datedServiceJourneyIds: [String]
+        codespaceId: String
+        mode: VehicleModeEnumeration
+        lineRef: String
+        monitored: Boolean
+        cancellation: Boolean
+        # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
+        bufferSize: Int = 20
+        # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
+        bufferTime: Int = 250) : [EstimatedTimetableUpdate] @deprecated(reason: "Experimental.")
 }
 
 type VehicleUpdate {
@@ -106,6 +129,63 @@ type VehicleUpdate {
 
     progressBetweenStops: ProgressBetweenStops
     monitoredCall: MonitoredCall
+}
+
+type EstimatedTimetableUpdate {
+    direction: String
+    serviceJourney: ServiceJourney
+    datedServiceJourney: DatedServiceJourney
+    operator: Operator
+    codespace: Codespace
+    originRef: String
+    originName: String
+    destinationRef: String
+    destinationName: String
+    mode: VehicleModeEnumeration
+    vehicleId: String
+    occupancyStatus: OccupancyStatus
+    line: Line
+    lastUpdated: DateTime
+    lastUpdatedEpochSecond: Float
+    expiration: DateTime
+    expirationEpochSecond: Float
+
+    monitored: Boolean
+    cancellation: Boolean
+
+    # Reported status of the vehicle
+    vehicleStatus: VehicleStatusEnumeration
+
+    calls: [Call]
+}
+
+type Call {
+    stop: Stop
+    order: Int
+    aimedArrivalTime: DateTime
+    aimedArrivalTimeEpochSecond: Float
+    aimedDepartureTime: DateTime
+    aimedDepartureTimeEpochSecond: Float
+    expectedArrivalTime: DateTime
+    expectedArrivalTimeEpochSecond: Float
+    expectedDepartureTime: DateTime
+    expectedDepartureTimeEpochSecond: Float
+    actualArrivalTime: DateTime
+    actualArrivalTimeEpochSecond: Float
+    actualDepartureTime: DateTime
+    actualDepartureTimeEpochSecond: Float
+    callType: CallTypeEnumeration
+    cancellation: Boolean
+    arrivalBoardingActivity: String
+    departureBoardingActivity: String
+    forBoarding: Boolean
+    occupancyStatus: OccupancyStatus
+}
+
+type Stop {
+    id: String!
+    name: String
+    location: Location
 }
 
 type Location {
@@ -247,4 +327,9 @@ enum VehicleStatusEnumeration {
     COMPLETED
     IN_PROGRESS
     OFF_ROUTE
+}
+
+enum CallTypeEnumeration {
+    RECORDED
+    ESTIMATED
 }
