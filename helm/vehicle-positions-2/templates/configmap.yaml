@@ -8,7 +8,8 @@ metadata:
 data:
     application.properties: |-
       entur.vehicle-positions.gcp.subscription.project.name={{.Values.configMap.subscriptionProjectId}}
-      entur.vehicle-positions.gcp.subscription.name=${HOSTNAME}-graphql
+      entur.vehicle-positions.gcp.subscription.name.vm=${HOSTNAME}-graphql-vm
+      entur.vehicle-positions.gcp.subscription.name.et=${HOSTNAME}-graphql-et
       entur.vehicle-positions.gcp.topic.project.name={{.Values.configMap.topicProjectId}}
       entur.vehicle-positions.gcp.topic.name.vm={{.Values.configMap.topicName.vm}}
       entur.vehicle-positions.gcp.topic.name.et={{.Values.configMap.topicName.et}}
