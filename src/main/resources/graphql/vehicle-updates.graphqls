@@ -160,7 +160,7 @@ type EstimatedTimetableUpdate {
 }
 
 type Call {
-    stop: Stop
+    stopPoint: Stop
     order: Int
     aimedArrivalTime: DateTime
     aimedArrivalTimeEpochSecond: Float
