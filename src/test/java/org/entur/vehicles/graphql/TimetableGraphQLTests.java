@@ -13,6 +13,7 @@ import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.AutoPurgingTimetableMap;
 import org.entur.vehicles.repository.TimetableRepository;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,7 @@ public class TimetableGraphQLTests {
                 metricsService,
                 new LineService(false),
                 serviceJourneyService,
+                new NSRService(false),
                 new AutoPurgingTimetableMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                         180,
                 publisher
