@@ -11,11 +11,11 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class VehicleUpdateFilterTest {
+class QueryFilterTest {
 
   @Test
   void testEqualMatch() {
-    VehicleUpdateFilter filter = new VehicleUpdateFilter(
+    QueryFilter filter = new QueryFilter(
             null,
             MetricType.QUERY,
         null,
@@ -25,6 +25,7 @@ class VehicleUpdateFilterTest {
         null,
         null,
         "TST:Line:123",
+        null,
         null,
         null,
         null,
@@ -42,7 +43,7 @@ class VehicleUpdateFilterTest {
 
   @Test
   void testContainsMatch() {
-    VehicleUpdateFilter filter = new VehicleUpdateFilter(
+    QueryFilter filter = new QueryFilter(
             null,
             MetricType.QUERY,
         null,
@@ -52,6 +53,7 @@ class VehicleUpdateFilterTest {
         null,
         null,
         ".*123.*",
+        null,
         null,
         null,
         null,
@@ -69,7 +71,7 @@ class VehicleUpdateFilterTest {
 
   @Test
   void testMultipleCriteriaMatch() {
-    VehicleUpdateFilter filter = new VehicleUpdateFilter(
+    QueryFilter filter = new QueryFilter(
             null,
             MetricType.QUERY,
             null,
@@ -79,6 +81,7 @@ class VehicleUpdateFilterTest {
             null,
             null,
             "TST:Line:123",
+            null,
             null,
             null,
             null,
@@ -105,10 +108,11 @@ class VehicleUpdateFilterTest {
                     new ServiceJourneyIdAndDate("999", null)
             );
 
-    VehicleUpdateFilter filter = new VehicleUpdateFilter(
+    QueryFilter filter = new QueryFilter(
             null,
             MetricType.QUERY,
             serviceJourneyIdAndDates,
+            null,
             null,
             null,
             null,

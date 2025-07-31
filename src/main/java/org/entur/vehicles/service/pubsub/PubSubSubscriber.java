@@ -1,27 +1,21 @@
-package org.entur.vehicles.service;
+package org.entur.vehicles.service.pubsub;
 
 import com.google.api.gax.core.InstantiatingExecutorProvider;
 import com.google.api.gax.rpc.AlreadyExistsException;
-import com.google.cloud.pubsub.v1.AckReplyConsumer;
 import com.google.cloud.pubsub.v1.MessageReceiver;
 import com.google.cloud.pubsub.v1.Subscriber;
 import com.google.cloud.pubsub.v1.SubscriptionAdminClient;
 import com.google.protobuf.Duration;
 import com.google.pubsub.v1.ExpirationPolicy;
-import com.google.pubsub.v1.PubsubMessage;
 import com.google.pubsub.v1.PushConfig;
 import com.google.pubsub.v1.Subscription;
 import com.google.pubsub.v1.SubscriptionName;
 import com.google.pubsub.v1.TopicName;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import org.entur.avro.realtime.siri.helper.JsonReader;
-import org.entur.vehicles.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -29,15 +23,12 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Service
-public class PubSubSubscriber {
+public abstract class PubSubSubscriber {
 
   private static final Logger LOG = LoggerFactory.getLogger(PubSubSubscriber.class.getName());
   private final int reconnectPeriodSec = 5;
   private final int parallelPullCount;
   private final int executorThreadCount;
-
-  private final VehicleRepository vehicleRepository;
 
   private SubscriptionAdminClient subscriptionAdminClient;
 
@@ -47,15 +38,18 @@ public class PubSubSubscriber {
   @Value("${entur.vehicle-positions.shutdownhook:false}")
   private boolean addManualShutdownhook;
 
-  public PubSubSubscriber(@Autowired VehicleRepository vehicleRepository,
-                          @Value("${entur.vehicle-positions.gcp.subscription.project.name}") String subscriptionProjectName,
-                          @Value("${entur.vehicle-positions.gcp.subscription.name}") String subscriptionName,
-                          @Value("${entur.vehicle-positions.gcp.topic.project.name}") String topicProjectName,
-                          @Value("${entur.vehicle-positions.gcp.topic.name}") String topicName,
-                          @Value("${entur.vehicle-positions.pubsub.parallel.pullcount:1}") int parallelPullCount,
-                          @Value("${entur.vehicle-positions.pubsub.parallel.executorThreadCount:5}") int executorThreadCount,
-                          @Value("#{${entur.vehicle-positions.gcp.labels}}") Map<String, String> appLabels) {
-    this.vehicleRepository = vehicleRepository;
+  private boolean enabled;
+  private MessageReceiver receiver;
+
+  public PubSubSubscriber(String subscriptionProjectName,
+                          String subscriptionName,
+                          String topicProjectName,
+                          String topicName,
+                          int parallelPullCount,
+                          int executorThreadCount,
+                          Map<String, String> appLabels,
+                          MessageReceiver receiver,
+                          boolean enabled) {
     this.parallelPullCount = parallelPullCount;
     this.executorThreadCount = executorThreadCount;
 
@@ -76,10 +70,16 @@ public class PubSubSubscriber {
     } catch (IOException e) {
       e.printStackTrace();
     }
+    this.enabled = enabled;
+    this.receiver = receiver;
   }
 
   @PostConstruct
   public void startSubscriptionAsync() {
+    if (!enabled) {
+      LOG.info("Vehicle Monitoring Pubsub subscription is disabled.");
+      return;
+    }
     ExecutorService service = Executors.newSingleThreadExecutor();
     service.execute(() -> {
         subscribe();
@@ -118,8 +118,6 @@ public class PubSubSubscriber {
       subscription = subscriptionAdminClient.getSubscription(projectSubscriptionName);
       LOG.info("Use already existing subscription {}", projectSubscriptionName);
     }
-
-    final VehicleMonitoringReceiver receiver = new VehicleMonitoringReceiver();
 
     Subscriber subscriber = null;
     while (true) {
@@ -175,26 +173,6 @@ public class PubSubSubscriber {
       LOG.info("Subscription deleted {}", projectSubscriptionName);
     } else {
       LOG.info("Nothing to clean up");
-    }
-  }
-
-  private class VehicleMonitoringReceiver implements MessageReceiver {
-
-    @Override
-    public void receiveMessage(
-        PubsubMessage pubsubMessage, AckReplyConsumer ackReplyConsumer
-    ) {
-
-      try {
-        vehicleRepository.add(
-                JsonReader.readVehicleActivity(pubsubMessage.getData().toStringUtf8())
-        );
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-
-      // Ack only after all work for the message is complete.
-      ackReplyConsumer.ack();
     }
   }
 }

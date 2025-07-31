@@ -10,8 +10,9 @@ import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ServiceJourney;
+import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
-import org.entur.vehicles.repository.AutoPurgingMap;
+import org.entur.vehicles.repository.AutoPurgingVehicleMap;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.ServiceJourneyService;
@@ -28,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class GraphQLTests {
+public class VehicleGraphQLTests {
 
     VehicleRepository repository;
 
@@ -44,12 +45,12 @@ public class GraphQLTests {
                 metricsService,
                 new LineService(false),
                 serviceJourneyService,
-                new AutoPurgingMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
+                new AutoPurgingVehicleMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                         180,
                 publisher
         );
         publisher = new VehicleUpdateRxPublisher();
-        queryService = new Query(repository, metricsService);
+        queryService = new Query(repository, null, metricsService);
 
         VehicleActivityRecord vehicleActivityRecord = new VehicleActivityRecord();
         vehicleActivityRecord.setRecordedAtTime(ZonedDateTime.now().toString());

@@ -1,4 +1,4 @@
-package org.entur.vehicles.graphql;
+package org.entur.vehicles.graphql.interceptors;
 
 public class Constants {
 

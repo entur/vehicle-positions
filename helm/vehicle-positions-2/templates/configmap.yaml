@@ -10,7 +10,8 @@ data:
       entur.vehicle-positions.gcp.subscription.project.name={{.Values.configMap.subscriptionProjectId}}
       entur.vehicle-positions.gcp.subscription.name=${HOSTNAME}-graphql
       entur.vehicle-positions.gcp.topic.project.name={{.Values.configMap.topicProjectId}}
-      entur.vehicle-positions.gcp.topic.name={{.Values.configMap.topicName}}
+      entur.vehicle-positions.gcp.topic.name.vm={{.Values.configMap.topicName.vm}}
+      entur.vehicle-positions.gcp.topic.name.et={{.Values.configMap.topicName.et}}
       entur.vehicle-positions.gcp.labels={app:'vehicle-positions',team:'ror', slack:'talk-ror', manager:'application'}
       
       # Number of pubsub-streams to open
@@ -47,3 +48,6 @@ data:
       spring.graphql.websocket.path=/subscriptions
       
       entur.vehicle-positions.client.name.header.name=Et-Client-Name
+
+      entur.vehicle-positions.et.enabled={{ .Values.configMap.etEnabled }}
+      entur.vehicle-positions.vm.enabled={{ .Values.configMap.vmEnabled }}

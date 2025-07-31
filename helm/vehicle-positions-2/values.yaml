@@ -15,7 +15,9 @@ PodDisruptionBudget:
 
 configMap:
   graphiqlEnabled: false
-  topicName: siri.vehicle_monitoring
+  topicName:
+    vm: siri.vehicle_monitoring
+    et: siri.estimated_timetables
   journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.graphql
   serviceJourneyLookupEnabled: false
@@ -29,6 +31,8 @@ configMap:
     line:
       threadpoolsize: 1
       sleeptime: 100
+  etEnabled: false
+  vmEnabled: true
 
 secretMount:
   name: vehicle-positions

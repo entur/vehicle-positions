@@ -3,6 +3,7 @@ package org.entur.vehicles.service;
 import jakarta.annotation.PostConstruct;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.graphql.Data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,7 +13,8 @@ import org.springframework.web.reactive.function.client.WebClientException;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+
+import static java.util.Collections.emptyList;
 
 @Service
 public class OperatorService {
@@ -25,16 +27,13 @@ public class OperatorService {
     @Autowired
     private PrometheusMetricsService metricsService;
 
-    private boolean operatorLookupEnabled;
-
-    boolean initialized = false;
-    private AtomicInteger concurrentRequestCounter = new AtomicInteger();
+    private final boolean operatorLookupEnabled;
 
     public OperatorService(@Value("${vehicle.operator.lookup.enabled:false}") boolean operatorLookupEnabled) {
         this.operatorLookupEnabled = operatorLookupEnabled;
     }
 
-    private static HashMap<String, Operator> operatorCache = new HashMap<>();
+    private static final HashMap<String, Operator> operatorCache = new HashMap<>();
 
     @PostConstruct
     private void warmUpCache() {
@@ -64,6 +63,6 @@ public class OperatorService {
         if (data != null) {
             return data.operators;
         }
-        return null;
+        return emptyList();
     }
 }

@@ -1,7 +1,7 @@
-package org.entur.vehicles.graphql;
+package org.entur.vehicles.graphql.publishers;
 
+import org.entur.vehicles.data.QueryFilter;
 import org.entur.vehicles.data.VehicleUpdate;
-import org.entur.vehicles.data.VehicleUpdateFilter;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -26,7 +26,7 @@ public class VehicleUpdateRxPublisher {
         sink.tryEmitNext(vehicleUpdate);
     }
 
-    public Flux<List<VehicleUpdate>> getPublisher(VehicleUpdateFilter template, String uuid) {
+    public Flux<List<VehicleUpdate>> getPublisher(QueryFilter template, String uuid) {
         List<VehicleUpdate> initialdata = new ArrayList<>();
         if (repository != null) {
             initialdata.addAll(repository.getVehicles(null));

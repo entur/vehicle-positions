@@ -30,15 +30,17 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
-import static org.entur.vehicles.graphql.Constants.CLIENT_HEADER_KEY;
+import static org.entur.vehicles.graphql.interceptors.Constants.CLIENT_HEADER_KEY;
 
 @Service
 public class PrometheusMetricsService {
     private static final Logger LOG = LoggerFactory.getLogger(PrometheusMetricsService.class);
 
     private static final String METRICS_PREFIX = "app.vehicles.";
-    private static final String DATA_COUNTER_NAME = METRICS_PREFIX + "data";
+    private static final String VEHICLE_DATA_COUNTER_NAME = METRICS_PREFIX + "data";
+    private static final String TIMETABLE_DATA_COUNTER_NAME = METRICS_PREFIX + "timetable.data";
 
     private static final String QUERY_TYPE_LABEL = "query";
     private static final String SUBSCRIPTION_TYPE_LABEL = "subscription";
@@ -53,10 +55,14 @@ public class PrometheusMetricsService {
     private static final String CODESPACE_TAG_NAME = "codespaceId";
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
-    private int lastLoggedCount;
-    private long lastLoggedCountTimeMillis = System.currentTimeMillis();
+    private final AtomicInteger vehicleCounter = new AtomicInteger(0);
+    private final AtomicInteger lastLoggedVehicleCount = new AtomicInteger(0);
+    private final AtomicLong lastLoggedVehicleCountTimeMillis = new AtomicLong(System.currentTimeMillis());
 
-    private final AtomicInteger counter = new AtomicInteger(0);
+    private final AtomicInteger timetableCounter = new AtomicInteger(0);
+    private final AtomicInteger lastLoggedTimetableCount = new AtomicInteger(0);
+    private final AtomicLong lastLoggedTimetableCountTimeMillis = new AtomicLong(System.currentTimeMillis());
+
 
     private static final String QUERY_TYPE = "queryType";
     private static final String VEHICLES = "vehicles";
@@ -75,31 +81,44 @@ public class PrometheusMetricsService {
         prometheusMeterRegistry.close();
     }
 
-    public void markUpdate(int count, Codespace codespace) {
+    public void markVehicleUpdate(int count, Codespace codespace) {
         List<Tag> counterTags = new ArrayList<>();
         counterTags.add(new ImmutableTag(CODESPACE_TAG_NAME, codespace.getCodespaceId()));
 
-        prometheusMeterRegistry.counter(DATA_COUNTER_NAME, counterTags).increment(count);
-        if (counter.addAndGet(count) % 1000 == 0) {
-            final int currentCount = counter.get();
+        prometheusMeterRegistry.counter(VEHICLE_DATA_COUNTER_NAME, counterTags).increment(count);
+        if (vehicleCounter.addAndGet(count) % 1000 == 0) {
+            final int currentCount = vehicleCounter.get();
 
-            LOG.debug("Processed {} updates. Current rate: {}/s", currentCount, calculateRate(currentCount));
+            LOG.debug("Processed {} vehicle-updates. Current rate: {}/s", currentCount, calculateRate(currentCount, lastLoggedVehicleCount, lastLoggedVehicleCountTimeMillis));
+
+        }
+    }
+    public void markTimetableUpdate(int count, Codespace codespace) {
+        List<Tag> counterTags = new ArrayList<>();
+        counterTags.add(new ImmutableTag(CODESPACE_TAG_NAME, codespace.getCodespaceId()));
+
+        prometheusMeterRegistry.counter(TIMETABLE_DATA_COUNTER_NAME, counterTags).increment(count);
+        if (timetableCounter.addAndGet(count) % 1000 == 0) {
+            final int currentCount = timetableCounter.get();
+
+            LOG.debug("Processed {} timetable-updates. Current rate: {}/s", currentCount, calculateRate(currentCount, lastLoggedTimetableCount, lastLoggedTimetableCountTimeMillis));
 
         }
     }
 
-    private long calculateRate(int currentCount) {
+    private long calculateRate(int currentCount, AtomicInteger lastLoggedCount, AtomicLong lastLoggedCountTimeMillis) {
+
         long now = System.currentTimeMillis();
 
-        final int updatesSinceLastTime = currentCount - lastLoggedCount;
-        final long elapsedSinceLastTime = now - lastLoggedCountTimeMillis;
+        final int updatesSinceLastTime = currentCount - lastLoggedCount.get();
+        final long elapsedSinceLastTime = now - lastLoggedCountTimeMillis.get();
 
         final double elapsedTimeSeconds = Math.max((double) elapsedSinceLastTime / 1000, 0.1);
 
         final long rate = (long) (updatesSinceLastTime / elapsedTimeSeconds);
 
-        lastLoggedCount = currentCount;
-        lastLoggedCountTimeMillis = now;
+        lastLoggedCount.set(currentCount);
+        lastLoggedCountTimeMillis.set(now);
 
         return rate;
     }
