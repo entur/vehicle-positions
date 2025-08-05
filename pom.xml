@@ -77,6 +77,12 @@
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
 
+		<dependency>
+			<groupId>org.entur</groupId>
+			<artifactId>netex-parser-java</artifactId>
+			<version>3.1.52</version>
+		</dependency>
+
 		<!-- Test -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

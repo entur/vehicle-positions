@@ -45,7 +45,7 @@ public class TimetableGraphQLTests {
                 metricsService,
                 new LineService(false),
                 serviceJourneyService,
-                new NSRService(false),
+                new NSRService(false, null),
                 new AutoPurgingTimetableMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                         180,
                 publisher
