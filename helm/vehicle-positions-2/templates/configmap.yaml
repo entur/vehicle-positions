@@ -53,6 +53,5 @@ data:
       entur.vehicle-positions.et.enabled={{ .Values.configMap.etEnabled }}
       entur.vehicle-positions.vm.enabled={{ .Values.configMap.vmEnabled }}
 
-
-      vehicle.nsr.lookup.nsr=https://storage.googleapis.com/marduk-production/tiamat/CurrentAndFuture_latest.zip
+      vehicle.nsr.lookup.url=https://storage.googleapis.com/marduk-production/tiamat/CurrentAndFuture_latest.zip
       vehicle.nsr.lookup.enabled=false
