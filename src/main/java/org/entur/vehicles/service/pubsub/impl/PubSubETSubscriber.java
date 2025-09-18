@@ -26,7 +26,7 @@ public class PubSubETSubscriber extends PubSubSubscriber {
                             @Value("${entur.vehicle-positions.pubsub.parallel.pullcount:1}") int parallelPullCount,
                             @Value("${entur.vehicle-positions.pubsub.parallel.executorThreadCount:5}") int executorThreadCount,
                             @Value("#{${entur.vehicle-positions.gcp.labels}}") Map<String, String> appLabels,
-                            @Value("${entur.vehicle-positions.vm.enabled:true}") boolean enabled) {
+                            @Value("${entur.vehicle-positions.et.enabled:false}") boolean enabled) {
     super(subscriptionProjectName,
             subscriptionName,
             topicProjectName,
