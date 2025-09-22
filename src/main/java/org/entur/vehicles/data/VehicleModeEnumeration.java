@@ -8,24 +8,16 @@ public enum VehicleModeEnumeration {
 
     public static VehicleModeEnumeration fromValue(String mode) {
         VehicleModeEnum vehicleModeEnum = VehicleModeEnum.valueOf(mode);
-        switch (vehicleModeEnum) {
-            case AIR:
-                return AIR;
-            case BUS:
-                return BUS;
-            case COACH:
-                return COACH;
-            case FERRY:
-                return FERRY;
-            case METRO:
-                return METRO;
-            case RAIL:
-                return RAIL;
-            case TAXI:
-                return TAXI;
-            case TRAM:
-                return TRAM;
-        }
-        return null;
+        return switch (vehicleModeEnum) {
+            case AIR -> AIR;
+            case BUS -> BUS;
+            case COACH -> COACH;
+            case FERRY -> FERRY;
+            case METRO -> METRO;
+            case RAIL -> RAIL;
+            case TAXI -> TAXI;
+            case TRAM -> TRAM;
+            default -> null;
+        };
     }
 }

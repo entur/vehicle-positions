@@ -8,21 +8,14 @@ public enum VehicleStatusEnumeration {
 
     public static VehicleStatusEnumeration fromValue(String vehicleStatus) {
         VehicleStatusEnum vehicleStatusEnum = VehicleStatusEnum.valueOf(vehicleStatus);
-        switch (vehicleStatusEnum) {
-            case ASSIGNED:
-                return ASSIGNED;
-            case AT_ORIGIN:
-                return AT_ORIGIN;
-            case CANCELLED:
-                return CANCELLED;
-            case COMPLETED:
-                return COMPLETED;
-            case IN_PROGRESS:
-                return IN_PROGRESS;
-            case OFF_ROUTE:
-                return OFF_ROUTE;
-            default:
-                return null;
-        }
+        return switch (vehicleStatusEnum) {
+            case ASSIGNED -> ASSIGNED;
+            case AT_ORIGIN -> AT_ORIGIN;
+            case CANCELLED -> CANCELLED;
+            case COMPLETED -> COMPLETED;
+            case IN_PROGRESS -> IN_PROGRESS;
+            case OFF_ROUTE -> OFF_ROUTE;
+            default -> null;
+        };
     }
 }

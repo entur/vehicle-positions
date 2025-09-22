@@ -305,6 +305,10 @@ enum OccupancyStatus {
   SIRI nordic profile: more than ~50% of seats available.
   """
   manySeatsAvailable
+  """
+  The vehicle or carriage has seats available. Deprecated in SIRI 2.1
+  """
+  seatsAvailable
   "The vehicle or carriage doesn't have any occupancy data available."
   noData
   """
@@ -318,6 +322,10 @@ enum OccupancyStatus {
   SIRI nordic profile: less than ~10% of seats available.
   """
   standingRoomOnly
+  """
+  The vehicle or carriage has no seats available. Deprecated in SIRI 2.1
+  """
+  standingAvailable
 }
 
 enum VehicleStatusEnumeration {

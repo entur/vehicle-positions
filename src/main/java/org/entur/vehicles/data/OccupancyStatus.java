@@ -8,34 +8,28 @@ public enum OccupancyStatus {
 
     noData,
     empty,
+    seatsAvailable,
     manySeatsAvailable,
     fewSeatsAvailable,
     standingRoomOnly,
+    standingAvailable,
     crushedStandingRoomOnly,
     full,
     notAcceptingPassengers;
 
     public static OccupancyStatus fromValue(String occupancy) {
         OccupancyEnum occupancyEnum = OccupancyEnum.valueOf(occupancy);
-        switch (occupancyEnum) {
-            case EMPTY:
-                return empty;
-            case UNKNOWN:
-                return noData;
-            case MANY_SEATS_AVAILABLE:
-                return manySeatsAvailable;
-            case SEATS_AVAILABLE:
-            case FEW_SEATS_AVAILABLE:
-                return fewSeatsAvailable;
-            case STANDING_AVAILABLE:
-                return standingRoomOnly;
-            case CRUSHED_STANDING_ROOM_ONLY:
-                return crushedStandingRoomOnly;
-            case FULL:
-                return full;
-            case NOT_ACCEPTING_PASSENGERS:
-                return notAcceptingPassengers;
-        }
-        return noData;
+        return switch (occupancyEnum) {
+            case EMPTY -> empty;
+            case UNKNOWN, UNDEFINED -> noData;
+            case MANY_SEATS_AVAILABLE -> manySeatsAvailable;
+            case SEATS_AVAILABLE -> seatsAvailable;
+            case FEW_SEATS_AVAILABLE -> fewSeatsAvailable;
+            case STANDING_AVAILABLE -> standingAvailable;
+            case STANDING_ROOM_ONLY -> standingRoomOnly;
+            case CRUSHED_STANDING_ROOM_ONLY -> crushedStandingRoomOnly;
+            case FULL -> full;
+            case NOT_ACCEPTING_PASSENGERS -> notAcceptingPassengers;
+        };
     }
 }
