@@ -107,6 +107,8 @@ public class ServiceJourneyService {
 
                         serviceJourneyCache.put(serviceJourneyId, data.serviceJourney);
 
+                    } else {
+                        LOG.info("No service journey found for id " + serviceJourneyId);
                     }
                 } catch (WebClientException e) {
                     // Ignore - return empty ServiceJourney

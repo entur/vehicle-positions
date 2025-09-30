@@ -102,6 +102,8 @@ public class LineService {
                     if (data != null && data.line != null) {
                         metricsService.markJourneyPlannerResponse("line");
                         lineCache.put(lineRef, data.line);
+                    } else {
+                        LOG.info("No line found for id " + lineRef);
                     }
                 } catch (WebClientException e) {
                     // Ignore - return empty Line
