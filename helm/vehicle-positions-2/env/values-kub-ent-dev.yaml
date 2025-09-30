@@ -7,6 +7,6 @@ configMap:
   subscriptionProjectId: ent-vpos-dev
   topicProjectId: ent-anshar-dev
   journeyPlannerUrl: https://api.dev.entur.io/journey-planner/v3/graphql
-  EtClientName: ror.vehicle-positions.graphql
+  EtClientName: ror.vehicle-positions.v2.graphql
   serviceJourneyLookupEnabled: true
   etEnabled: true
