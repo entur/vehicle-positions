@@ -1,7 +1,7 @@
 package org.entur.vehicles.graphql;
 
-import io.micrometer.prometheus.PrometheusConfig;
-import io.micrometer.prometheus.PrometheusMeterRegistry;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.entur.avro.realtime.siri.model.EstimatedVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.FramedVehicleJourneyRefRecord;
 import org.entur.vehicles.data.EstimatedTimetableUpdate;

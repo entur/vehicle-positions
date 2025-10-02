@@ -150,7 +150,7 @@ public class QueryFilter extends AbstractUpdate {
       isCompleteMatch = isCompleteMatch & matches(line.getLineName(), vehicleUpdate.getLine().getLineName());
     }
     if (isCompleteMatch && monitored != null) {
-      isCompleteMatch = monitored.equals(vehicleUpdate.isMonitored());
+      isCompleteMatch = monitored.equals(vehicleUpdate.getMonitored());
     }
     if (isCompleteMatch && maxDataAge != null) {
       isCompleteMatch = vehicleUpdate.getLastUpdated().isAfter(maxDataAge);
@@ -198,10 +198,10 @@ public class QueryFilter extends AbstractUpdate {
       isCompleteMatch = isCompleteMatch & matches(line.getLineName(), timetableUpdate.getLine().getLineName());
     }
     if (isCompleteMatch && monitored != null) {
-      isCompleteMatch = monitored.equals(timetableUpdate.isMonitored());
+      isCompleteMatch = monitored.equals(timetableUpdate.getMonitored());
     }
     if (isCompleteMatch && cancellation != null) {
-      boolean isCancellation = timetableUpdate.isCancellation() != null && timetableUpdate.isCancellation();
+      boolean isCancellation = timetableUpdate.getCancellation() != null && timetableUpdate.getCancellation();
       isCompleteMatch = cancellation.equals(isCancellation);
     }
 

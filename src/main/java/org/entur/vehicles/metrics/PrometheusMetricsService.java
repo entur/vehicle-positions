@@ -17,7 +17,7 @@ package org.entur.vehicles.metrics;
 
 import io.micrometer.core.instrument.ImmutableTag;
 import io.micrometer.core.instrument.Tag;
-import io.micrometer.prometheus.PrometheusMeterRegistry;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import jakarta.annotation.PreDestroy;
 import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.model.Codespace;

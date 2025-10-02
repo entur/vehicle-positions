@@ -223,7 +223,7 @@ public class TimetableRepository {
           if (call.getDepartureBoardingActivity() != null) {
             c.setDepartureBoardingActivity(call.getDepartureBoardingActivity().toString());
           }
-          c.setCancelled(call.getCancellation() != null && call.getCancellation());
+          c.setCancellation(call.getCancellation() != null && call.getCancellation());
           c.setCallType(EstimatedTimetableUpdate.CallType.RECORDED);
           v.addCall(c);
         }
@@ -245,7 +245,7 @@ public class TimetableRepository {
           c.setExpectedArrivalTime(call.getExpectedArrivalTime() != null ? convert(call.getExpectedArrivalTime()) : null);
           c.setExpectedDepartureTime(call.getExpectedDepartureTime() != null ? convert(call.getExpectedDepartureTime()) : null);
 
-          c.setCancelled(call.getCancellation() != null && call.getCancellation());
+          c.setCancellation(call.getCancellation() != null && call.getCancellation());
 
           if (call.getArrivalBoardingActivity() != null) {
             c.setArrivalBoardingActivity(call.getArrivalBoardingActivity().toString());

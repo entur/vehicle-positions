@@ -92,10 +92,10 @@ abstract class AbstractUpdate {
     this.monitored = monitored;
   }
 
-  public Boolean isMonitored() {
+  public Boolean getMonitored() {
     return monitored;
   }
-  public Boolean isCancellation() {
+  public Boolean getCancellation() {
     return cancellation;
   }
 }

@@ -112,11 +112,11 @@ public class Call {
         return departureStatus;
     }
 
-    public void setCancelled(boolean cancellation) {
+    public void setCancellation(boolean cancellation) {
         this.cancellation = cancellation;
     }
 
-    public boolean isCancelled() {
+    public boolean getCancellation() {
         return cancellation;
     }
 
