@@ -1,6 +1,7 @@
 package org.entur.vehicles.data.model;
 
 import org.entur.vehicles.data.EstimatedTimetableUpdate;
+import org.entur.vehicles.data.OccupancyStatus;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.time.ZonedDateTime;
@@ -9,6 +10,8 @@ import java.time.ZonedDateTime;
 public class Call {
     StopPoint stopPoint;
     Integer order;
+
+    private OccupancyStatus occupancyStatus;
 
     Boolean vehicleAtStop;
     private ZonedDateTime aimedArrivalTime;
@@ -38,6 +41,14 @@ public class Call {
 
     public void setOrder(Integer order) {
         this.order = order;
+    }
+
+    public OccupancyStatus getOccupancyStatus() {
+        return occupancyStatus;
+    }
+
+    public void setOccupancyStatus(OccupancyStatus occupancyStatus) {
+        this.occupancyStatus = occupancyStatus;
     }
 
     public Boolean getVehicleAtStop() {

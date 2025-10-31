@@ -208,6 +208,9 @@ public class TimetableRepository {
             c.getStopPoint().setName(call.getStopPointNames().get(0).getValue().toString());
           }
           c.setOrder(call.getOrder() != null ? call.getOrder() : 0);
+          if (call.getOccupancy() != null) {
+              c.setOccupancyStatus(OccupancyStatus.fromValue(call.getOccupancy().toString()));
+          }
 
           c.setAimedArrivalTime(call.getAimedArrivalTime() != null ? convert(call.getAimedArrivalTime()) : null);
           c.setAimedDepartureTime(call.getAimedDepartureTime() != null ? convert(call.getAimedDepartureTime()) : null);
@@ -238,6 +241,10 @@ public class TimetableRepository {
             c.getStopPoint().setName(call.getStopPointNames().get(0).getValue().toString());
           }
           c.setOrder(call.getOrder() != null ? call.getOrder() : 0);
+
+          if (call.getOccupancy() != null) {
+              c.setOccupancyStatus(OccupancyStatus.fromValue(call.getOccupancy().toString()));
+          }
 
           c.setAimedArrivalTime(call.getAimedArrivalTime() != null ? convert(call.getAimedArrivalTime()) : null);
           c.setAimedDepartureTime(call.getAimedDepartureTime() != null ? convert(call.getAimedDepartureTime()) : null);
