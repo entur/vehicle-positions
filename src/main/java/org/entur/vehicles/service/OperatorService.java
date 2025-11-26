@@ -13,6 +13,9 @@ import org.springframework.web.reactive.function.client.WebClientException;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.Collections.emptyList;
 
@@ -29,25 +32,35 @@ public class OperatorService {
 
     private final boolean operatorLookupEnabled;
 
+    private static final HashMap<String, Operator> operatorCache = new HashMap<>();
+
+    private final ScheduledExecutorService executor;
+
     public OperatorService(@Value("${vehicle.operator.lookup.enabled:false}") boolean operatorLookupEnabled) {
         this.operatorLookupEnabled = operatorLookupEnabled;
+        executor = Executors.newSingleThreadScheduledExecutor();
     }
-
-    private static final HashMap<String, Operator> operatorCache = new HashMap<>();
 
     @PostConstruct
     private void warmUpCache() {
         if (operatorLookupEnabled) {
-            try {
-                final List<Operator> allOperators = getAllOperators();
-                for (Operator operator : allOperators) {
-                    operatorCache.put(operator.getOperatorRef(), operator);
-                }
-                LOG.info("OperatorCache initialized with {} operators", operatorCache.size());
+            //Trigger synchronous update during startup
+            updateOperators();
+            //Schedule periodic updates
+            executor.scheduleAtFixedRate(this::updateOperators, 60, 60, TimeUnit.MINUTES);
+        }
+    }
+
+    private void updateOperators() {
+        try {
+            final List<Operator> allOperators = getAllOperators();
+            for (Operator operator : allOperators) {
+                operatorCache.put(operator.getOperatorRef(), operator);
             }
-            catch (WebClientException e) {
-                LOG.error("Error while getting all operators", e);
-            }
+            LOG.info("OperatorCache populated with {} operators", operatorCache.size());
+        }
+        catch (WebClientException e) {
+            LOG.error("Error while getting all operators", e);
         }
     }
 
