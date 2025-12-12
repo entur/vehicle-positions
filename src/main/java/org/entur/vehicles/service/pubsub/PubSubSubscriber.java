@@ -68,7 +68,7 @@ public abstract class PubSubSubscriber {
       }
 
     } catch (IOException e) {
-      e.printStackTrace();
+      LOG.error("Failed to create Pub/Sub subscription", e);
     }
     this.enabled = enabled;
     this.receiver = receiver;
@@ -146,7 +146,7 @@ public abstract class PubSubSubscriber {
       try {
         Thread.sleep(reconnectPeriodSec * 1000);
       } catch (InterruptedException e) {
-        e.printStackTrace();
+        LOG.error("Pub/Sub subscriber failed, attempting reconnection in {} seconds", reconnectPeriodSec, e);
       }
     }
   }

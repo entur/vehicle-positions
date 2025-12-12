@@ -81,7 +81,7 @@ public class QueryFilter extends AbstractUpdate {
     }
     this.mode = mode;
     this.vehicleIds = vehicleIds;
-    if (lineRef != null | lineName != null) {
+    if (lineRef != null || lineName != null) {
       this.line = new Line(lineRef, lineName);
     }
     this.monitored = monitored;
@@ -147,7 +147,7 @@ public class QueryFilter extends AbstractUpdate {
     }
     if (isCompleteMatch && line != null) {
       isCompleteMatch = matches(line.getLineRef(), vehicleUpdate.getLine().getLineRef());
-      isCompleteMatch = isCompleteMatch & matches(line.getLineName(), vehicleUpdate.getLine().getLineName());
+      isCompleteMatch = isCompleteMatch && matches(line.getLineName(), vehicleUpdate.getLine().getLineName());
     }
     if (isCompleteMatch && monitored != null) {
       isCompleteMatch = monitored.equals(vehicleUpdate.getMonitored());
@@ -195,7 +195,7 @@ public class QueryFilter extends AbstractUpdate {
     }
     if (isCompleteMatch && line != null) {
       isCompleteMatch = matches(line.getLineRef(), timetableUpdate.getLine().getLineRef());
-      isCompleteMatch = isCompleteMatch & matches(line.getLineName(), timetableUpdate.getLine().getLineName());
+      isCompleteMatch = isCompleteMatch && matches(line.getLineName(), timetableUpdate.getLine().getLineName());
     }
     if (isCompleteMatch && monitored != null) {
       isCompleteMatch = monitored.equals(timetableUpdate.getMonitored());

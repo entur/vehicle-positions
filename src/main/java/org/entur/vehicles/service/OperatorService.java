@@ -11,8 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClientException;
 
-import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +32,7 @@ public class OperatorService {
 
     private final boolean operatorLookupEnabled;
 
-    private static final HashMap<String, Operator> operatorCache = new HashMap<>();
+    private static final ConcurrentHashMap<String, Operator> operatorCache = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService executor;
 

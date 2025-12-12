@@ -143,4 +143,47 @@ class QueryFilterTest {
     update.setServiceJourney(new ServiceJourney("234", "2021-01-02"));
     assertTrue(filter.isMatch(update));
   }
+
+  @Test
+  void testShortCircuitEvaluation() {
+    // Test that logical operators short-circuit properly
+    QueryFilter filterWithLine = new QueryFilter(
+            null,
+            MetricType.QUERY,
+            null, null, null, null, null, null,
+            "TST:Line:123",  // lineRef provided
+            null,            // lineName is null
+            null, null, null, null
+    );
+
+    VehicleUpdate update = new VehicleUpdate();
+    update.setLine(new Line("TST:Line:123", "Test Line"));
+
+    // Should match even though lineName filter is null
+    assertTrue(filterWithLine.isMatch(update));
+
+    // Test with both lineRef and lineName
+    QueryFilter filterWithBoth = new QueryFilter(
+            null,
+            MetricType.QUERY,
+            null, null, null, null, null, null,
+            "TST:Line:123",  // lineRef
+            "Test.*",        // lineName regex
+            null, null, null, null
+    );
+
+    assertTrue(filterWithBoth.isMatch(update));
+
+    // Test that first condition failure skips second evaluation
+    QueryFilter filterNoMatch = new QueryFilter(
+            null,
+            MetricType.QUERY,
+            null, null, null, null, null, null,
+            "OTHER:Line:999",  // Different lineRef
+            null,
+            null, null, null, null
+    );
+
+    assertFalse(filterNoMatch.isMatch(update));
+  }
 }
