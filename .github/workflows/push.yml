@@ -1,4 +1,4 @@
-name: Build and push
+name: Build, push and deploy
 on:
   push:
     branches:
@@ -39,9 +39,81 @@ jobs:
       build_artifact_name: artifact
       build_artifact_path: target
       image_name: vehicle-positions-2
+  docker-scan:
+    needs: [ docker-build ]
+    uses: entur/gha-security/.github/workflows/docker-scan.yml@v2
+    with:
+      image_artifact: ${{ needs.docker-build.outputs.image_artifact }}
   docker-push:
     if: github.repository_owner == 'entur' && github.event_name == 'push'
     needs: [docker-build]
     uses: entur/gha-docker/.github/workflows/push.yml@v1
     with:
       image_name: vehicle-positions-2
+
+  helm-lint:
+    uses: entur/gha-helm/.github/workflows/lint.yml@v1
+    with:
+      environment: dev
+
+
+  deploy-dev:
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    needs: [ helm-lint, docker-push ]
+    uses: entur/gha-helm/.github/workflows/deploy.yml@v1
+    with:
+      environment: dev
+      image: ${{ needs.docker-push.outputs.image_name }}:${{ needs.docker-push.outputs.image_tag}}
+      image_set_path: "image.identifier"
+      chart: helm/vehicle-positions-2
+      namespace: vehicle-positions
+      release_name: vehicle-positions-2
+    secrets: inherit
+
+  approval-tst:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Approve
+    steps:
+      - name: Manual approval
+        shell: bash
+        run: echo "Approve TST deployment"
+
+  deploy-tst:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: [ docker-push, approval-tst ]
+    uses: entur/gha-helm/.github/workflows/deploy.yml@v1
+    with:
+      environment: tst
+      image: ${{ needs.docker-push.outputs.image_name }}:${{ needs.docker-push.outputs.image_tag}}
+      image_set_path: "image.identifier"
+      chart: helm/vehicle-positions-2
+      namespace: vehicle-positions
+      release_name: vehicle-positions-2
+    secrets: inherit
+
+  approval-prd:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: deploy-tst
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Approve
+    steps:
+      - name: Manual approval
+        shell: bash
+        run: echo "Approve PRD deployment"
+
+  deploy-prd:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: [ docker-push, approval-prd ]
+    uses: entur/gha-helm/.github/workflows/deploy.yml@v1
+    with:
+      environment: prd
+      image: ${{ needs.docker-push.outputs.image_name }}:${{ needs.docker-push.outputs.image_tag}}
+      image_set_path: "image.identifier"
+      chart: helm/vehicle-positions-2
+      namespace: vehicle-positions
+      release_name: vehicle-positions-2
+    secrets: inherit
