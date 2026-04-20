@@ -55,6 +55,7 @@ jobs:
     uses: entur/gha-helm/.github/workflows/lint.yml@v1
     with:
       environment: dev
+      chart: 'helm/vehicle-positions-2'
 
 
   deploy-dev:
