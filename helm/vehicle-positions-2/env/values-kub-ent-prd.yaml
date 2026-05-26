@@ -7,4 +7,5 @@ configMap:
   journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
   EtClientName: ror.vehicle-positions.v2.graphql
   serviceJourneyLookupEnabled: true
+  etEnabled: true
 
