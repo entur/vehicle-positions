@@ -155,8 +155,8 @@ already has, reusing `Line`, `StopPoint`, `ServiceJourney`,
 | Field | Populated from |
 |---|---|
 | `lines` | `affects.networks[].affectedLines[].lineRef`, plus `affects.vehicleJourneys[].lineRef` |
-| `stopPoints` | `affects.stopPoints[].stopPointRef` (+ `stopPointNames`) |
-| `stopPlaces` | `affects.stopPlaces[].stopPlaceRef` (+ `placeNames`) |
+| `stopPoints` | `affects.stopPoints[].stopPointRef` |
+| `stopPlaces` | `affects.stopPlaces[].stopPlaceRef` |
 | `serviceJourneys` | `affects.vehicleJourneys[].vehicleJourneyRefs[]` and `framedVehicleJourneyRef` |
 | `datedServiceJourneys` | `affects.vehicleJourneys[].datedVehicleJourneyRefs[]` |
 | `operators` | `affects.networks[].affectedOperators[].operatorRef`, plus `affects.vehicleJourneys[].operator.operatorRef` |
@@ -165,6 +165,13 @@ already has, reusing `Line`, `StopPoint`, `ServiceJourney`,
 Several rows draw from two places — `lines` and `operators` are each populated
 from both the affected networks and the affected vehicle journeys. Entries are
 deduplicated by reference, so a line named in both appears once.
+
+Stop names come from `NSRService` and nowhere else. NSR is the single source of
+truth for official stop names, so the `stopPointNames` and `placeNames` a
+producer carries inside a situation are ignored, and a stop NSR does not know
+has no name rather than falling back to the producer's. Ignoring them also means
+the shared cached `StopPoint` that `NSRService` hands out — the same instance
+`TimetableRepository` puts into `Call.stopPoint` — is never modified.
 
 Alongside these display lists, `Affects` precomputes flat `Set<String>` id-sets:
 `lineRefs`, `stopRefs` (stop points and stop places combined),

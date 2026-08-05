@@ -214,21 +214,13 @@ public class SituationMapper {
 
         if (containsValues(record.getStopPoints())) {
             for (AffectedStopPointRecord stopPoint : record.getStopPoints()) {
-                StopPoint stop = resolveStop(asString(stopPoint.getStopPointRef()));
-                String name = containsValues(stopPoint.getStopPointNames())
-                        ? asString(stopPoint.getStopPointNames().get(0).getValue())
-                        : null;
-                affects.addStopPoint(copyWithName(stop, name));
+                affects.addStopPoint(resolveStop(asString(stopPoint.getStopPointRef())));
             }
         }
 
         if (containsValues(record.getStopPlaces())) {
             for (AffectedStopPlaceRecord stopPlace : record.getStopPlaces()) {
-                StopPoint stop = resolveStop(asString(stopPlace.getStopPlaceRef()));
-                String name = containsValues(stopPlace.getPlaceNames())
-                        ? asString(stopPlace.getPlaceNames().get(0).getValue())
-                        : null;
-                affects.addStopPlace(copyWithName(stop, name));
+                affects.addStopPlace(resolveStop(asString(stopPlace.getStopPlaceRef())));
             }
         }
 
@@ -282,26 +274,18 @@ public class SituationMapper {
         return operator != null ? operator : new org.entur.vehicles.data.model.Operator(operatorRef);
     }
 
+    /**
+     * NSR is the single source of truth for official stop names, so a StopPointName or
+     * PlaceName carried inside the situation is deliberately ignored. That also means the
+     * shared instance {@link NSRService#getStop} returns from its cache - the same one
+     * referenced by {@code Call.stopPoint} in {@code TimetableRepository} - is never
+     * modified here.
+     */
     private StopPoint resolveStop(String stopRef) {
         if (stopRef == null) {
             return null;
         }
         return nsrService.getStop(stopRef);
-    }
-
-    /**
-     * {@link NSRService#getStop} returns a shared instance from its cache - the same
-     * instance is also referenced by {@code Call.stopPoint} in {@code TimetableRepository}.
-     * It must never be mutated here. Build a new {@link StopPoint} instead, carrying the
-     * cached id and location, with the situation's own name when it supplied one and the
-     * cached name otherwise.
-     */
-    private StopPoint copyWithName(StopPoint cached, String situationName) {
-        if (cached == null) {
-            return null;
-        }
-        String name = situationName != null ? situationName : cached.getName();
-        return new StopPoint(cached.getId(), name, cached.getLocation());
     }
 
     private VehicleModeEnumeration resolveMode(String vehicleMode) {

@@ -219,17 +219,17 @@ public class SituationMapperTest {
     }
 
     /**
-     * NSRService.getStop returns a shared, cached instance also referenced by
-     * TimetableRepository's Call.stopPoint. If mapAffects mutated it directly (via
-     * stop.setName(...)), one situation's StopPointName would leak into every other
-     * consumer of that cached stop - including the already-working timetables API.
-     * A stub that hands out the SAME instance on every call (unlike the other tests
-     * in this file, which return a fresh StopPoint per call) is required to catch this.
+     * NSR is the single source of truth for official stop names. A StopPointName or
+     * PlaceName reported inside a situation is never used, and the shared cached
+     * StopPoint that NSRService hands out - the same instance TimetableRepository puts
+     * into Call.stopPoint - is never modified. A stub handing out the SAME instance on
+     * every call (unlike the other tests in this file, which return a fresh StopPoint
+     * per call) is required to catch a mutation.
      */
     @Test
-    public void testDoesNotMutateSharedNsrStopPointCache() {
-        StopPoint cachedQuay = new StopPoint("TST:Quay:1", "Original quay name", null);
-        StopPoint cachedStopPlace = new StopPoint("TST:StopPlace:9", "Original stop place name", null);
+    public void testStopNamesAlwaysComeFromNsrAndTheCacheIsNeverModified() {
+        StopPoint cachedQuay = new StopPoint("TST:Quay:1", "Official quay name", null);
+        StopPoint cachedStopPlace = new StopPoint("TST:StopPlace:9", "Official stop place name", null);
 
         NSRService nsrService = Mockito.mock(NSRService.class);
         Mockito.when(nsrService.getStop("TST:Quay:1")).thenReturn(cachedQuay);
@@ -239,15 +239,34 @@ public class SituationMapperTest {
         SituationUpdate first = mapper.map(situationNamingStop("TST:SituationNumber:first", "Name from situation A"));
         SituationUpdate second = mapper.map(situationNamingStop("TST:SituationNumber:second", "Name from situation B"));
 
-        assertEquals("Name from situation A", first.getAffects().getStopPoints().get(0).getName());
-        assertEquals("Name from situation A", first.getAffects().getStopPlaces().get(0).getName());
-        assertEquals("Name from situation B", second.getAffects().getStopPoints().get(0).getName());
-        assertEquals("Name from situation B", second.getAffects().getStopPlaces().get(0).getName());
+        assertEquals("Official quay name", first.getAffects().getStopPoints().get(0).getName(),
+                "The situation's own StopPointName must be ignored - NSR is the source of truth");
+        assertEquals("Official stop place name", first.getAffects().getStopPlaces().get(0).getName(),
+                "The situation's own PlaceName must be ignored - NSR is the source of truth");
+        assertEquals("Official quay name", second.getAffects().getStopPoints().get(0).getName());
+        assertEquals("Official stop place name", second.getAffects().getStopPlaces().get(0).getName());
 
-        assertEquals("Original quay name", cachedQuay.getName(),
+        assertEquals("Official quay name", cachedQuay.getName(),
                 "The shared NSRService stop-point cache instance must never be mutated");
-        assertEquals("Original stop place name", cachedStopPlace.getName(),
+        assertEquals("Official stop place name", cachedStopPlace.getName(),
                 "The shared NSRService stop-place cache instance must never be mutated");
+    }
+
+    @Test
+    public void testStopUnknownToNsrHasNoName() {
+        // What the real cache loader returns for a ref NSR knows nothing about.
+        NSRService nsrService = Mockito.mock(NSRService.class);
+        Mockito.when(nsrService.getStop("TST:Quay:1")).thenReturn(new StopPoint("TST:Quay:1"));
+        Mockito.when(nsrService.getStop("TST:StopPlace:9")).thenReturn(new StopPoint("TST:StopPlace:9"));
+        SituationMapper mapper = new SituationMapper(new LineService(false), nsrService);
+
+        SituationUpdate situation =
+                mapper.map(situationNamingStop("TST:SituationNumber:unknown", "Name from situation"));
+
+        assertNull(situation.getAffects().getStopPoints().get(0).getName(),
+                "A stop NSR does not know has no official name - the situation's name is not a fallback");
+        assertNull(situation.getAffects().getStopPlaces().get(0).getName(),
+                "A stop place NSR does not know has no official name");
     }
 
     private PtSituationElementRecord situationNamingStop(String situationNumber, String name) {
