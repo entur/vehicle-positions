@@ -68,6 +68,13 @@ public class SituationRepository {
                 return;
             }
 
+            // Publishing happens outside the compute() lock above (as it must - see the
+            // comment there), so two threads that both pass the version guard for the
+            // same key can publish out of order: e.g. thread A accepts v3 while thread B
+            // accepts v2, B's compute() runs first, but A reaches this line first. The map
+            // itself stays correct - only the stream can briefly regress. This is accepted
+            // as eventually consistent; clients must track `version` per situationNumber
+            // and discard a regression rather than relying on stream order.
             publisher.publishUpdate(situation);
 
             metricsService.markSituationUpdate(1, situation.getCodespace());

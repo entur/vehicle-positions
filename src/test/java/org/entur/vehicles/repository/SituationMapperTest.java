@@ -14,6 +14,7 @@ import org.entur.vehicles.data.SeverityEnumeration;
 import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
+import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.NSRService;
 import org.junit.jupiter.api.BeforeEach;
@@ -215,5 +216,103 @@ public class SituationMapperTest {
 
         assertNotNull(situation.getExpiration());
         assertTrue(situation.getExpiration().isBefore(ZonedDateTime.now().plusSeconds(5)));
+    }
+
+    /**
+     * NSRService.getStop returns a shared, cached instance also referenced by
+     * TimetableRepository's Call.stopPoint. If mapAffects mutated it directly (via
+     * stop.setName(...)), one situation's StopPointName would leak into every other
+     * consumer of that cached stop - including the already-working timetables API.
+     * A stub that hands out the SAME instance on every call (unlike the other tests
+     * in this file, which return a fresh StopPoint per call) is required to catch this.
+     */
+    @Test
+    public void testDoesNotMutateSharedNsrStopPointCache() {
+        StopPoint cachedQuay = new StopPoint("TST:Quay:1", "Original quay name", null);
+        StopPoint cachedStopPlace = new StopPoint("TST:StopPlace:9", "Original stop place name", null);
+
+        NSRService nsrService = Mockito.mock(NSRService.class);
+        Mockito.when(nsrService.getStop("TST:Quay:1")).thenReturn(cachedQuay);
+        Mockito.when(nsrService.getStop("TST:StopPlace:9")).thenReturn(cachedStopPlace);
+        SituationMapper mapper = new SituationMapper(new LineService(false), nsrService);
+
+        SituationUpdate first = mapper.map(situationNamingStop("TST:SituationNumber:first", "Name from situation A"));
+        SituationUpdate second = mapper.map(situationNamingStop("TST:SituationNumber:second", "Name from situation B"));
+
+        assertEquals("Name from situation A", first.getAffects().getStopPoints().get(0).getName());
+        assertEquals("Name from situation A", first.getAffects().getStopPlaces().get(0).getName());
+        assertEquals("Name from situation B", second.getAffects().getStopPoints().get(0).getName());
+        assertEquals("Name from situation B", second.getAffects().getStopPlaces().get(0).getName());
+
+        assertEquals("Original quay name", cachedQuay.getName(),
+                "The shared NSRService stop-point cache instance must never be mutated");
+        assertEquals("Original stop place name", cachedStopPlace.getName(),
+                "The shared NSRService stop-place cache instance must never be mutated");
+    }
+
+    private PtSituationElementRecord situationNamingStop(String situationNumber, String name) {
+        PtSituationElementRecord record = minimalRecord();
+        record.setSituationNumber(situationNumber);
+
+        TranslatedStringRecord stopPointName = new TranslatedStringRecord();
+        stopPointName.setValue(name);
+        stopPointName.setLanguage("no");
+
+        AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+        stopPoint.setStopPointRef("TST:Quay:1");
+        stopPoint.setStopPointNames(List.of(stopPointName));
+        stopPoint.setStopConditions(List.of());
+
+        TranslatedStringRecord placeName = new TranslatedStringRecord();
+        placeName.setValue(name);
+        placeName.setLanguage("no");
+
+        AffectedStopPlaceRecord stopPlace = new AffectedStopPlaceRecord();
+        stopPlace.setStopPlaceRef("TST:StopPlace:9");
+        stopPlace.setPlaceNames(List.of(placeName));
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setStopPoints(List.of(stopPoint));
+        affects.setStopPlaces(List.of(stopPlace));
+        record.setAffects(affects);
+
+        return record;
+    }
+
+    /** Regression test for the framed-vs-bare vehicle-journey ref ordering (see mapAffects). */
+    @Test
+    public void testFramedVehicleJourneyRefDateSurvivesWhenAlsoListedAsBareRef() {
+        PtSituationElementRecord record = minimalRecord();
+
+        org.entur.avro.realtime.siri.model.FramedVehicleJourneyRefRecord framedRef =
+                new org.entur.avro.realtime.siri.model.FramedVehicleJourneyRefRecord();
+        framedRef.setDatedVehicleJourneyRef("TST:ServiceJourney:1");
+        framedRef.setDataFrameRef("2026-08-05");
+
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setLineRef("TST:Line:1");
+        // The same id is also carried as a bare ref - the framed ref must still win.
+        journey.setVehicleJourneyRefs(List.of("TST:ServiceJourney:1"));
+        journey.setFramedVehicleJourneyRef(framedRef);
+        journey.setRoutes(List.of());
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setVehicleJourneys(List.of(journey));
+        record.setAffects(affects);
+
+        SituationUpdate situation = mapper.map(record);
+
+        assertEquals(1, situation.getAffects().getServiceJourneys().size());
+        assertEquals("2026-08-05", situation.getAffects().getServiceJourneys().get(0).getDate(),
+                "The framed ref's dataFrameRef date must not be discarded by the later bare ref");
+    }
+
+    @Test
+    public void testResolveCodespaceRejectsSituationNumberStartingWithColon() {
+        PtSituationElementRecord record = minimalRecord();
+        record.setParticipantRef(null);
+        record.setSituationNumber(":Foo:1");
+
+        assertNull(mapper.map(record));
     }
 }

@@ -57,9 +57,20 @@ Situations are filtered by the objects they affect — `lineRef`, `stopRef` (mat
 points and stop places), `serviceJourneyId`, `datedServiceJourneyId`, `operatorRef` and `mode` — as well
 as by `codespaceId`, `severity`, `reportType` and `situationNumbers`.
 
-Closed situations are excluded unless `includeClosed: true` is passed. A situation that is closed is
-published to active subscribers once, with `progress: closed`, before it is removed — subscribers should
-use that to drop it from display.
+`includeClosed` defaults differently for the query and the subscription, deliberately:
+
+- `situations` (query) defaults to `includeClosed: false` — a one-time snapshot has no use for
+  situations that are already gone.
+- `situations` (subscription) defaults to `includeClosed: true` — a live subscriber needs to observe
+  a situation transitioning to `progress: closed` so it can remove it from display. A situation that
+  is closed is published to active subscribers once, with `progress: closed`, before it is removed.
+  One consequence of this default: a new subscription's initial snapshot also includes any situations
+  closed within the grace period, not just live ones. Pass `includeClosed: false` explicitly on the
+  subscription to opt out of that.
+
+The situation stream is only eventually consistent: two concurrent updates to the same situation can
+reach subscribers in reverse version order. Clients should track the highest `version` seen per
+`situationNumber` and discard any update that regresses it.
 
 A situation published without a validity end time never expires and is retained indefinitely. `openEnded`
 and `minAge` exist to find such situations:

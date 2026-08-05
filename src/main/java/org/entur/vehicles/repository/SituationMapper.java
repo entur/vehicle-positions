@@ -122,7 +122,10 @@ public class SituationMapper {
             return Codespace.getCodespace(participantRef);
         }
         if (situationNumber != null && situationNumber.contains(":")) {
-            return Codespace.getCodespace(situationNumber.substring(0, situationNumber.indexOf(':')));
+            String prefix = situationNumber.substring(0, situationNumber.indexOf(':'));
+            if (!prefix.isBlank()) {
+                return Codespace.getCodespace(prefix);
+            }
         }
         LOG.debug("Unable to resolve codespace for situation {} - ignoring.", situationNumber);
         return null;
@@ -212,20 +215,20 @@ public class SituationMapper {
         if (containsValues(record.getStopPoints())) {
             for (AffectedStopPointRecord stopPoint : record.getStopPoints()) {
                 StopPoint stop = resolveStop(asString(stopPoint.getStopPointRef()));
-                if (stop != null && containsValues(stopPoint.getStopPointNames())) {
-                    stop.setName(asString(stopPoint.getStopPointNames().get(0).getValue()));
-                }
-                affects.addStopPoint(stop);
+                String name = containsValues(stopPoint.getStopPointNames())
+                        ? asString(stopPoint.getStopPointNames().get(0).getValue())
+                        : null;
+                affects.addStopPoint(copyWithName(stop, name));
             }
         }
 
         if (containsValues(record.getStopPlaces())) {
             for (AffectedStopPlaceRecord stopPlace : record.getStopPlaces()) {
                 StopPoint stop = resolveStop(asString(stopPlace.getStopPlaceRef()));
-                if (stop != null && containsValues(stopPlace.getPlaceNames())) {
-                    stop.setName(asString(stopPlace.getPlaceNames().get(0).getValue()));
-                }
-                affects.addStopPlace(stop);
+                String name = containsValues(stopPlace.getPlaceNames())
+                        ? asString(stopPlace.getPlaceNames().get(0).getValue())
+                        : null;
+                affects.addStopPlace(copyWithName(stop, name));
             }
         }
 
@@ -236,15 +239,19 @@ public class SituationMapper {
                 if (journey.getOperator() != null) {
                     affects.addOperator(resolveOperator(asString(journey.getOperator().getOperatorRef())));
                 }
-                if (containsValues(journey.getVehicleJourneyRefs())) {
-                    journey.getVehicleJourneyRefs().forEach(ref ->
-                            affects.addServiceJourney(new ServiceJourney(ref.toString())));
-                }
+                // Affects.addServiceJourney dedupes on getId() alone, so when the same id
+                // appears both as a bare ref and as a framed ref, whichever is added first
+                // wins. The framed ref carries the dataFrameRef date, so it must be added
+                // before the bare vehicleJourneyRefs - otherwise the date is silently lost.
                 if (journey.getFramedVehicleJourneyRef() != null
                         && journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef() != null) {
                     affects.addServiceJourney(new ServiceJourney(
                             journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef().toString(),
                             asString(journey.getFramedVehicleJourneyRef().getDataFrameRef())));
+                }
+                if (containsValues(journey.getVehicleJourneyRefs())) {
+                    journey.getVehicleJourneyRefs().forEach(ref ->
+                            affects.addServiceJourney(new ServiceJourney(ref.toString())));
                 }
                 if (containsValues(journey.getDatedVehicleJourneyRefs())) {
                     journey.getDatedVehicleJourneyRefs().forEach(ref ->
@@ -280,6 +287,21 @@ public class SituationMapper {
             return null;
         }
         return nsrService.getStop(stopRef);
+    }
+
+    /**
+     * {@link NSRService#getStop} returns a shared instance from its cache - the same
+     * instance is also referenced by {@code Call.stopPoint} in {@code TimetableRepository}.
+     * It must never be mutated here. Build a new {@link StopPoint} instead, carrying the
+     * cached id and location, with the situation's own name when it supplied one and the
+     * cached name otherwise.
+     */
+    private StopPoint copyWithName(StopPoint cached, String situationName) {
+        if (cached == null) {
+            return null;
+        }
+        String name = situationName != null ? situationName : cached.getName();
+        return new StopPoint(cached.getId(), name, cached.getLocation());
     }
 
     private VehicleModeEnumeration resolveMode(String vehicleMode) {

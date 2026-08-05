@@ -276,10 +276,16 @@ Criteria, each ignored when null:
 | `validNow: Boolean` | `true` → some validity period has started and has not ended |
 | `openEnded: Boolean` | `true` → no validity period carries an `endTime` |
 | `minAge: Duration` | `creationTime` is older than `now - minAge` |
-| `includeClosed: Boolean` | when false (default), `progress != closed` |
+| `includeClosed: Boolean` | when false, `progress != closed` |
 
 Matching short-circuits on the first failing criterion, following `QueryFilter`'s
 existing style.
+
+`includeClosed` defaults to `false` on `Query.situations` but to `true` on
+`Subscription.situations` — deliberately: a live subscriber needs to observe a
+situation transitioning to `progress: closed` so it can remove it from display,
+whereas a one-time query snapshot has no use for a situation that is already
+gone. See "GraphQL API" below.
 
 ### 6. GraphQL API
 
@@ -409,13 +415,21 @@ type Subscription {
         validNow: Boolean
         openEnded: Boolean
         minAge: Duration
-        includeClosed: Boolean = false
+        # Defaults to true here, unlike Query.situations - a live subscriber needs to
+        # observe a situation closing so it can drop it from display.
+        includeClosed: Boolean = true
         # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
         bufferSize: Int = 20
         # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
         bufferTime: Int = 250) : [Situation]
 }
 ```
+
+The two defaults differ deliberately: the query's snapshot has no use for a
+situation that is already gone, while a live subscription must surface the
+`progress: closed` transition so clients can react to it. One consequence is
+that a new subscription's initial snapshot also includes situations closed
+within the grace period, not just live ones.
 
 The quality tooling's primary query is
 `situations(openEnded: true, minAge: "P30D")`.

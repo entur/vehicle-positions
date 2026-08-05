@@ -125,7 +125,12 @@ type Subscription {
         validNow: Boolean
         openEnded: Boolean
         minAge: Duration
-        includeClosed: Boolean = false
+        # Defaults to true here (unlike Query.situations, which defaults to false):
+        # a live subscriber needs to observe a situation transitioning to
+        # progress: closed so it can remove it from display. One consequence:
+        # a new subscriber's initial snapshot also includes situations closed
+        # within the grace period, not just live ones.
+        includeClosed: Boolean = true
         # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
         bufferSize: Int = 20
         # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
@@ -298,6 +303,9 @@ type Situation {
     situationNumber: String!
     participantRef: String
     codespace: Codespace
+    # The subscription stream is only eventually consistent: two concurrent updates
+    # to the same situation can be published in reverse version order. Clients should
+    # keep the highest version seen per situationNumber and discard a regression.
     version: Int
     sourceType: String
     progress: WorkflowStatusEnumeration

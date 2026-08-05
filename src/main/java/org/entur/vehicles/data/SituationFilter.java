@@ -28,7 +28,7 @@ public class SituationFilter {
     private static final int DEFAULT_BUFFER_TIME_MILLIS = 250;
 
     private final PrometheusMetricsService metricsService;
-    private MetricType metricType = UNDEFINED;
+    private final MetricType metricType;
 
     private final Set<String> situationNumbers;
     private final Codespace codespace;
@@ -42,7 +42,7 @@ public class SituationFilter {
     private final String reportType;
     private final Boolean validNow;
     private final Boolean openEnded;
-    private final ZonedDateTime maxCreationTime;
+    private final Duration minAge;
     private final boolean includeClosed;
 
     private int bufferSize = DEFAULT_BUFFER_SIZE;
@@ -67,9 +67,7 @@ public class SituationFilter {
                            Integer bufferSize,
                            Integer bufferTimeMillis) {
         this.metricsService = metricsService;
-        if (metricType != null) {
-            this.metricType = metricType;
-        }
+        this.metricType = metricType != null ? metricType : UNDEFINED;
         this.situationNumbers = situationNumbers;
         this.codespace = codespaceId != null ? Codespace.getCodespace(codespaceId) : null;
         this.operatorRef = operatorRef;
@@ -82,7 +80,7 @@ public class SituationFilter {
         this.reportType = reportType;
         this.validNow = validNow;
         this.openEnded = openEnded;
-        this.maxCreationTime = minAge != null ? ZonedDateTime.now().minus(minAge) : null;
+        this.minAge = minAge;
         this.includeClosed = includeClosed != null && includeClosed;
 
         if (bufferSize != null) {
@@ -146,9 +144,14 @@ public class SituationFilter {
         if (openEnded != null && !openEnded.equals(situation.getOpenEnded())) {
             return false;
         }
-        if (maxCreationTime != null
-                && (situation.getCreationTime() == null || situation.getCreationTime().isAfter(maxCreationTime))) {
-            return false;
+        if (minAge != null) {
+            // Computed per call - not once in the constructor - so a long-lived
+            // subscription's window keeps rolling forward with "now" instead of
+            // freezing at the moment the subscription was opened.
+            ZonedDateTime maxCreationTime = ZonedDateTime.now().minus(minAge);
+            if (situation.getCreationTime() == null || situation.getCreationTime().isAfter(maxCreationTime)) {
+                return false;
+            }
         }
 
         if (metricsService != null) {
@@ -166,10 +169,13 @@ public class SituationFilter {
                 .add("lineRef='" + lineRef + "'")
                 .add("stopRef='" + stopRef + "'")
                 .add("serviceJourneyId='" + serviceJourneyId + "'")
+                .add("datedServiceJourneyId='" + datedServiceJourneyId + "'")
                 .add("mode=" + mode)
                 .add("severity=" + severity)
+                .add("reportType='" + reportType + "'")
                 .add("validNow=" + validNow)
                 .add("openEnded=" + openEnded)
+                .add("minAge=" + minAge)
                 .add("includeClosed=" + includeClosed)
                 .toString();
     }

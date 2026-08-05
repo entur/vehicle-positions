@@ -128,6 +128,31 @@ public class SituationFilterTest {
         assertFalse(filter(null, null, null, null, null, null, null, null, null, Duration.ofDays(30), null).isMatch(fresh));
     }
 
+    /**
+     * Regression test: the minAge cutoff must be evaluated per isMatch() call against the
+     * current time, not frozen once in the constructor - otherwise a long-lived subscription's
+     * rolling window becomes a fixed absolute timestamp that never re-admits a situation once
+     * rejected as "too recent".
+     */
+    @Test
+    public void testMinAgeWindowRollsForwardOnALongLivedFilterInstance() throws InterruptedException {
+        SituationFilter longLived = filter(null, null, null, null, null, null, null, null, null,
+                Duration.ofMillis(300), null);
+
+        SituationUpdate justCreated = situation();
+        justCreated.setCreationTime(ZonedDateTime.now());
+
+        // Too recent the moment it is created.
+        assertFalse(longLived.isMatch(justCreated));
+
+        Thread.sleep(500);
+
+        // The SAME filter instance, unchanged, must now admit it: minAge has actually
+        // elapsed in wall-clock time. A filter that froze its cutoff at construction time
+        // would incorrectly still reject this.
+        assertTrue(longLived.isMatch(justCreated));
+    }
+
     @Test
     public void testClosedSituationsAreExcludedByDefault() {
         SituationUpdate closed = situation();

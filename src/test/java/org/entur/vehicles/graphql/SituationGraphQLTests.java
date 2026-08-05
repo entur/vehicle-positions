@@ -9,9 +9,12 @@ import org.entur.avro.realtime.siri.model.AffectsRecord;
 import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
 import org.entur.avro.realtime.siri.model.TranslatedStringRecord;
 import org.entur.avro.realtime.siri.model.ValidityPeriodRecord;
+import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.SeverityEnumeration;
+import org.entur.vehicles.data.SituationFilter;
 import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.VehicleModeEnumeration;
+import org.entur.vehicles.data.WorkflowStatusEnumeration;
 import org.entur.vehicles.graphql.publishers.SituationUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.AutoPurgingSituationMap;
@@ -22,12 +25,17 @@ import org.entur.vehicles.service.NSRService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import reactor.core.Disposable;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,10 +43,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SituationGraphQLTests {
 
     private Query queryService;
+    private SituationRepository repository;
+    private SituationUpdateRxPublisher publisher;
+    private PrometheusMetricsService metricsService;
 
     @BeforeEach
     public void initData() {
-        PrometheusMetricsService metricsService =
+        metricsService =
                 new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
 
         NSRService nsrService = Mockito.mock(NSRService.class);
@@ -46,11 +57,12 @@ public class SituationGraphQLTests {
                 .thenAnswer(invocation ->
                         new org.entur.vehicles.data.model.StopPoint(invocation.getArgument(0)));
 
-        SituationRepository repository = new SituationRepository(
+        publisher = new SituationUpdateRxPublisher();
+        repository = new SituationRepository(
                 metricsService,
                 new SituationMapper(new LineService(false), nsrService),
                 new AutoPurgingSituationMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
-                new SituationUpdateRxPublisher()
+                publisher
         );
 
         repository.addAll(List.of(
@@ -201,5 +213,45 @@ public class SituationGraphQLTests {
                 null, null, null, null, null, null, null, null, null, null, true, null, null, null);
 
         assertEquals(2, situations.size());
+    }
+
+    /**
+     * Regression test for Subscription.situations' includeClosed default (true, unlike
+     * Query.situations' false): a subscriber must observe a PUBLISHED -> CLOSED
+     * transition, not have it silently swallowed by the filter.
+     */
+    @Test
+    public void testSubscriptionWithDefaultFilterReceivesClosedTransition() throws InterruptedException {
+        // Mirrors the Subscription.situations schema default of includeClosed: true.
+        SituationFilter subscriptionDefaultFilter = new SituationFilter(metricsService, MetricType.SUBSCRIPTION,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, true, 1, 50);
+
+        List<List<SituationUpdate>> received = Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch closedReceived = new CountDownLatch(1);
+
+        PtSituationElementRecord published = baseRecord("TST:SituationNumber:lifecycle");
+        published.setProgress("PUBLISHED");
+        published.setVersion(1);
+        published.setSeverity("NORMAL");
+        repository.add(published);
+
+        Disposable subscription = publisher.getPublisher(subscriptionDefaultFilter, "uuid").subscribe(batch -> {
+            received.add(batch);
+            if (batch.stream().anyMatch(s -> s.getProgress() == WorkflowStatusEnumeration.closed)) {
+                closedReceived.countDown();
+            }
+        });
+
+        try {
+            PtSituationElementRecord closed = baseRecord("TST:SituationNumber:lifecycle");
+            closed.setProgress("CLOSED");
+            closed.setVersion(2);
+            repository.add(closed);
+
+            assertTrue(closedReceived.await(2, TimeUnit.SECONDS),
+                    "Expected the closed transition to reach a subscriber using the default (includeClosed: true) filter");
+        } finally {
+            subscription.dispose();
+        }
     }
 }
