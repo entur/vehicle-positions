@@ -74,8 +74,11 @@ public final class AvroJsonUnionWrapper {
         ObjectNode wrapped = MAPPER.createObjectNode();
         for (Schema.Field field : schema.getFields()) {
             JsonNode value = plain.get(field.name());
-            // Detect absent required fields (no default and not nullable). A missing
-            // required array field silently becomes empty, which corrupts openEnded signals.
+            // A field with neither a default nor a nullable union must be present. Without this,
+            // an absent one becomes an explicit null and fails later inside the Avro decoder with
+            // a message that does not name the field. Note this cannot fire for array fields -
+            // every array on these records declares a default of [], so an absent array
+            // legitimately means "empty" per the schema.
             if (value == null && !field.hasDefaultValue() && !isNullable(field.schema())) {
                 throw new IllegalArgumentException("Missing required field '" + field.name()
                         + "' on record " + schema.getFullName());

@@ -113,6 +113,35 @@ public class AvroJsonUnionWrapperTest {
                 "the failure should name the expected type, was: " + thrown.getMessage());
     }
 
+    @Test
+    public void testAnAbsentRequiredFieldThrowsNamingTheField() throws IOException {
+        ObjectNode corrupted = (ObjectNode) fixtureSituations().get(0).deepCopy();
+        corrupted.remove("reportType");
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+                () -> AvroJsonUnionWrapper.wrap(corrupted, SITUATION_SCHEMA));
+        assertTrue(thrown.getMessage().contains("reportType"),
+                "the failure should name the missing field, was: " + thrown.getMessage());
+    }
+
+    /**
+     * Every array field on these records declares a default of [], so an absent array
+     * legitimately means "empty" and must NOT throw. Pinned because an earlier review
+     * argued the opposite on the mistaken belief that validityPeriods was required.
+     */
+    @Test
+    public void testAnAbsentArrayFieldIsEmptyNotAnError() throws IOException {
+        ObjectNode situation = (ObjectNode) fixtureSituations().get(0).deepCopy();
+        situation.remove("validityPeriods");
+
+        JsonNode wrapped = AvroJsonUnionWrapper.wrap(situation, SITUATION_SCHEMA);
+        PtSituationElementRecord record =
+                JsonReader.readPtSituationElement(MAPPER.writeValueAsString(wrapped));
+
+        assertNotNull(record.getValidityPeriods());
+        assertTrue(record.getValidityPeriods().isEmpty());
+    }
+
     /**
      * The wrapper picks the first non-null branch of every union. That is only correct
      * while every union has exactly one. If a siri-avro-model upgrade introduces a union
