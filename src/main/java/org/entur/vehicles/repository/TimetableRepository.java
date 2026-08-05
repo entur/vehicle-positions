@@ -204,9 +204,6 @@ public class TimetableRepository {
         for (RecordedCallRecord call : journeyRecord.getRecordedCalls()) {
           Call c = new Call();
           c.setStopPoint(nsrService.getStop(call.getStopPointRef().toString()));
-          if (call.getStopPointNames() != null && !call.getStopPointNames().isEmpty()) {
-            c.getStopPoint().setName(call.getStopPointNames().get(0).getValue().toString());
-          }
           c.setOrder(call.getOrder() != null ? call.getOrder() : 0);
           if (call.getOccupancy() != null) {
               c.setOccupancyStatus(OccupancyStatus.fromValue(call.getOccupancy().toString()));
@@ -237,9 +234,6 @@ public class TimetableRepository {
         for (EstimatedCallRecord call : journeyRecord.getEstimatedCalls()) {
           Call c = new Call();
           c.setStopPoint(nsrService.getStop(call.getStopPointRef().toString()));
-          if (call.getStopPointNames() != null && !call.getStopPointNames().isEmpty()) {
-            c.getStopPoint().setName(call.getStopPointNames().get(0).getValue().toString());
-          }
           c.setOrder(call.getOrder() != null ? call.getOrder() : 0);
 
           if (call.getOccupancy() != null) {
