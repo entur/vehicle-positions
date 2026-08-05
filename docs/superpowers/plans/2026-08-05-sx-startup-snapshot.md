@@ -702,11 +702,46 @@ Expected: PASS, 7 tests.
 
 If `testOneMalformedSituationDoesNotDiscardTheRest` reports 4 loaded rather than 3, the malformed situation is being silently tolerated somewhere rather than throwing. Do not weaken the test to match — report it, since the point of the test is that a bad record is counted as skipped.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Add configuration**
+
+In `src/main/resources/application.properties`, add next to the other `vehicle.*` lookup settings (near `vehicle.nsr.lookup.*`):
+
+```properties
+vehicle.sx.snapshot.url=https://api.dev.entur.io/realtime/v1/rest/sx?SIRI_VERSION=2.1
+vehicle.sx.snapshot.timeout=PT60S
+```
+
+The default points at dev, matching `vehicle.journeyplanner.url`. The snapshot URL and the Pub/Sub topic project must move together per environment — pointing the snapshot at production while the stream reads `ent-anshar-dev` would merge two inconsistent datasets into one map. Add that as a comment above the property.
+
+In `src/test/resources/application.properties`, add a URL that cannot resolve, so the `@SpringBootTest` context never attempts a real fetch. `entur.vehicle-positions.sx.enabled=false` is already set there, so the service short-circuits before the URL is used, but the placeholder must still resolve:
+
+```properties
+vehicle.sx.snapshot.url=http://localhost:0/sx
+```
+
+This belongs in THIS task, not a later one: `SituationSnapshotService` declares
+`@Value("${vehicle.sx.snapshot.url}")` with no inline default, so the bean cannot be
+constructed until the property exists. Without it the Spring context test
+(`ApplicationGraphQlSchemaTests`) fails with
+`Could not resolve placeholder 'vehicle.sx.snapshot.url'` and the task ends on a red build.
+Do not give the annotation a default instead — a missing snapshot URL should fail loudly at
+startup rather than silently disabling the bootstrap.
+
+- [ ] **Step 6: Run the full suite**
+
+Run: `mvn clean test`
+Expected: PASS, 96 tests. The malformed-fixture test legitimately logs
+`IllegalArgumentException: Expected an array but found STRING`, and the failing-fetch test
+legitimately logs a connection refusal — both are expected output from tests asserting
+graceful degradation, not noise.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/main/java/org/entur/vehicles/service/SituationSnapshotService.java \
-        src/test/java/org/entur/vehicles/service/SituationSnapshotServiceTest.java
+        src/test/java/org/entur/vehicles/service/SituationSnapshotServiceTest.java \
+        src/main/resources/application.properties \
+        src/test/resources/application.properties
 git commit -m "Adding startup snapshot loader for situations"
 ```
 
@@ -718,8 +753,6 @@ Wires the snapshot ahead of the Pub/Sub subscriber, adds the properties, and doc
 
 **Files:**
 - Modify: `src/main/java/org/entur/vehicles/service/pubsub/impl/PubSubSXSubscriber.java`
-- Modify: `src/main/resources/application.properties`
-- Modify: `src/test/resources/application.properties`
 - Modify: `src/main/resources/Usage.md`
 - Test: `src/test/java/org/entur/vehicles/service/pubsub/impl/PubSubSXSubscriberOrderingTest.java`
 
@@ -796,29 +829,12 @@ Add a short comment above the annotation explaining why, since an unexplained `@
 Run: `mvn test -Dtest=PubSubSXSubscriberOrderingTest`
 Expected: PASS, 1 test.
 
-- [ ] **Step 5: Add configuration**
-
-In `src/main/resources/application.properties`, add next to the other `vehicle.*` lookup settings (near `vehicle.nsr.lookup.*`):
-
-```properties
-vehicle.sx.snapshot.url=https://api.dev.entur.io/realtime/v1/rest/sx?SIRI_VERSION=2.1
-vehicle.sx.snapshot.timeout=PT60S
-```
-
-The default points at dev, matching `vehicle.journeyplanner.url`. The snapshot URL and the Pub/Sub topic project must move together per environment — pointing the snapshot at production while the stream reads `ent-anshar-dev` would merge two inconsistent datasets into one map. Add that as a comment above the property.
-
-In `src/test/resources/application.properties`, add a URL that cannot resolve, so the `@SpringBootTest` context never attempts a real fetch. `entur.vehicle-positions.sx.enabled=false` is already set there, so the service short-circuits before the URL is used, but the placeholder must still resolve:
-
-```properties
-vehicle.sx.snapshot.url=http://localhost:0/sx
-```
-
-- [ ] **Step 6: Run the full suite**
+- [ ] **Step 5: Run the full suite**
 
 Run: `mvn clean test`
-Expected: PASS. The 81 pre-existing tests plus 14 new ones (6 + 7 + 1) — 95 total. `ApplicationGraphQlSchemaTests` must still start the context; if it now fails, the snapshot service is attempting a fetch when it should be disabled.
+Expected: PASS. 97 total: the 81 pre-existing, plus 8 from Task 1, 7 from Task 2 and 1 here. `ApplicationGraphQlSchemaTests` must still start the context; if it now fails, the snapshot service is attempting a fetch when it should be disabled.
 
-- [ ] **Step 7: Document the behaviour**
+- [ ] **Step 6: Document the behaviour**
 
 `src/main/resources/Usage.md` already has a `## Situations` section. Add this to the end of it:
 
@@ -830,12 +846,10 @@ consuming the stream. A situation that was published long before the service sta
 therefore available immediately, without waiting for its producer to republish.
 ````
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/main/java/org/entur/vehicles/service/pubsub/impl/PubSubSXSubscriber.java \
-        src/main/resources/application.properties \
-        src/test/resources/application.properties \
         src/main/resources/Usage.md \
         src/test/java/org/entur/vehicles/service/pubsub/impl/PubSubSXSubscriberOrderingTest.java
 git commit -m "Loading the situation snapshot before the SX stream starts"
