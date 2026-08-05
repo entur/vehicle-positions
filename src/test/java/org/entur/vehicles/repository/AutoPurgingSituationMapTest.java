@@ -102,4 +102,53 @@ public class AutoPurgingSituationMapTest {
         situation.setCreationTime(ZonedDateTime.now().minusDays(2));
         assertTrue(situation.getAge().toDays() >= 2);
     }
+
+    @Test
+    public void testLastUpdatedEpochSecondHandlesNullLastUpdated() {
+        SituationUpdate situation = new SituationUpdate();
+        situation.setSituationNumber("TST:SituationNumber:8");
+        situation.setCodespace(Codespace.getCodespace("TST"));
+        // Explicitly NOT setting lastUpdated - leaves it null
+
+        assertNull(situation.getLastUpdatedEpochSecond());
+    }
+
+    @Test
+    public void testIsValidAtWithNoPeriods() {
+        SituationUpdate situation = situation("TST:SituationNumber:9", null);
+        // No validity periods set
+
+        ZonedDateTime timestamp = ZonedDateTime.now();
+        assertTrue(situation.isValidAt(timestamp));
+
+        // Should return true for any timestamp when no periods constrain it
+        assertTrue(situation.isValidAt(timestamp.minusDays(100)));
+        assertTrue(situation.isValidAt(timestamp.plusDays(100)));
+    }
+
+    @Test
+    public void testIsValidAtMatchesValidityPeriods() {
+        SituationUpdate situation = situation("TST:SituationNumber:10", null);
+        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime yesterday = now.minusDays(1);
+        ZonedDateTime tomorrow = now.plusDays(1);
+        ZonedDateTime nextWeek = now.plusDays(7);
+
+        // Set up two validity periods: one covering today, one covering next week
+        situation.setValidityPeriods(List.of(
+                new ValidityPeriod(yesterday, tomorrow),
+                new ValidityPeriod(nextWeek, nextWeek.plusDays(1))));
+
+        // Timestamp inside first period should be valid
+        assertTrue(situation.isValidAt(now));
+
+        // Timestamp before both periods should be invalid
+        assertFalse(situation.isValidAt(yesterday.minusDays(1)));
+
+        // Timestamp between periods should be invalid
+        assertFalse(situation.isValidAt(now.plusDays(3)));
+
+        // Timestamp inside second period should be valid
+        assertTrue(situation.isValidAt(nextWeek));
+    }
 }
