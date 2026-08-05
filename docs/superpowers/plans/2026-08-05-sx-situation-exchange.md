@@ -2595,13 +2595,23 @@ public class SituationRepository {
 
             SituationKey key = new SituationKey(situation.getCodespace(), situation.getSituationNumber());
 
-            if (isSupersededByStoredVersion(key, situation)) {
+            // Pub/Sub gives no ordering guarantee, so a redelivered message can carry an
+            // older version of a situation that is already stored. The check-then-act
+            // must be atomic: concurrent add() calls for the same key are real (the
+            // subscriber runs with several parallel executor threads), so the version
+            // guard is implemented via compute() rather than a separate get()+put().
+            // The mapping function must stay side-effect free - it runs while
+            // ConcurrentHashMap holds a bin lock, so publishing or recording metrics in
+            // here risks blocking or deadlock.
+            SituationUpdate accepted = situationMap.compute(key,
+                    (k, stored) -> isSupersededByStoredVersion(stored, situation) ? stored : situation);
+
+            if (accepted != situation) {
                 LOG.debug("Ignoring out-of-order update for {} - version {} is older than the stored one.",
                         situation.getSituationNumber(), situation.getVersion());
                 return;
             }
 
-            situationMap.put(key, situation);
             publisher.publishUpdate(situation);
 
             metricsService.markSituationUpdate(1, situation.getCodespace());
@@ -2610,12 +2620,7 @@ public class SituationRepository {
         }
     }
 
-    /**
-     * Pub/Sub gives no ordering guarantee, so a redelivered message can carry an older
-     * version of a situation that is already stored.
-     */
-    private boolean isSupersededByStoredVersion(SituationKey key, SituationUpdate incoming) {
-        SituationUpdate stored = situationMap.get(key);
+    private static boolean isSupersededByStoredVersion(SituationUpdate stored, SituationUpdate incoming) {
         if (stored == null || stored.getVersion() == null || incoming.getVersion() == null) {
             return false;
         }
