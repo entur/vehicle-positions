@@ -46,7 +46,7 @@
 
 ### Task 1: Generify AutoPurgingMap
 
-`AutoPurgingMap` is hardcoded to `StorageKey`. Situations are keyed differently, so the key type becomes a parameter. This is a pure refactor with no behavioural change — the existing test suites are the acceptance gate.
+`AutoPurgingMap` is hardcoded to `StorageKey`. Situations are keyed differently, so the key type becomes a parameter. The purge hook is also renamed from `removeExpiredEntries()` to `removeExpiredEntries()`, since a third subclass will purge situations rather than vehicles. This is a pure refactor with no behavioural change — the existing test suites are the acceptance gate.
 
 **Files:**
 - Modify: `src/main/java/org/entur/vehicles/repository/AutoPurgingMap.java`
@@ -55,16 +55,14 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `abstract class AutoPurgingMap<K, V> extends ConcurrentHashMap<K, V>` with protected field `gracePeriod` (`java.time.Duration`) and `public abstract void removeExpiredVehicles()`.
+- Produces: `abstract class AutoPurgingMap<K, V> extends ConcurrentHashMap<K, V>` with protected field `gracePeriod` (`java.time.Duration`) and `public abstract void removeExpiredEntries()`.
 
 - [ ] **Step 1: Run the existing suite to establish a green baseline**
 
 Run: `mvn test`
 Expected: PASS. Note the number of tests run — Task 1 must not change it.
 
-- [ ] **Step 2: Generify the base class**
-
-Replace the class declaration in `AutoPurgingMap.java`. Only the type parameters change; the constructor body and abstract method are untouched.
+- [ ] **Step 2: Generify the base class and rename the purge hook**
 
 ```java
 package org.entur.vehicles.repository;
@@ -84,33 +82,41 @@ public abstract class AutoPurgingMap<K, V> extends ConcurrentHashMap<K, V> {
         this.gracePeriod = gracePeriod;
         ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
         long purgeIntervalSeconds = purgeInterval.getSeconds();
-        service.scheduleWithFixedDelay(this::removeExpiredVehicles, purgeIntervalSeconds, purgeIntervalSeconds, TimeUnit.SECONDS);
+        service.scheduleWithFixedDelay(this::removeExpiredEntries, purgeIntervalSeconds, purgeIntervalSeconds, TimeUnit.SECONDS);
     }
 
-    public abstract void removeExpiredVehicles();
+    public abstract void removeExpiredEntries();
 }
 ```
 
 - [ ] **Step 3: Update the two existing subclasses**
 
-In `AutoPurgingVehicleMap.java`, change the `extends` clause only:
+In `AutoPurgingVehicleMap.java`, change the `extends` clause and rename the overriding method:
 
 ```java
 public class AutoPurgingVehicleMap extends AutoPurgingMap<StorageKey, VehicleUpdate> {
 ```
 
-In `AutoPurgingTimetableMap.java`:
+```java
+    public void removeExpiredEntries() {
+```
+
+In `AutoPurgingTimetableMap.java`, the same two changes:
 
 ```java
 public class AutoPurgingTimetableMap extends AutoPurgingMap<StorageKey, EstimatedTimetableUpdate> {
 ```
 
-Both files need `import org.entur.vehicles.repository.StorageKey;` only if they are in a different package — they are not, so no import changes are required.
+```java
+    public void removeExpiredEntries() {
+```
 
-- [ ] **Step 4: Verify nothing else referenced the raw type**
+Leave each method body untouched. Both files are in the same package as `StorageKey`, so no import changes are required.
 
-Run: `grep -rn "AutoPurgingMap" src/main src/test`
-Expected: only the three files above. If `VehicleRepository` or `TimetableRepository` declare a field typed `AutoPurgingMap` without parameters, add the parameters.
+- [ ] **Step 4: Verify no stale references remain**
+
+Run: `grep -rn "AutoPurgingMap\|removeExpiredVehicles" src/main src/test`
+Expected: `AutoPurgingMap` appears only in the three files above, and `removeExpiredVehicles` appears nowhere. If `VehicleRepository` or `TimetableRepository` declare a field typed `AutoPurgingMap` without parameters, add the parameters. If any test calls the old `removeExpiredVehicles()`, rename the call.
 
 - [ ] **Step 5: Compile and run the full suite**
 
@@ -850,7 +856,7 @@ public class AutoPurgingSituationMapTest {
         map.put(new SituationKey(expired.getCodespace(), expired.getSituationNumber()), expired);
         assertEquals(1, map.size());
 
-        map.removeExpiredVehicles();
+        map.removeExpiredEntries();
         assertEquals(0, map.size());
     }
 
@@ -862,7 +868,7 @@ public class AutoPurgingSituationMapTest {
         SituationUpdate justExpired = situation("TST:SituationNumber:2", ZonedDateTime.now().minusSeconds(5));
         map.put(new SituationKey(justExpired.getCodespace(), justExpired.getSituationNumber()), justExpired);
 
-        map.removeExpiredVehicles();
+        map.removeExpiredEntries();
         assertEquals(1, map.size());
     }
 
@@ -874,9 +880,9 @@ public class AutoPurgingSituationMapTest {
         SituationUpdate openEnded = situation("TST:SituationNumber:3", null);
         map.put(new SituationKey(openEnded.getCodespace(), openEnded.getSituationNumber()), openEnded);
 
-        map.removeExpiredVehicles();
-        map.removeExpiredVehicles();
-        map.removeExpiredVehicles();
+        map.removeExpiredEntries();
+        map.removeExpiredEntries();
+        map.removeExpiredEntries();
 
         assertEquals(1, map.size());
     }
@@ -1250,7 +1256,7 @@ public class AutoPurgingSituationMap extends AutoPurgingMap<SituationKey, Situat
         super(purgeInterval, gracePeriod);
     }
 
-    public void removeExpiredVehicles() {
+    public void removeExpiredEntries() {
         long before = System.currentTimeMillis();
 
         int sizeBefore = this.size();
@@ -2504,6 +2510,7 @@ public class SituationUpdateRxPublisher {
         sink.tryEmitNext(situationUpdate);
     }
 
+    /** {@code template} is required - Subscription always supplies a filter. */
     public Flux<List<SituationUpdate>> getPublisher(SituationFilter template, String uuid) {
         List<SituationUpdate> initialdata = new ArrayList<>();
         if (repository != null) {
@@ -2512,7 +2519,7 @@ public class SituationUpdateRxPublisher {
 
         return sink.asFlux()
                 .startWith(initialdata)
-                .filter(situationUpdate -> template == null || template.isMatch(situationUpdate))
+                .filter(template::isMatch)
                 .bufferTimeout(template.getBufferSize(), Duration.of(template.getBufferTimeMillis(), ChronoUnit.MILLIS))
                 .onBackpressureDrop();
     }
