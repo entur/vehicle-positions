@@ -41,6 +41,7 @@ public class PrometheusMetricsService {
     private static final String METRICS_PREFIX = "app.vehicles.";
     private static final String VEHICLE_DATA_COUNTER_NAME = METRICS_PREFIX + "data";
     private static final String TIMETABLE_DATA_COUNTER_NAME = METRICS_PREFIX + "timetable.data";
+    private static final String SITUATION_DATA_COUNTER_NAME = METRICS_PREFIX + "situation.data";
 
     private static final String QUERY_TYPE_LABEL = "query";
     private static final String SUBSCRIPTION_TYPE_LABEL = "subscription";
@@ -62,6 +63,10 @@ public class PrometheusMetricsService {
     private final AtomicInteger timetableCounter = new AtomicInteger(0);
     private final AtomicInteger lastLoggedTimetableCount = new AtomicInteger(0);
     private final AtomicLong lastLoggedTimetableCountTimeMillis = new AtomicLong(System.currentTimeMillis());
+
+    private final AtomicInteger situationCounter = new AtomicInteger(0);
+    private final AtomicInteger lastLoggedSituationCount = new AtomicInteger(0);
+    private final AtomicLong lastLoggedSituationCountTimeMillis = new AtomicLong(System.currentTimeMillis());
 
 
     private static final String QUERY_TYPE = "queryType";
@@ -103,6 +108,19 @@ public class PrometheusMetricsService {
 
             LOG.debug("Processed {} timetable-updates. Current rate: {}/s", currentCount, calculateRate(currentCount, lastLoggedTimetableCount, lastLoggedTimetableCountTimeMillis));
 
+        }
+    }
+
+    public void markSituationUpdate(int count, Codespace codespace) {
+        List<Tag> counterTags = new ArrayList<>();
+        counterTags.add(new ImmutableTag(CODESPACE_TAG_NAME, codespace.getCodespaceId()));
+
+        prometheusMeterRegistry.counter(SITUATION_DATA_COUNTER_NAME, counterTags).increment(count);
+        if (situationCounter.addAndGet(count) % 1000 == 0) {
+            final int currentCount = situationCounter.get();
+
+            LOG.debug("Processed {} situation-updates. Current rate: {}/s", currentCount,
+                calculateRate(currentCount, lastLoggedSituationCount, lastLoggedSituationCountTimeMillis));
         }
     }
 
