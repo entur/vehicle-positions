@@ -1833,7 +1833,12 @@ public class SituationMapper {
         if (operatorRef == null) {
             return null;
         }
-        return OperatorService.getOperator(operatorRef);
+        // OperatorService.getOperator is a plain cache lookup that returns null on a miss,
+        // and the cache is only populated by the hourly Journey Planner refresh. Falling back
+        // to a bare Operator mirrors resolveLine: without it, Affects.addOperator(null) would
+        // silently drop the operator and break the operatorRef filter until the first refresh.
+        org.entur.vehicles.data.model.Operator operator = OperatorService.getOperator(operatorRef);
+        return operator != null ? operator : new org.entur.vehicles.data.model.Operator(operatorRef);
     }
 
     private StopPoint resolveStop(String stopRef) {
