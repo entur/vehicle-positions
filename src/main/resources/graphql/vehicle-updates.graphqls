@@ -41,6 +41,26 @@ type Query {
         monitored: Boolean
         cancellation: Boolean) : [EstimatedTimetableUpdate] @deprecated(reason: "Experimental.")
 
+    situations(
+        situationNumbers: [String]
+        codespaceId: String
+        operatorRef: String
+        lineRef: String
+        # Matches affected stop points and stop places alike.
+        stopRef: String
+        serviceJourneyId: String
+        datedServiceJourneyId: String
+        mode: VehicleModeEnumeration
+        severity: SeverityEnumeration
+        reportType: String
+        # When true, only situations that are valid at the time of the request.
+        validNow: Boolean
+        # When true, only situations where no validity period carries an end time.
+        openEnded: Boolean
+        # Only situations created longer ago than this, as Duration (e.g. `P30D`).
+        minAge: Duration
+        includeClosed: Boolean = false) : [Situation]
+
     lines(codespaceId: String) : [Line]
 
     codespaces : [Codespace]
@@ -89,6 +109,27 @@ type Subscription {
         bufferSize: Int = 20
         # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
         bufferTime: Int = 250) : [EstimatedTimetableUpdate] @deprecated(reason: "Experimental.")
+
+    situations(
+        situationNumbers: [String]
+        codespaceId: String
+        operatorRef: String
+        lineRef: String
+        # Matches affected stop points and stop places alike.
+        stopRef: String
+        serviceJourneyId: String
+        datedServiceJourneyId: String
+        mode: VehicleModeEnumeration
+        severity: SeverityEnumeration
+        reportType: String
+        validNow: Boolean
+        openEnded: Boolean
+        minAge: Duration
+        includeClosed: Boolean = false
+        # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
+        bufferSize: Int = 20
+        # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
+        bufferTime: Int = 250) : [Situation]
 }
 
 type VehicleUpdate {
@@ -253,6 +294,64 @@ input BoundingBox {
     maxLon: Float!
 }
 
+type Situation {
+    situationNumber: String!
+    participantRef: String
+    codespace: Codespace
+    version: Int
+    sourceType: String
+    progress: WorkflowStatusEnumeration
+    severity: SeverityEnumeration
+    priority: Int
+    reportType: String
+    keywords: [String]
+    planned: Boolean
+    creationTime: DateTime
+    versionedAtTime: DateTime
+    validityPeriods: [ValidityPeriod]
+    summary: [TranslatedString]
+    description: [TranslatedString]
+    advice: [TranslatedString]
+    detail: [TranslatedString]
+    infoLinks: [InfoLink]
+    affects: Affects
+    lastUpdated: DateTime
+    lastUpdatedEpochSecond: Float
+    # Null when the situation never expires.
+    expiration: DateTime
+    expirationEpochSecond: Float
+
+    # True when no validity period carries an end time.
+    openEnded: Boolean
+    # Time elapsed since creationTime. Null when creationTime is absent.
+    age: Duration
+}
+
+type Affects {
+    lines: [Line]
+    stopPoints: [Stop]
+    stopPlaces: [Stop]
+    serviceJourneys: [ServiceJourney]
+    datedServiceJourneys: [DatedServiceJourney]
+    operators: [Operator]
+    vehicleModes: [VehicleModeEnumeration]
+}
+
+type ValidityPeriod {
+    startTime: DateTime
+    endTime: DateTime
+}
+
+type TranslatedString {
+    value: String
+    language: String
+}
+
+type InfoLink {
+    uri: String
+    labels: [TranslatedString]
+}
+
 enum VehicleModeEnumeration {
     AIR
     BUS
@@ -340,4 +439,25 @@ enum VehicleStatusEnumeration {
 enum CallTypeEnumeration {
     RECORDED
     ESTIMATED
+}
+
+enum WorkflowStatusEnumeration {
+    draft
+    pendingApproval
+    approvedDraft
+    open
+    published
+    closing
+    closed
+}
+
+enum SeverityEnumeration {
+    unknown
+    verySlight
+    slight
+    normal
+    severe
+    verySevere
+    noImpact
+    undefined
 }

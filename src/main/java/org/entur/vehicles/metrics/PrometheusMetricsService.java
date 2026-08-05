@@ -76,6 +76,7 @@ public class PrometheusMetricsService {
     private static final String SERVICE_JOURNEY = "serviceJourney";
     private static final String OPERATORS = "operators";
     private static final String CODESPACES = "codespaces";
+    private static final String SITUATIONS = "situations";
 
     public PrometheusMetricsService(@Autowired PrometheusMeterRegistry prometheusMeterRegistry) {
         this.prometheusMeterRegistry = prometheusMeterRegistry;
@@ -232,5 +233,8 @@ public class PrometheusMetricsService {
     }
     public void markCodespacesQuery() {
         markQuery(CODESPACES);
+    }
+    public void markSituationsQuery() {
+        markQuery(SITUATIONS);
     }
 }

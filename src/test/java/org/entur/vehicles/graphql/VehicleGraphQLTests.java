@@ -50,7 +50,7 @@ public class VehicleGraphQLTests {
                 publisher
         );
         publisher = new VehicleUpdateRxPublisher();
-        queryService = new Query(repository, null, metricsService);
+        queryService = new Query(repository, null, null, metricsService);
 
         VehicleActivityRecord vehicleActivityRecord = new VehicleActivityRecord();
         vehicleActivityRecord.setRecordedAtTime(ZonedDateTime.now().toString());
