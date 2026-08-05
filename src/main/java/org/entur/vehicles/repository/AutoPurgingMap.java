@@ -6,7 +6,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public abstract class AutoPurgingMap<T> extends ConcurrentHashMap<StorageKey, T> {
+public abstract class AutoPurgingMap<K, V> extends ConcurrentHashMap<K, V> {
 
     final Duration gracePeriod;
 
@@ -15,8 +15,8 @@ public abstract class AutoPurgingMap<T> extends ConcurrentHashMap<StorageKey, T>
         this.gracePeriod = gracePeriod;
         ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
         long purgeIntervalSeconds = purgeInterval.getSeconds();
-        service.scheduleWithFixedDelay(this::removeExpiredVehicles, purgeIntervalSeconds, purgeIntervalSeconds, TimeUnit.SECONDS);
+        service.scheduleWithFixedDelay(this::removeExpiredEntries, purgeIntervalSeconds, purgeIntervalSeconds, TimeUnit.SECONDS);
     }
 
-    public  abstract  void removeExpiredVehicles();
+    public abstract void removeExpiredEntries();
 }

@@ -10,7 +10,7 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 
 @Component
-public class AutoPurgingVehicleMap extends AutoPurgingMap<VehicleUpdate> {
+public class AutoPurgingVehicleMap extends AutoPurgingMap<StorageKey, VehicleUpdate> {
 
     private static final Logger LOG = LoggerFactory.getLogger(AutoPurgingVehicleMap.class);
 
@@ -20,7 +20,7 @@ public class AutoPurgingVehicleMap extends AutoPurgingMap<VehicleUpdate> {
         super(purgeInterval, gracePeriod);
     }
 
-    public void removeExpiredVehicles() {
+    public void removeExpiredEntries() {
         long before = System.currentTimeMillis();
 
         int sizeBefore = this.size();
