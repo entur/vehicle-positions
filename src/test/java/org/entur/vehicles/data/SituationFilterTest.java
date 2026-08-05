@@ -2,6 +2,7 @@ package org.entur.vehicles.data;
 
 import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
@@ -42,6 +43,13 @@ public class SituationFilterTest {
         return situation;
     }
 
+    /** Base fixture plus a dated service journey, for the datedServiceJourneyId criterion. */
+    private SituationUpdate situationWithDatedServiceJourney() {
+        SituationUpdate situation = situation();
+        situation.getAffects().addDatedServiceJourney(new DatedServiceJourney("TST:DatedServiceJourney:1"));
+        return situation;
+    }
+
     private SituationFilter filter(String codespaceId, String operatorRef, String lineRef, String stopRef,
                                    String serviceJourneyId, VehicleModeEnumeration mode,
                                    SeverityEnumeration severity, Boolean validNow, Boolean openEnded,
@@ -73,8 +81,10 @@ public class SituationFilterTest {
     public void testRejectsNonMatchingAffectedObjects() {
         SituationUpdate situation = situation();
         assertFalse(filter("ABC", null, null, null, null, null, null, null, null, null, null).isMatch(situation));
+        assertFalse(filter(null, "TST:Operator:999", null, null, null, null, null, null, null, null, null).isMatch(situation));
         assertFalse(filter(null, null, "TST:Line:999", null, null, null, null, null, null, null, null).isMatch(situation));
         assertFalse(filter(null, null, null, "TST:Quay:999", null, null, null, null, null, null, null).isMatch(situation));
+        assertFalse(filter(null, null, null, null, "TST:ServiceJourney:999", null, null, null, null, null, null).isMatch(situation));
         assertFalse(filter(null, null, null, null, null, VehicleModeEnumeration.RAIL, null, null, null, null, null).isMatch(situation));
         assertFalse(filter(null, null, null, null, null, null, SeverityEnumeration.slight, null, null, null, null).isMatch(situation));
     }
@@ -126,6 +136,32 @@ public class SituationFilterTest {
         assertFalse(filter(null, null, null, null, null, null, null, null, null, null, null).isMatch(closed));
         assertFalse(filter(null, null, null, null, null, null, null, null, null, null, false).isMatch(closed));
         assertTrue(filter(null, null, null, null, null, null, null, null, null, null, true).isMatch(closed));
+    }
+
+    @Test
+    public void testReportType() {
+        SituationUpdate situation = situation();
+
+        SituationFilter matching = new SituationFilter(null, MetricType.QUERY, null, null, null, null, null,
+                null, null, null, null, "general", null, null, null, null, null, null);
+        assertTrue(matching.isMatch(situation));
+
+        SituationFilter nonMatching = new SituationFilter(null, MetricType.QUERY, null, null, null, null, null,
+                null, null, null, null, "incident", null, null, null, null, null, null);
+        assertFalse(nonMatching.isMatch(situation));
+    }
+
+    @Test
+    public void testDatedServiceJourneyId() {
+        SituationUpdate situation = situationWithDatedServiceJourney();
+
+        SituationFilter matching = new SituationFilter(null, MetricType.QUERY, null, null, null, null, null,
+                null, "TST:DatedServiceJourney:1", null, null, null, null, null, null, null, null, null);
+        assertTrue(matching.isMatch(situation));
+
+        SituationFilter nonMatching = new SituationFilter(null, MetricType.QUERY, null, null, null, null, null,
+                null, "TST:DatedServiceJourney:999", null, null, null, null, null, null, null, null, null);
+        assertFalse(nonMatching.isMatch(situation));
     }
 
     @Test
