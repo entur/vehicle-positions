@@ -48,3 +48,47 @@ Examples:
 - [Stream all updates for codespace=SKY](https://api.entur.io/realtime/v1/vehicles/graphiql?query=subscription%20%7B%0A%20%20vehicles(codespaceId%3A%22SKY%22)%20%7B%0A%20%20%20%20lastUpdated%0A%20%20%20%20location%20%7B%0A%20%20%20%20%20%20latitude%0A%20%20%20%20%20%20longitude%0A%20%20%20%20%7D%0A%20%20%7D%0A%7D&variables=%7B%0A%20%20%22date%22%3A%20%222021-04-16%22%0A%7D)
 
 More details about GraphQL-subscriptions: https://graphql.org/blog/subscriptions-in-graphql-and-relay/
+
+## Situations
+Service messages (SIRI-SX) describing disruptions and deviations. Available both as a query and as a
+subscription, using the same filter arguments as the examples below.
+
+Situations are filtered by the objects they affect — `lineRef`, `stopRef` (matching both affected stop
+points and stop places), `serviceJourneyId`, `datedServiceJourneyId`, `operatorRef` and `mode` — as well
+as by `codespaceId`, `severity`, `reportType` and `situationNumbers`.
+
+Closed situations are excluded unless `includeClosed: true` is passed. A situation that is closed is
+published to active subscribers once, with `progress: closed`, before it is removed — subscribers should
+use that to drop it from display.
+
+A situation published without a validity end time never expires and is retained indefinitely. `openEnded`
+and `minAge` exist to find such situations:
+
+```
+{
+  situations(codespaceId: "RUT") {
+    situationNumber
+    progress
+    severity
+    openEnded
+    age
+    summary { value language }
+    affects {
+      lines { lineRef lineName }
+      stopPoints { id name }
+    }
+  }
+}
+```
+
+Open-ended situations that have been active for more than 30 days:
+
+```
+{
+  situations(openEnded: true, minAge: "P30D") {
+    situationNumber
+    codespace { codespaceId }
+    age
+  }
+}
+```
