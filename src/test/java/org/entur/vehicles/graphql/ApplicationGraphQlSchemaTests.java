@@ -1,21 +1,27 @@
 package org.entur.vehicles.graphql;
 
+import graphql.ExecutionResult;
 import org.entur.avro.realtime.siri.model.AffectedLineRecord;
 import org.entur.avro.realtime.siri.model.AffectedNetworkRecord;
 import org.entur.avro.realtime.siri.model.AffectsRecord;
 import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
 import org.entur.vehicles.repository.SituationRepository;
 import org.junit.jupiter.api.Test;
+import org.reactivestreams.Publisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.graphql.ExecutionGraphQlResponse;
 import org.springframework.graphql.ExecutionGraphQlService;
 import org.springframework.graphql.support.DefaultExecutionGraphQlRequest;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -114,6 +120,74 @@ class ApplicationGraphQlSchemaTests {
 
         String lineRef = response.field("situations[0].affects.lines[0].lineRef").getValue();
         assertThat(lineRef).isEqualTo("TST:Line:1");
+    }
+
+    /**
+     * {@code Subscription.situations} declares {@code includeClosed: Boolean = true} while
+     * {@code Query.situations} declares {@code = false}. That asymmetry is deliberate: a
+     * subscriber has to observe a situation closing in order to drop it from display, and the
+     * publisher applies the same filter to the live stream as to the initial snapshot - so with
+     * the query's default, a close would be published to the sink and then filtered out before
+     * reaching anyone.
+     * <p>
+     * This executes a real subscription document that OMITS the argument, so the schema default
+     * is what is under test. Reverting {@code vehicle-updates.graphqls} to {@code = false} makes
+     * this fail; asserting on a hand-built filter would not.
+     */
+    @Test
+    void subscriptionDefaultDeliversTheCloseTransitionWithoutAskingForIt() throws InterruptedException {
+        situationRepository.add(situation("TST:SituationNumber:closes", 1, "PUBLISHED"));
+
+        String document = """
+                subscription {
+                  situations(bufferSize: 1, bufferTime: 50) {
+                    situationNumber
+                    progress
+                  }
+                }
+                """;
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-subscription", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        Publisher<ExecutionResult> publisher = response.getData();
+        CountDownLatch closeReceived = new CountDownLatch(1);
+
+        Disposable subscription = Flux.from(publisher).subscribe(result -> {
+            Map<String, Object> data = result.getData();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> situations = (List<Map<String, Object>>) data.get("situations");
+            for (Map<String, Object> situation : situations) {
+                if ("TST:SituationNumber:closes".equals(situation.get("situationNumber"))
+                        && "closed".equals(situation.get("progress"))) {
+                    closeReceived.countDown();
+                }
+            }
+        });
+
+        try {
+            situationRepository.add(situation("TST:SituationNumber:closes", 2, "CLOSED"));
+
+            assertThat(closeReceived.await(5, TimeUnit.SECONDS))
+                    .withFailMessage("a subscriber that never mentioned includeClosed must still be told "
+                            + "the situation closed - check the Subscription.situations default in "
+                            + "vehicle-updates.graphqls")
+                    .isTrue();
+        } finally {
+            subscription.dispose();
+        }
+    }
+
+    private PtSituationElementRecord situation(String situationNumber, int version, String progress) {
+        PtSituationElementRecord record = situationRecord();
+        record.setSituationNumber(situationNumber);
+        record.setVersion(version);
+        record.setProgress(progress);
+        return record;
     }
 
     private PtSituationElementRecord situationRecord() {
