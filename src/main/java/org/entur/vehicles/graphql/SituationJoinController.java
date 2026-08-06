@@ -35,7 +35,18 @@ public class SituationJoinController {
      * Returns a list positionally aligned with {@code timetables} - NOT a Map keyed by the
      * source objects. {@code EstimatedTimetableUpdate} inherits value-based equals/hashCode
      * from AbstractUpdate that ignore datedServiceJourney, so two journeys on different
-     * operating days compare equal and a Map would collapse them.
+     * operating days compare equal. Returning a Map would additionally collapse the
+     * *results* onto one key; returning a List avoids that half of the problem.
+     * <p>
+     * It does not avoid the other half: Spring GraphQL's {@code AnnotatedControllerConfigurer}
+     * calls {@code dataLoader.load(source)} per object, and DataLoader deduplicates *keys* by
+     * equals/hashCode before this method is ever invoked - upstream of whatever this method
+     * returns. Two journeys that compare equal are therefore batched as a single key and both
+     * receive the one match computed for it, regardless of the return shape here. What
+     * actually prevents that collapse is {@link GraphQlBatchLoaderConfiguration}, which
+     * disables DataLoader's per-key cache so each object is looked up by identity instead of
+     * by value - see its Javadoc for the full mechanism, including why this also affects
+     * subscription staleness.
      */
     @BatchMapping(typeName = "EstimatedTimetableUpdate", field = "situations")
     public List<List<SituationUpdate>> timetableSituations(List<EstimatedTimetableUpdate> timetables) {

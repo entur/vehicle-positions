@@ -22,11 +22,14 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -66,6 +69,29 @@ class ApplicationGraphQlSchemaTests {
 
     @Autowired
     private TimetableRepository timetableRepository;
+
+    // Every fixture below uses a line/quay/situationNumber unique to its own test. The
+    // repositories are shared, mutable, singleton beans that persist state across every test
+    // method in this class (and are never reset between them), so a query that isn't scoped
+    // to its own fixture's identifiers would pass or fail depending on what other test
+    // methods happened to run first - see the join test's history for why this matters.
+    private static final String QUAY_JOIN_LINE = "TST:Line:quay-join-probe";
+    private static final String QUAY_JOIN_DSJ = "TST:DatedServiceJourney:quay-join-probe";
+    private static final String QUAY_JOIN_QUAY_1 = "NSR:Quay:quay-join-probe-1";
+    private static final String QUAY_JOIN_QUAY_2 = "NSR:Quay:quay-join-probe-2";
+    private static final String QUAY_JOIN_SITUATION = "TST:SituationNumber:quay-join-probe";
+
+    private static final String TWO_JOURNEY_LINE = "TST:Line:two-journey-probe";
+    private static final String TWO_JOURNEY_DSJ_A = "TST:DatedServiceJourney:two-journey-probe-A";
+    private static final String TWO_JOURNEY_DSJ_B = "TST:DatedServiceJourney:two-journey-probe-B";
+    private static final String TWO_JOURNEY_MATCHING_QUAY = "NSR:Quay:two-journey-probe-match";
+    private static final String TWO_JOURNEY_NON_MATCHING_QUAY = "NSR:Quay:two-journey-probe-nomatch";
+    private static final String TWO_JOURNEY_SITUATION = "TST:SituationNumber:two-journey-probe";
+
+    private static final String STALE_LINE = "TST:Line:subscription-stale-probe";
+    private static final String STALE_DSJ = "TST:DatedServiceJourney:subscription-stale-probe";
+    private static final String STALE_QUAY = "NSR:Quay:subscription-stale-probe";
+    private static final String STALE_SITUATION = "TST:SituationNumber:subscription-stale-probe";
 
     @Test
     void contextLoads() {
@@ -198,12 +224,12 @@ class ApplicationGraphQlSchemaTests {
 
     @Test
     void situationsResolveOnBothTheJourneyAndTheSpecificCall() {
-        situationRepository.add(quaySituationRecord());
-        timetableRepository.add(journeyCallingAtQuay());
+        situationRepository.add(situationAffectingStop(QUAY_JOIN_SITUATION, QUAY_JOIN_QUAY_1));
+        timetableRepository.add(journeyCallingAt(QUAY_JOIN_LINE, QUAY_JOIN_DSJ, QUAY_JOIN_QUAY_1, QUAY_JOIN_QUAY_2));
 
         String document = """
                 query {
-                  timetables {
+                  timetables(lineRef: "%s") {
                     serviceJourney { id }
                     situations { situationNumber }
                     calls {
@@ -212,7 +238,7 @@ class ApplicationGraphQlSchemaTests {
                     }
                   }
                 }
-                """;
+                """.formatted(QUAY_JOIN_LINE);
 
         ExecutionGraphQlResponse response = graphQlService.execute(
                 new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-join", Locale.ENGLISH)
@@ -222,12 +248,12 @@ class ApplicationGraphQlSchemaTests {
         assertThat(response.getErrors()).isEmpty();
 
         List<String> journeySituations = situationNumbersOf(response.field("timetables[0].situations").getValue());
-        assertThat(journeySituations).containsExactly("TST:SituationNumber:quay");
+        assertThat(journeySituations).containsExactly(QUAY_JOIN_SITUATION);
 
         // The stop-triggered situation belongs to the call it came from.
         List<String> firstCallSituations =
                 situationNumbersOf(response.field("timetables[0].calls[0].situations").getValue());
-        assertThat(firstCallSituations).containsExactly("TST:SituationNumber:quay");
+        assertThat(firstCallSituations).containsExactly(QUAY_JOIN_SITUATION);
 
         // ...and not to the journey's other call.
         List<String> secondCallSituations =
@@ -237,8 +263,8 @@ class ApplicationGraphQlSchemaTests {
 
     @Test
     void aTimetablesQueryThatDoesNotSelectSituationsDoesNoMatchingWork() {
-        situationRepository.add(quaySituationRecord());
-        timetableRepository.add(journeyCallingAtQuay());
+        situationRepository.add(situationAffectingStop(QUAY_JOIN_SITUATION, QUAY_JOIN_QUAY_1));
+        timetableRepository.add(journeyCallingAt(QUAY_JOIN_LINE, QUAY_JOIN_DSJ, QUAY_JOIN_QUAY_1, QUAY_JOIN_QUAY_2));
 
         ExecutionGraphQlResponse response = graphQlService.execute(
                 new DefaultExecutionGraphQlRequest(
@@ -255,6 +281,131 @@ class ApplicationGraphQlSchemaTests {
     }
 
     /**
+     * DataLoader (java-dataloader) defaults to caching a batch loader's results per key via
+     * equals/hashCode, and Spring GraphQL's {@code @BatchMapping} infrastructure calls
+     * {@code dataLoader.load(source)} once per parent object - so a cache hit never reaches
+     * {@code SituationJoinController} at all. {@code EstimatedTimetableUpdate} inherits
+     * {@code AbstractUpdate}'s value-based equals/hashCode (serviceJourney, operator,
+     * codespace, mode, line), and the {@code DatedVehicleJourneyRef} ingest path used by
+     * {@code journeyCallingAt} never populates the plain {@code serviceJourney} field, so it
+     * plays no part in equality either. Two distinct journeys sharing a line, operator,
+     * codespace and mode are therefore mutually equal keys: with DataLoader's default cache
+     * on, the second key registered in a batch is silently answered from the first key's
+     * cached result instead of being matched itself. {@code GraphQlBatchLoaderConfiguration}
+     * disables that cache; without it, this test fails with one journey's situations answering
+     * for the other's.
+     */
+    @Test
+    void twoDistinctJourneysOnTheSameLineGetTheirOwnSituationsNotEachOthers() {
+        situationRepository.add(situationAffectingStop(TWO_JOURNEY_SITUATION, TWO_JOURNEY_MATCHING_QUAY));
+
+        // Registered "B then A" on purpose - nothing about which key a DataLoader batch sees
+        // first should change the outcome.
+        timetableRepository.add(journeyCallingAt(TWO_JOURNEY_LINE, TWO_JOURNEY_DSJ_B, TWO_JOURNEY_NON_MATCHING_QUAY));
+        timetableRepository.add(journeyCallingAt(TWO_JOURNEY_LINE, TWO_JOURNEY_DSJ_A, TWO_JOURNEY_MATCHING_QUAY));
+
+        String document = """
+                query {
+                  timetables(lineRef: "%s") {
+                    datedServiceJourney { id }
+                    situations { situationNumber }
+                  }
+                }
+                """.formatted(TWO_JOURNEY_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-two-journeys", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        List<Map<String, Object>> timetables = response.field("timetables").getValue();
+        assertThat(timetables).hasSize(2);
+
+        Map<String, List<String>> situationsByJourneyId = new HashMap<>();
+        for (Map<String, Object> timetable : timetables) {
+            situationsByJourneyId.put(datedServiceJourneyId(timetable), situationNumbersOf(timetable.get("situations")));
+        }
+
+        assertThat(situationsByJourneyId.get(TWO_JOURNEY_DSJ_A))
+                .withFailMessage("journey A calls at the affected quay and must see the situation")
+                .containsExactly(TWO_JOURNEY_SITUATION);
+        assertThat(situationsByJourneyId.get(TWO_JOURNEY_DSJ_B))
+                .withFailMessage("journey B does not call at the affected quay and must not inherit "
+                        + "journey A's situations through a shared DataLoader cache key")
+                .isEmpty();
+    }
+
+    /**
+     * The {@code DataLoaderRegistry} backing {@code @BatchMapping} is built once per
+     * subscription (see {@code GraphQlBatchLoaderConfiguration}) and reused for every event
+     * delivered on it, for the connection's whole lifetime. With DataLoader's default per-key
+     * cache, a journey published again after a situation starts affecting it would keep
+     * resolving {@code situations} from its first, pre-situation answer instead of being
+     * re-matched. Filtering by a unique {@code lineRef} keeps this test isolated from whatever
+     * other journeys the shared, never-reset repository accumulates across the test class.
+     */
+    @Test
+    void subscriptionJourneyFieldPicksUpASituationAddedBetweenTwoEventsForTheSameJourney() throws InterruptedException {
+        // Present before subscribing, so it arrives as the subscription's initial snapshot -
+        // the first of the two events under test, with no situation attached yet.
+        timetableRepository.add(journeyCallingAt(STALE_LINE, STALE_DSJ, STALE_QUAY));
+
+        String document = """
+                subscription {
+                  timetables(lineRef: "%s", bufferSize: 1, bufferTime: 50) {
+                    datedServiceJourney { id }
+                    situations { situationNumber }
+                  }
+                }
+                """.formatted(STALE_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-subscription-stale", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        Publisher<ExecutionResult> publisher = response.getData();
+        CountDownLatch situationSeen = new CountDownLatch(1);
+        AtomicReference<List<String>> lastSituations = new AtomicReference<>(List.of());
+
+        Disposable subscription = Flux.from(publisher).subscribe(result -> {
+            Map<String, Object> data = result.getData();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> timetables = (List<Map<String, Object>>) data.get("timetables");
+            for (Map<String, Object> timetable : timetables) {
+                if (STALE_DSJ.equals(datedServiceJourneyId(timetable))) {
+                    List<String> situations = situationNumbersOf(timetable.get("situations"));
+                    lastSituations.set(situations);
+                    if (!situations.isEmpty()) {
+                        situationSeen.countDown();
+                    }
+                }
+            }
+        });
+
+        try {
+            // The situation appears only after the first (initial-snapshot) event has gone out.
+            situationRepository.add(situationAffectingStop(STALE_SITUATION, STALE_QUAY));
+
+            // The same journey - equal to its earlier self under AbstractUpdate's value
+            // equality - republished. This is the second event under test.
+            timetableRepository.add(journeyCallingAt(STALE_LINE, STALE_DSJ, STALE_QUAY));
+
+            assertThat(situationSeen.await(5, TimeUnit.SECONDS))
+                    .withFailMessage("the second event for this journey must reflect the situation added "
+                            + "since the first event - last seen situations: " + lastSituations.get()
+                            + " - check DataLoader caching in GraphQlBatchLoaderConfiguration")
+                    .isTrue();
+        } finally {
+            subscription.dispose();
+        }
+    }
+
+    /**
      * {@code response.field(...)} does not support a {@code [*]} projection - its path parser
      * only accepts numeric list indices in brackets - so the list of maps is read as-is and
      * the numbers extracted here instead.
@@ -265,32 +416,37 @@ class ApplicationGraphQlSchemaTests {
         return situations.stream().map(s -> (String) s.get("situationNumber")).toList();
     }
 
-    private EstimatedVehicleJourneyRecord journeyCallingAtQuay() {
-        EstimatedCallRecord first = new EstimatedCallRecord();
-        first.setStopPointRef("NSR:Quay:1");
-        first.setOrder(1);
-        first.setAimedArrivalTime(ZonedDateTime.now().plusMinutes(5).toString());
-        first.setAimedDepartureTime(ZonedDateTime.now().plusMinutes(6).toString());
+    @SuppressWarnings("unchecked")
+    private String datedServiceJourneyId(Map<String, Object> timetable) {
+        return (String) ((Map<String, Object>) timetable.get("datedServiceJourney")).get("id");
+    }
 
-        EstimatedCallRecord second = new EstimatedCallRecord();
-        second.setStopPointRef("NSR:Quay:2");
-        second.setOrder(2);
-        second.setAimedArrivalTime(ZonedDateTime.now().plusMinutes(10).toString());
-        second.setAimedDepartureTime(ZonedDateTime.now().plusMinutes(11).toString());
+    private EstimatedVehicleJourneyRecord journeyCallingAt(String lineRef, String datedServiceJourneyId, String... stopRefs) {
+        List<EstimatedCallRecord> calls = new ArrayList<>();
+        int order = 1;
+        for (String stopRef : stopRefs) {
+            EstimatedCallRecord call = new EstimatedCallRecord();
+            call.setStopPointRef(stopRef);
+            call.setOrder(order);
+            call.setAimedArrivalTime(ZonedDateTime.now().plusMinutes(order * 5L).toString());
+            call.setAimedDepartureTime(ZonedDateTime.now().plusMinutes(order * 5L + 1).toString());
+            calls.add(call);
+            order++;
+        }
 
         EstimatedVehicleJourneyRecord journey = new EstimatedVehicleJourneyRecord();
         journey.setDataSource("TST");
-        journey.setLineRef("TST:Line:1");
-        journey.setDatedVehicleJourneyRef("TST:DatedServiceJourney:quay-join");
+        journey.setLineRef(lineRef);
+        journey.setDatedVehicleJourneyRef(datedServiceJourneyId);
         journey.setRecordedAtTime(ZonedDateTime.now().toString());
         journey.setMonitored(true);
-        journey.setEstimatedCalls(List.of(first, second));
+        journey.setEstimatedCalls(calls);
         return journey;
     }
 
-    private PtSituationElementRecord quaySituationRecord() {
+    private PtSituationElementRecord situationAffectingStop(String situationNumber, String stopRef) {
         PtSituationElementRecord record = new PtSituationElementRecord();
-        record.setSituationNumber("TST:SituationNumber:quay");
+        record.setSituationNumber(situationNumber);
         record.setParticipantRef("TST");
         record.setVersion(1);
         record.setProgress("PUBLISHED");
@@ -306,7 +462,7 @@ class ApplicationGraphQlSchemaTests {
         record.setInfoLinks(List.of());
 
         AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
-        stopPoint.setStopPointRef("NSR:Quay:1");
+        stopPoint.setStopPointRef(stopRef);
 
         AffectsRecord affects = new AffectsRecord();
         affects.setStopPoints(List.of(stopPoint));
