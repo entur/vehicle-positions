@@ -203,6 +203,11 @@ type EstimatedTimetableUpdate {
     vehicleStatus: VehicleStatusEnumeration
 
     calls: [Call]
+
+    # Situations affecting this journey: those naming the journey, its dated journey or its
+    # line and overlapping the journey, plus those affecting any stop it calls at while the
+    # vehicle is there. Closed situations are never included.
+    situations: [Situation]
 }
 
 type Call {
@@ -226,6 +231,10 @@ type Call {
     departureBoardingActivity: String
     forBoarding: Boolean
     occupancyStatus: OccupancyStatus
+
+    # Situations affecting this stop while the vehicle is here. A situation on a quay that
+    # ends before the vehicle arrives is not included.
+    situations: [Situation]
 }
 
 type Stop {

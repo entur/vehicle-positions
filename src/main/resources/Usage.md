@@ -109,3 +109,24 @@ real-time stream carries updates rather than state, the service loads a complete
 of current situations from Entur's SIRI-SX REST endpoint at startup, before it begins
 consuming the stream. A situation that was published long before the service started is
 therefore available immediately, without waiting for its producer to republish.
+
+Situations are also attached to estimated timetable data, so a consumer fetching a journey
+receives the disruptions affecting it without querying the situations feed separately:
+
+```
+{
+  timetables(codespaceId: "RUT") {
+    serviceJourney { id }
+    situations { situationNumber severity summary { value } }
+    calls {
+      stopPoint { id name }
+      situations { situationNumber summary { value } }
+    }
+  }
+}
+```
+
+A situation attaches to a journey when it names that journey, its dated journey or its line
+and overlaps the journey in time, or when it affects a stop the journey calls at. A situation
+attached to a call is in force while the vehicle is at that stop specifically — a quay message
+that ends before the vehicle arrives is not included. Closed situations are never attached.
