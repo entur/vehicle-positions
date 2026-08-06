@@ -134,7 +134,7 @@ type Subscription {
         # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
         bufferSize: Int = 20
         # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
-        bufferTime: Int = 250) : [Situation]
+        bufferTime: Int = 250) : [Situation]  @deprecated(reason: "Experimental.")
 }
 
 type VehicleUpdate {
