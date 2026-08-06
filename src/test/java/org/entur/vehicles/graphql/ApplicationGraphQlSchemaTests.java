@@ -95,6 +95,11 @@ class ApplicationGraphQlSchemaTests {
     private static final String STALE_QUAY = "NSR:Quay:subscription-stale-probe";
     private static final String STALE_SITUATION = "TST:SituationNumber:subscription-stale-probe";
 
+    private static final String REPUBLISH_LINE = "TST:Line:republish-probe";
+    private static final String REPUBLISH_DSJ = "TST:DatedServiceJourney:republish-probe";
+    private static final String REPUBLISH_QUAY = "NSR:Quay:republish-probe";
+    private static final String REPUBLISH_SITUATION = "TST:SituationNumber:republish-probe";
+
     @Test
     void contextLoads() {
         // If the schema fails to parse, or a field can't be wired to any resolver/getter,
@@ -428,6 +433,142 @@ class ApplicationGraphQlSchemaTests {
         } finally {
             subscription.dispose();
         }
+    }
+
+    /**
+     * The behaviour this whole mechanism exists for. The timetables subscription is fed only by
+     * EstimatedTimetableUpdateRxPublisher, and the situations field is resolved once per emitted
+     * event - so without SituationTriggeredRepublisher, a situation appearing after the journey
+     * was published never reaches the subscriber at all.
+     * <p>
+     * Note there is deliberately NO ET update after the subscription opens: the journey is
+     * published first, and the only thing that happens afterwards is the situation being added.
+     */
+    @Test
+    void addingASituationRepublishesTheAffectedJourneyWithNoEtUpdate() throws InterruptedException {
+        timetableRepository.add(journeyCallingAt(REPUBLISH_LINE, REPUBLISH_DSJ, REPUBLISH_QUAY));
+
+        String document = """
+                subscription {
+                  timetables(lineRef: "%s", bufferSize: 1, bufferTime: 50) {
+                    datedServiceJourney { id }
+                    calls { situations { situationNumber } }
+                  }
+                }
+                """.formatted(REPUBLISH_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-republish", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        Publisher<ExecutionResult> publisher = response.getData();
+        CountDownLatch situationSeen = new CountDownLatch(1);
+
+        Disposable subscription = Flux.from(publisher).subscribe(result -> {
+            Map<String, Object> data = result.getData();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> timetables = (List<Map<String, Object>>) data.get("timetables");
+            for (Map<String, Object> timetable : timetables) {
+                if (REPUBLISH_DSJ.equals(datedServiceJourneyId(timetable))
+                        && callSituationNumbers(timetable).contains(REPUBLISH_SITUATION)) {
+                    situationSeen.countDown();
+                }
+            }
+        });
+
+        try {
+            situationRepository.add(situationAffectingStop(REPUBLISH_SITUATION, REPUBLISH_QUAY));
+
+            assertThat(situationSeen.await(10, TimeUnit.SECONDS))
+                    .withFailMessage("a situation affecting a stored journey must reach an active "
+                            + "timetables subscriber without waiting for an ET update - check "
+                            + "SituationTriggeredRepublisher is wired into SituationRepository.add")
+                    .isTrue();
+        } finally {
+            subscription.dispose();
+        }
+    }
+
+    /**
+     * Closing is the case that fails if the PREVIOUS version is not captured: the matcher excludes
+     * closed situations, so matching only the new state finds no journeys and nothing would be
+     * republished - leaving the disruption on the client's display indefinitely.
+     */
+    @Test
+    void closingASituationRepublishesTheAffectedJourneyWithoutIt() throws InterruptedException {
+        String line = REPUBLISH_LINE + "-close";
+        String dsj = REPUBLISH_DSJ + "-close";
+        String quay = REPUBLISH_QUAY + "-close";
+        String situationNumber = REPUBLISH_SITUATION + "-close";
+
+        timetableRepository.add(journeyCallingAt(line, dsj, quay));
+        situationRepository.add(situationAffectingStop(situationNumber, quay));
+
+        String document = """
+                subscription {
+                  timetables(lineRef: "%s", bufferSize: 1, bufferTime: 50) {
+                    datedServiceJourney { id }
+                    calls { situations { situationNumber } }
+                  }
+                }
+                """.formatted(line);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-republish-close", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        Publisher<ExecutionResult> publisher = response.getData();
+        CountDownLatch situationGone = new CountDownLatch(1);
+        AtomicReference<List<String>> lastSeen = new AtomicReference<>(List.of());
+
+        Disposable subscription = Flux.from(publisher).subscribe(result -> {
+            Map<String, Object> data = result.getData();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> timetables = (List<Map<String, Object>>) data.get("timetables");
+            for (Map<String, Object> timetable : timetables) {
+                if (dsj.equals(datedServiceJourneyId(timetable))) {
+                    List<String> situations = callSituationNumbers(timetable);
+                    lastSeen.set(situations);
+                    if (!situations.contains(situationNumber)) {
+                        situationGone.countDown();
+                    }
+                }
+            }
+        });
+
+        try {
+            PtSituationElementRecord closed = situationAffectingStop(situationNumber, quay);
+            closed.setProgress("CLOSED");
+            closed.setVersion(2);
+            situationRepository.add(closed);
+
+            assertThat(situationGone.await(10, TimeUnit.SECONDS))
+                    .withFailMessage("closing a situation must republish the journey without it - "
+                            + "the matcher excludes closed situations, so the republisher has to "
+                            + "trigger on the PREVIOUS version's refs. Last seen: " + lastSeen.get())
+                    .isTrue();
+        } finally {
+            subscription.dispose();
+        }
+    }
+
+    /** Flattens the situationNumbers across every call of a timetable in a subscription payload. */
+    private List<String> callSituationNumbers(Map<String, Object> timetable) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> calls = (List<Map<String, Object>>) timetable.get("calls");
+        List<String> numbers = new ArrayList<>();
+        if (calls != null) {
+            for (Map<String, Object> call : calls) {
+                numbers.addAll(situationNumbersOf(call.get("situations")));
+            }
+        }
+        return numbers;
     }
 
     /**

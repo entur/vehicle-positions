@@ -8,6 +8,7 @@ import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.SituationFilter;
 import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
+import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
 import org.entur.vehicles.graphql.publishers.SituationUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.service.LineService;
@@ -46,11 +47,20 @@ public class SituationRepositoryTest {
                         new org.entur.vehicles.data.model.StopPoint(invocation.getArgument(0)));
 
         publisher = new SituationUpdateRxPublisher();
+        // A real republisher, never started: onSituationChanged() only accumulates pending
+        // refs and releases a semaphore permit, which is harmless with no worker thread
+        // running to consume it - these tests exercise storage, not republishing.
+        SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(
+                new AutoPurgingTimetableMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
+                new EstimatedTimetableUpdateRxPublisher(),
+                100,
+                Duration.ofMillis(50));
         repository = new SituationRepository(
                 metricsService,
                 new SituationMapper(new LineService(false), nsrService),
                 new AutoPurgingSituationMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
-                publisher
+                publisher,
+                republisher
         );
     }
 

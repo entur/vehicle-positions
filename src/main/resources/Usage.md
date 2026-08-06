@@ -145,3 +145,13 @@ journey keeps the situation.
 
 A situation naming several of the journey's stops is reported against every one of them, so a
 client can mark each affected stop. Closed situations are never attached.
+
+A `timetables` subscription is also told when a situation affecting one of its journeys changes,
+even if the journey's own timetable data has not. The affected journeys are re-sent on the normal
+stream, identical in shape to any other update, so no special client handling is needed — apply
+them exactly as you already apply every event. This covers situations appearing, changing and
+closing, and it means a disruption disappears from a journey promptly rather than lingering until
+that journey's producer happens to send another message.
+
+A situation affecting a large number of journeys is re-sent over a few seconds rather than all at
+once, so that one wide-reaching disruption does not crowd out ordinary timetable updates.

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Repository
 public class SituationRepository {
@@ -24,15 +25,18 @@ public class SituationRepository {
     private final SituationMapper mapper;
     private final AutoPurgingSituationMap situationMap;
     private final SituationUpdateRxPublisher publisher;
+    private final SituationTriggeredRepublisher republisher;
 
     public SituationRepository(@Autowired PrometheusMetricsService metricsService,
                                @Autowired SituationMapper mapper,
                                @Autowired AutoPurgingSituationMap situationMap,
-                               @Autowired SituationUpdateRxPublisher publisher) {
+                               @Autowired SituationUpdateRxPublisher publisher,
+                               @Autowired SituationTriggeredRepublisher republisher) {
         this.metricsService = metricsService;
         this.mapper = mapper;
         this.situationMap = situationMap;
         this.publisher = publisher;
+        this.republisher = republisher;
         this.publisher.setRepository(this);
     }
 
@@ -59,8 +63,17 @@ public class SituationRepository {
             // The mapping function must stay side-effect free - it runs while
             // ConcurrentHashMap holds a bin lock, so publishing or recording metrics in
             // here risks blocking or deadlock.
-            SituationUpdate accepted = situationMap.compute(key,
-                    (k, stored) -> isSupersededByStoredVersion(stored, situation) ? stored : situation);
+            // The previous version is captured for the republisher: when a situation closes, the
+            // matcher excludes it, so matching only the new state would find no journeys to
+            // republish - and a situation that narrows no longer names the stops whose journeys
+            // must be told. Assigning a reference is not the kind of side effect the comment above
+            // rules out: it neither blocks nor performs I/O, and compute() does not re-invoke the
+            // mapping function.
+            AtomicReference<SituationUpdate> previous = new AtomicReference<>();
+            SituationUpdate accepted = situationMap.compute(key, (k, stored) -> {
+                previous.set(stored);
+                return isSupersededByStoredVersion(stored, situation) ? stored : situation;
+            });
 
             if (accepted != situation) {
                 LOG.debug("Ignoring out-of-order update for {} - version {} is older than the stored one.",
@@ -78,6 +91,8 @@ public class SituationRepository {
             publisher.publishUpdate(situation);
 
             metricsService.markSituationUpdate(1, situation.getCodespace());
+
+            republisher.onSituationChanged(previous.get(), situation);
         } catch (RuntimeException e) {
             LOG.warn("Update ignored.", e);
         }
