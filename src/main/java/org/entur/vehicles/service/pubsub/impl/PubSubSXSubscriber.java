@@ -8,12 +8,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.Map;
 
+// The startup snapshot must finish loading before the stream starts: `version` is null on
+// most real situations, so the repository's version guard cannot stop a late snapshot
+// record from overwriting fresher streamed data.
 @Service
+@DependsOn("situationSnapshotService")
 public class PubSubSXSubscriber extends PubSubSubscriber {
 
   private static final Logger LOG = LoggerFactory.getLogger(PubSubSXSubscriber.class.getName());
