@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 
 /**
  * Republishes stored estimated timetables when a situation affecting them changes.
@@ -90,8 +89,11 @@ public class SituationTriggeredRepublisher {
         } else {
             this.chunkSize = chunkSize;
         }
-        // A negative chunkDelay throws out of Thread.sleep, and an unreasonably large one (a
-        // misconfigured PT1M, say) stalls the single worker thread for minutes per fan-out.
+        // A negative chunkDelay is not itself dangerous - TimeUnit.MILLISECONDS.sleep(negative)
+        // returns immediately rather than throwing, unlike bare Thread.sleep - but it silently
+        // defeats the pacing this delay exists for, indistinguishably from a configuration
+        // mistake. An unreasonably large one (a misconfigured PT1M, say) stalls the single
+        // worker thread for minutes per fan-out.
         if (chunkDelay.isNegative() || chunkDelay.compareTo(MAX_CHUNK_DELAY) > 0) {
             LOG.warn("vehicle.sx.republish.chunk.delay={} is out of range (must be between 0 and {}) "
                     + "- falling back to {}.", chunkDelay, MAX_CHUNK_DELAY, DEFAULT_CHUNK_DELAY);
@@ -99,7 +101,18 @@ public class SituationTriggeredRepublisher {
         } else {
             this.chunkDelay = chunkDelay;
         }
-        this.largeFanoutThreshold = largeFanoutThreshold;
+        // largeFanoutThreshold < 1 makes affected.size() >= largeFanoutThreshold true on every
+        // scan, including ones matching nothing - the large-fan-out WARN would fire routinely
+        // rather than only for a genuinely wide situation. Log noise only, never a functional
+        // failure (emission is never gated on this threshold), but validated the same way as
+        // the two configs above.
+        if (largeFanoutThreshold < 1) {
+            LOG.warn("vehicle.sx.republish.large.fanout.threshold={} is not a positive number - "
+                    + "falling back to 2000.", largeFanoutThreshold);
+            this.largeFanoutThreshold = 2000;
+        } else {
+            this.largeFanoutThreshold = largeFanoutThreshold;
+        }
     }
 
     @PostConstruct
@@ -127,13 +140,13 @@ public class SituationTriggeredRepublisher {
      * {@code version} is null on the large majority of real situations, so
      * {@code SituationRepository}'s version guard cannot filter out a redelivery - an
      * at-least-once Pub/Sub redelivery, a producer's periodic full resend of its active set, or a
-     * purged-then-resnapshotted situation all reach here. {@link #hasMatchRelevantChange} keeps
+     * purged-then-resnapshotted situation all reach here. {@link #isUnchangedRedelivery} keeps
      * the hand-off proportional to actual change rather than message volume: a plain redelivery
-     * that changed nothing {@code SituationMatcher} reads must not cost a scan and a fan-out.
+     * that is byte-for-byte the same situation already stored must not cost a scan and a fan-out.
      */
     public void onSituationChanged(SituationUpdate previous, SituationUpdate current) {
         try {
-            if (!hasMatchRelevantChange(previous, current)) {
+            if (isUnchangedRedelivery(previous, current)) {
                 return;
             }
             Set<String> refs = triggerRefs(previous, current);
@@ -303,33 +316,84 @@ public class SituationTriggeredRepublisher {
     }
 
     /**
-     * True when the transition from {@code previous} to {@code current} could change what
-     * {@code SituationMatcher} decides for some journey. A plain redelivery of an unchanged
-     * situation - which {@code version} being null on most real situations cannot rule out, see
-     * {@link #onSituationChanged} - must not schedule a scan.
+     * True when {@code current} is byte-for-byte the same situation already stored as
+     * {@code previous}, in every field the client can observe - so a redelivery must not
+     * schedule a scan. False in every other case, including for a field this predicate does not
+     * yet compare: a missed field costs a redundant republish (the client re-applies data it
+     * already has), which is the safe direction to be wrong in. The opposite mistake - comparing
+     * only what {@code SituationMatcher} reads, as an earlier version of this predicate did - is
+     * a silent miss: a producer that escalates {@code severity} or rewrites {@code summary}
+     * while leaving {@code progress}, the ref sets and {@code validityPeriods} untouched would
+     * schedule nothing, and a subscriber watching a quiet journey would keep rendering stale
+     * data indefinitely. That is the bug this predicate exists to prevent.
      * <p>
-     * What the matcher reads is exactly: {@code progress}, the four match-dimension ref sets, and
-     * {@code validityPeriods}. Codespace and situationNumber cannot differ - they are the map key
-     * a redelivery of the same situation is stored under.
+     * {@code previous == null} - a situation's first sighting - is never an unchanged redelivery:
+     * there is nothing to compare against, and it is also not a state a redelivery of an
+     * already-stored situation can produce.
      * <p>
-     * {@code previous == null} - a situation's first sighting - always counts as changed: there is
-     * nothing to compare against, and it is also not a state a redelivery of an already-stored
-     * situation can produce.
+     * {@code situationNumber} and {@code codespace} are the map key {@code previous} and
+     * {@code current} are stored under, so they cannot differ - excluded for that reason, not
+     * because they are unimportant. {@code lastUpdated} and {@code expiration} (and their derived
+     * epoch-second twins) are excluded because {@code SituationMapper} computes both from
+     * {@code ZonedDateTime.now()} under some conditions - {@code lastUpdated} whenever
+     * {@code versionedAtTime} and {@code creationTime} are both absent, {@code expiration}
+     * whenever {@code progress} is closed - so comparing either would make an unchanged
+     * redelivery look changed on every parse, reinstating exactly the per-message triggering
+     * this predicate exists to stop. {@code openEnded} and {@code age} are derived, read-only
+     * views over {@code validityPeriods}/{@code creationTime}, which are compared directly.
+     * {@code SituationTriggeredRepublisherTest.testEveryClientVisibleGetterOnSituationUpdateIsAccountedFor}
+     * enumerates every public getter on {@code SituationUpdate} by reflection and fails if one is
+     * added that is named in neither this comparison nor that test's ignore list - the guard
+     * against silently reintroducing this bug when a field is added later.
+     * <p>
+     * Deliberately a static method here rather than {@code SituationUpdate.equals()}: that type
+     * is a mutable object living in a map, and this branch already has one hard-won bug from
+     * value equality on a mutable domain object - see {@code AbstractUpdate.equals} ignoring
+     * {@code datedServiceJourney}, which collapsed distinct journeys under one DataLoader cache
+     * key.
      */
-    static boolean hasMatchRelevantChange(SituationUpdate previous, SituationUpdate current) {
+    static boolean isUnchangedRedelivery(SituationUpdate previous, SituationUpdate current) {
         if (previous == null) {
-            return true;
+            return false;
         }
-        return previous.getProgress() != current.getProgress()
-                || !matchRefs(previous, Affects::getLineRefs).equals(matchRefs(current, Affects::getLineRefs))
-                || !matchRefs(previous, Affects::getStopRefs).equals(matchRefs(current, Affects::getStopRefs))
-                || !matchRefs(previous, Affects::getServiceJourneyIds).equals(matchRefs(current, Affects::getServiceJourneyIds))
-                || !matchRefs(previous, Affects::getDatedServiceJourneyIds).equals(matchRefs(current, Affects::getDatedServiceJourneyIds))
-                || !Objects.equals(previous.getValidityPeriods(), current.getValidityPeriods());
+        return Objects.equals(previous.getParticipantRef(), current.getParticipantRef())
+                && Objects.equals(previous.getVersion(), current.getVersion())
+                && Objects.equals(previous.getSourceType(), current.getSourceType())
+                && previous.getProgress() == current.getProgress()
+                && previous.getSeverity() == current.getSeverity()
+                && Objects.equals(previous.getPriority(), current.getPriority())
+                && Objects.equals(previous.getReportType(), current.getReportType())
+                && Objects.equals(previous.getKeywords(), current.getKeywords())
+                && Objects.equals(previous.getPlanned(), current.getPlanned())
+                && Objects.equals(previous.getCreationTime(), current.getCreationTime())
+                && Objects.equals(previous.getVersionedAtTime(), current.getVersionedAtTime())
+                && Objects.equals(previous.getValidityPeriods(), current.getValidityPeriods())
+                && Objects.equals(previous.getSummary(), current.getSummary())
+                && Objects.equals(previous.getDescription(), current.getDescription())
+                && Objects.equals(previous.getAdvice(), current.getAdvice())
+                && Objects.equals(previous.getDetail(), current.getDetail())
+                && Objects.equals(previous.getInfoLinks(), current.getInfoLinks())
+                && affectsUnchanged(previous.getAffects(), current.getAffects());
     }
 
-    private static Set<String> matchRefs(SituationUpdate situation, Function<Affects, Set<String>> getter) {
-        return situation.getAffects() != null ? getter.apply(situation.getAffects()) : Set.of();
+    /**
+     * {@code Affects} has no {@code equals()} of its own (deliberately - see
+     * {@link #isUnchangedRedelivery}'s note on why {@code SituationUpdate} does not either), so
+     * this compares it field by field via its own getters. {@code Line} overrides
+     * {@code equals()} to include {@code lineName}, so this also catches a line rename that the
+     * ref-only comparison the previous version of this predicate used would have missed.
+     */
+    private static boolean affectsUnchanged(Affects previous, Affects current) {
+        if (previous == null || current == null) {
+            return previous == current;
+        }
+        return Objects.equals(previous.getLines(), current.getLines())
+                && Objects.equals(previous.getStopPoints(), current.getStopPoints())
+                && Objects.equals(previous.getStopPlaces(), current.getStopPlaces())
+                && Objects.equals(previous.getServiceJourneys(), current.getServiceJourneys())
+                && Objects.equals(previous.getDatedServiceJourneys(), current.getDatedServiceJourneys())
+                && Objects.equals(previous.getOperators(), current.getOperators())
+                && Objects.equals(previous.getVehicleModes(), current.getVehicleModes());
     }
 
     /**

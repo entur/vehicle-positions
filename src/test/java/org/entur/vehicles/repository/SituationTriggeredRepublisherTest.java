@@ -5,6 +5,7 @@ import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.entur.vehicles.data.EstimatedTimetableUpdate;
 import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.QueryFilter;
+import org.entur.vehicles.data.SeverityEnumeration;
 import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
 import org.entur.vehicles.data.model.Affects;
@@ -15,6 +16,7 @@ import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.StopPoint;
+import org.entur.vehicles.data.model.TranslatedString;
 import org.entur.vehicles.data.model.ValidityPeriod;
 import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
@@ -25,12 +27,17 @@ import org.mockito.Mockito;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -435,6 +442,114 @@ public class SituationTriggeredRepublisherTest {
     }
 
     /**
+     * The matcher only decides WHICH situations attach to a journey - it is not the whole story.
+     * The GraphQL layer serializes the whole {@code Situation} type, including {@code severity},
+     * which the matcher never reads. A producer that escalates severity while leaving progress,
+     * every ref set and validityPeriods untouched must still schedule work, or a subscriber
+     * watching a quiet journey keeps rendering the stale severity indefinitely.
+     */
+    @Test
+    public void testSeverityOnlyChangeStillSchedulesWork() {
+        SituationUpdate previous = situation();
+        previous.setProgress(WorkflowStatusEnumeration.published);
+        previous.setSeverity(SeverityEnumeration.normal);
+        previous.getAffects().addLine(new Line("TST:Line:1"));
+
+        SituationUpdate current = situation();
+        current.setProgress(WorkflowStatusEnumeration.published);
+        current.setSeverity(SeverityEnumeration.severe);
+        current.getAffects().addLine(new Line("TST:Line:1"));
+
+        republisher.onSituationChanged(previous, current);
+
+        assertThat(republisher.takePending())
+                .withFailMessage("a severity-only change is fully client-visible (Situation.severity) "
+                        + "and must still schedule work, even though SituationMatcher never reads severity")
+                .containsExactly("TST:Line:1");
+    }
+
+    /**
+     * Same principle as severity, for free text: {@code summary} is serialized to the client but
+     * never read by the matcher. Rewriting it while every match dimension stays the same must
+     * still schedule work.
+     */
+    @Test
+    public void testSummaryTextOnlyChangeStillSchedulesWork() {
+        SituationUpdate previous = situation();
+        previous.setProgress(WorkflowStatusEnumeration.published);
+        previous.getAffects().addLine(new Line("TST:Line:1"));
+        previous.setSummary(List.of(new TranslatedString("Delays expected", "en")));
+
+        SituationUpdate current = situation();
+        current.setProgress(WorkflowStatusEnumeration.published);
+        current.getAffects().addLine(new Line("TST:Line:1"));
+        current.setSummary(List.of(new TranslatedString("Severe delays expected", "en")));
+
+        republisher.onSituationChanged(previous, current);
+
+        assertThat(republisher.takePending())
+                .withFailMessage("rewriting the summary text is fully client-visible (Situation.summary) "
+                        + "and must still schedule work, even though SituationMatcher never reads it")
+                .containsExactly("TST:Line:1");
+    }
+
+    /**
+     * Enumerates every public, zero-arg getter on {@code SituationUpdate} and requires each one
+     * to be accounted for: either named in {@link #COMPARED_GETTERS} (and actually compared by
+     * {@code isUnchangedRedelivery} - see the severity/summary tests above and the existing
+     * progress/refs/validityPeriods ones for the behavioural half of that claim) or named in
+     * {@link #IGNORED_GETTERS} with a reason. A getter in neither set fails this test - that is
+     * the guard against someone adding a field to SituationUpdate later and silently
+     * reintroducing "trigger fires on message, not on change", the exact bug this predicate was
+     * rewritten to fix.
+     */
+    @Test
+    public void testEveryClientVisibleGetterOnSituationUpdateIsAccountedFor() {
+        Set<String> getters = Arrays.stream(SituationUpdate.class.getMethods())
+                .filter(m -> m.getDeclaringClass() == SituationUpdate.class)
+                .filter(m -> m.getParameterCount() == 0)
+                .filter(m -> m.getName().startsWith("get") || m.getName().startsWith("is"))
+                .map(Method::getName)
+                .collect(Collectors.toSet());
+
+        Set<String> accounted = new HashSet<>(COMPARED_GETTERS);
+        accounted.addAll(IGNORED_GETTERS.keySet());
+
+        assertThat(getters)
+                .withFailMessage("a getter was added to (or removed from) SituationUpdate that this "
+                        + "test does not know about - add it to COMPARED_GETTERS (and to "
+                        + "isUnchangedRedelivery) if it is client-visible, or to IGNORED_GETTERS "
+                        + "with a reason otherwise")
+                .isEqualTo(accounted);
+    }
+
+    /** Client-visible getters compared by {@code SituationTriggeredRepublisher.isUnchangedRedelivery}. */
+    private static final Set<String> COMPARED_GETTERS = Set.of(
+            "getParticipantRef", "getVersion", "getSourceType", "getProgress", "getSeverity",
+            "getPriority", "getReportType", "getKeywords", "getPlanned", "getCreationTime",
+            "getVersionedAtTime", "getValidityPeriods", "getSummary", "getDescription", "getAdvice",
+            "getDetail", "getInfoLinks", "getAffects");
+
+    /** Getters deliberately not compared, and why. */
+    private static final Map<String, String> IGNORED_GETTERS = Map.of(
+            "getSituationNumber", "part of the map key (SituationKey) - cannot differ between "
+                    + "previous and current for the same stored entry",
+            "getCodespace", "part of the map key (SituationKey) - cannot differ between previous "
+                    + "and current for the same stored entry",
+            "getLastUpdated", "SituationMapper falls back to ZonedDateTime.now() when "
+                    + "versionedAtTime and creationTime are both absent - comparing it would make "
+                    + "every redelivery look changed",
+            "getLastUpdatedEpochSecond", "derived from lastUpdated - same reason",
+            "getExpiration", "SituationMapper.calculateExpiration() returns ZonedDateTime.now() "
+                    + "whenever progress is closed, and otherwise mirrors validityPeriods' latest "
+                    + "endTime, which is already compared directly",
+            "getExpirationEpochSecond", "derived from expiration - same reason",
+            "getOpenEnded", "derived from validityPeriods, which is already compared directly",
+            "getAge", "derived from creationTime via Duration.between(creationTime, "
+                    + "ZonedDateTime.now()) - inherently unstable, and creationTime itself is "
+                    + "already compared directly");
+
+    /**
      * TimetableRepository.add() mutates a stored update in place (including
      * {@code getCalls().clear()}), so a journey being updated concurrently with a scan can throw
      * more than {@code ConcurrentModificationException} - an NPE from a nulled-but-not-yet-removed
@@ -479,22 +594,40 @@ public class SituationTriggeredRepublisherTest {
                 .isEqualTo(1.0);
     }
 
+    /**
+     * Unlike the above-maximum case, a negative delay is not itself a hang -
+     * {@code TimeUnit.MILLISECONDS.sleep(negative)} returns immediately rather than throwing
+     * (only bare {@code Thread.sleep} throws for a negative argument) - so an unclamped negative
+     * delay and the clamped default cannot be told apart by whether {@code republishNow} returns.
+     * They can be told apart by how long it takes: an unclamped negative delay makes every
+     * inter-chunk sleep a no-op, so 3 candidates at {@code chunkSize=1} (two inter-chunk sleeps)
+     * would finish near-instantly; the {@code DEFAULT_CHUNK_DELAY} (50ms) fallback makes the same
+     * run take at least 100ms.
+     */
     @Test
     public void testChunkDelayNegativeFallsBackToDefault() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 100, Duration.ofSeconds(-1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 1, Duration.ofSeconds(-1), DEFAULT_THRESHOLD);
 
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
+        storeJourney("TST:Line:1", "TST:ServiceJourney:2", "TST:DatedServiceJourney:2", "NSR:Quay:1");
+        storeJourney("TST:Line:1", "TST:ServiceJourney:3", "TST:DatedServiceJourney:3", "NSR:Quay:1");
         Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
                 .subscribe(batch -> { });
 
         try {
-            // A negative delay would throw out of Thread.sleep - reaching this line at all,
-            // with the single candidate emitted, is the proof the fallback engaged.
+            long started = System.currentTimeMillis();
             republisher.republishNow(Set.of("TST:Line:1"));
+            long elapsedMillis = System.currentTimeMillis() - started;
 
-            assertThat(republisher.getRepublishedCount()).isEqualTo(1);
+            assertThat(republisher.getRepublishedCount()).isEqualTo(3);
+            assertThat(elapsedMillis)
+                    .withFailMessage("a negative chunkDelay must fall back to DEFAULT_CHUNK_DELAY "
+                            + "(50ms) - two inter-chunk sleeps at that default take at least "
+                            + "100ms, whereas an unclamped negative delay's no-op sleeps would "
+                            + "finish near-instantly")
+                    .isGreaterThanOrEqualTo(80);
         } finally {
             subscription.dispose();
         }
@@ -553,6 +686,33 @@ public class SituationTriggeredRepublisherTest {
                     .withFailMessage("crossing the large fan-out threshold must not drop a single "
                             + "candidate - it only logs a warning naming the counts")
                     .isEqualTo(5);
+        } finally {
+            subscription.dispose();
+        }
+    }
+
+    /**
+     * A non-positive threshold has no functional consequence - unlike chunkSize or chunkDelay it
+     * never gates emission, only a log line - so there is no hang or timeout to discriminate on
+     * the way the sibling tests for those two configs use. This is a smoke test: construction
+     * with an invalid value must not throw, and republishing must still work normally once
+     * falling back to the default. The WARN itself is exercised (see the log output in this
+     * test's run), not asserted on here.
+     */
+    @Test
+    public void testLargeFanoutThresholdNonPositiveFallsBackToDefaultAndStillEmits() {
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
+                timetableMap, etPublisher, 100, Duration.ofMillis(1), 0);
+
+        storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
+        Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
+                .subscribe(batch -> { });
+
+        try {
+            republisher.republishNow(Set.of("TST:Line:1"));
+
+            assertThat(republisher.getRepublishedCount()).isEqualTo(1);
         } finally {
             subscription.dispose();
         }
