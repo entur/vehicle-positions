@@ -103,9 +103,16 @@ class ApplicationGraphQlSchemaTests {
     void situationsQueryResolvesEveryFieldIncludingSetAndDurationCoercions() {
         situationRepository.add(situationRecord());
 
+        // Scoped to this fixture's own situationNumber: situationRepository is a shared
+        // singleton never reset between test methods, and an unfiltered situations query
+        // would return every situation any method in this class has ever added (including
+        // "TST:SituationNumber:closes" below, which shares the same lineRef). An unfiltered
+        // query previously indexed into situations[0], which only happened to land on this
+        // fixture because of ConcurrentHashMap's incidental bucket layout - it was not true by
+        // construction. See the join test's history in this file for the same class of bug.
         String document = """
                 query {
-                  situations(includeClosed: true) {
+                  situations(includeClosed: true, situationNumbers: ["TST:SituationNumber:schema-wiring"]) {
                     situationNumber
                     codespace { codespaceId }
                     version
