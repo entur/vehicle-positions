@@ -39,13 +39,27 @@ change immediately, a `timetables` subscriber does not.
 - **No vehicle-monitoring equivalent.** `VehicleUpdate` has no `situations` field
   yet. When it gains one, this mechanism extends to it; not before.
 - **No purge-driven republish.** Situations also leave the map by expiry, without
-  passing through `add()`. This is deliberately not handled, and the reasoning is
-  that it is very nearly a non-event: a *closed* situation is republished at the
-  moment it closes (which does pass through `add()`), and the matcher excludes it
-  from that instant, so its later purge changes nothing. A merely *expired*
-  situation only ever matched calls whose windows overlapped its now-past validity,
-  and those journeys are themselves at or near their own expiry. Hooking the purge
-  path would buy almost nothing for real added complexity.
+  passing through `add()`. This is deliberately not handled, but the justification
+  is weaker than it first appears and is recorded here accurately rather than
+  reassuringly.
+
+  A *closed* situation is genuinely a non-event: it is republished at the moment it
+  closes, which does pass through `add()`, and the matcher excludes it from that
+  instant, so its later purge changes nothing.
+
+  A merely *expired* situation is not so clean. An earlier draft of this spec argued
+  it could only have matched calls whose windows overlapped its now-past validity,
+  and that those journeys are themselves near expiry. That is wrong: a journey-level
+  match tests the **journey's whole span**, so a situation valid 06:00–08:00 attaches
+  to a journey running 07:30–23:00, which is nowhere near expiry when the situation
+  is purged.
+
+  The real mitigation is that such a journey is by definition currently running, and
+  a running journey receives ET updates — each of which re-resolves its situations.
+  The residual gap is a **quiet** journey overlapping a lapsed situation, which keeps
+  it until its own purge. That is the same wrong-direction failure this feature
+  exists to fix, just narrower, and it is accepted for now rather than solved.
+  Hooking the purge path is the fix if it proves to matter.
 - **No change to the `situations` subscription**, to the read-path matcher, or to
   the SX ingest and snapshot paths beyond the single call site described below.
 - **No new client-visible field.** See "The republished message".
