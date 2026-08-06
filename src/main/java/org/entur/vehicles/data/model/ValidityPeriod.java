@@ -33,4 +33,16 @@ public class ValidityPeriod {
         }
         return endTime == null || !endTime.isBefore(timestamp);
     }
+
+    /**
+     * True when this period overlaps the window {@code [from, to]}, inclusive at both ends.
+     * A null bound means unbounded on that side, so an unresolvable call window overlaps
+     * every period rather than silently dropping the situation.
+     */
+    public boolean overlaps(ZonedDateTime from, ZonedDateTime to) {
+        if (endTime != null && from != null && endTime.isBefore(from)) {
+            return false;
+        }
+        return startTime == null || to == null || !startTime.isAfter(to);
+    }
 }

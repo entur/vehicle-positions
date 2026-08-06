@@ -251,4 +251,15 @@ public class SituationUpdate {
         }
         return validityPeriods.stream().anyMatch(period -> period.isValidAt(timestamp));
     }
+
+    /**
+     * True when any validity period overlaps {@code [from, to]}. A situation with no
+     * validity periods is unconstrained and always applies, matching {@link #getOpenEnded()}.
+     */
+    public boolean isValidDuring(ZonedDateTime from, ZonedDateTime to) {
+        if (validityPeriods == null || validityPeriods.isEmpty()) {
+            return true;
+        }
+        return validityPeriods.stream().anyMatch(period -> period.overlaps(from, to));
+    }
 }
