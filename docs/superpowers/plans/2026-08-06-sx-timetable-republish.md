@@ -390,12 +390,12 @@ public class SituationTriggeredRepublisher {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `mvn -o test -Dtest=SituationTriggeredRepublisherTest`
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Run the full suite**
 
 Run: `mvn -o clean test`
-Expected: PASS, 136 tests (128 + 8). Output pristine.
+Expected: PASS, 137 tests (128 + 9). Output pristine.
 
 - [ ] **Step 6: Commit**
 
@@ -754,12 +754,12 @@ Note `republishNow` does **not** call `metricsService.markTimetableUpdate(...)`.
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `mvn -o test -Dtest=SituationTriggeredRepublisherTest`
-Expected: PASS, 14 tests.
+Expected: PASS, 15 tests.
 
 - [ ] **Step 5: Run the full suite**
 
 Run: `mvn -o clean test`
-Expected: PASS, 142 tests (128 + 14). Output pristine.
+Expected: PASS, 143 tests (128 + 15). Output pristine.
 
 - [ ] **Step 6: Commit**
 
@@ -1018,7 +1018,7 @@ Expected: PASS, 9 tests.
 - [ ] **Step 6: Run the full suite**
 
 Run: `mvn -o clean test`
-Expected: PASS, 144 tests (142 + 2). Output pristine.
+Expected: PASS, 145 tests (143 + 2). Output pristine.
 
 - [ ] **Step 7: Verify the tests are not passing for the wrong reason**
 
@@ -1057,7 +1057,7 @@ git commit -m "Republishing affected timetables when a situation changes"
 ## Overall verification
 
 ```bash
-mvn -o clean test          # 144 tests, 0 failures
+mvn -o clean test          # 145 tests, 0 failures
 git log --oneline -3       # three commits, terse subjects, no AI attribution
 git status --short         # only the user's pre-existing untracked files
 ```
