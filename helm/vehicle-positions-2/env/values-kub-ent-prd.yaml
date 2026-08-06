@@ -8,4 +8,6 @@ configMap:
   EtClientName: ror.vehicle-positions.v2.graphql
   serviceJourneyLookupEnabled: true
   etEnabled: true
+  sxEnabled: false
+  sxSnapshotUrl: https://api.entur.io/realtime/v1/rest/sx?SIRI_VERSION=2.1
 

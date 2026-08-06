@@ -103,3 +103,9 @@ Open-ended situations that have been active for more than 30 days:
   }
 }
 ```
+
+Situations are long-lived, and many carry no validity end time at all. Because the
+real-time stream carries updates rather than state, the service loads a complete snapshot
+of current situations from Entur's SIRI-SX REST endpoint at startup, before it begins
+consuming the stream. A situation that was published long before the service started is
+therefore available immediately, without waiting for its producer to republish.
