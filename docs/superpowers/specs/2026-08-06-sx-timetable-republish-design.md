@@ -82,8 +82,8 @@ SituationRepository.add(record)
     │
     └─ republisher.onSituationChanged(previous, accepted)     [non-blocking]
             │
-            └─ queue ── SituationTriggeredRepublisher worker thread
-                          ├─ drain queue, union the ref sets      (coalesce)
+            └─ pending set ── SituationTriggeredRepublisher worker thread
+                          ├─ take the whole accumulated ref set    (coalesce)
                           ├─ return immediately if no subscribers
                           ├─ scan timetableMap for candidates
                           └─ emit to EstimatedTimetableUpdateRxPublisher, chunked
@@ -169,13 +169,22 @@ are orders of magnitude rarer than ET updates.
 
 ### 4. Coalescing and pacing
 
-A single worker thread owns all of this. `onSituationChanged` enqueues the trigger
-ref set and returns, so the SX Pub/Sub executor threads never wait on a scan.
+A single worker thread owns all of this. `onSituationChanged` adds the trigger refs
+to a **pending set** and signals the worker, then returns — so the SX Pub/Sub
+executor threads never wait on a scan.
 
-The worker **drains everything currently queued and unions the ref sets into one
-scan**. A burst of situation changes therefore costs one pass over the timetable
-map, not one per situation. This bounds the cost of any burst, including a snapshot
-reload, without a separate rate limiter.
+The pending set is the coalescing mechanism, and it is a set rather than a queue on
+purpose. Refs accumulate into it while the worker is busy; the worker takes the
+whole accumulated set in one go and performs **one** scan. A burst of situation
+changes therefore costs one pass over the timetable map, not one per situation, and
+the memory involved is bounded by the number of distinct refs rather than by the
+number of changes. This bounds the cost of any burst, including a snapshot reload,
+without a separate rate limiter and without a capacity to overflow.
+
+A bounded queue was considered and rejected: it needs an overflow rule, and every
+cheap overflow rule either drops a trigger or merges into an entry the worker may
+concurrently have taken, losing refs silently. An accumulating set has no overflow
+case at all, so there is nothing to get wrong.
 
 Emission is **chunked**: N journeys, then a short pause, until the candidate set is
 exhausted. A line-wide or major-hub situation can match a large share of stored
@@ -193,10 +202,6 @@ vehicle.sx.republish.chunk.delay=PT0.05S
 
 At those values 5,000 journeys drain in about 2.5 seconds, which meets the
 "within seconds" requirement with room to spare.
-
-The queue is bounded. If it is full, the incoming ref set is merged into the tail
-entry rather than dropped — merging is always safe, because the trigger set is a
-union and a larger set only causes extra redundant republishes, never a miss.
 
 ### 5. The republished message
 
@@ -250,7 +255,7 @@ be recorded as follow-up work rather than left as folklore.
 - **The worker thread must never die.** Its run loop catches `RuntimeException` per
   drained batch, logs at WARN and continues. A dead worker would silently stop all
   republishing with the rest of the service healthy.
-- **A failure in `onSituationChanged` must not break SX ingest.** Enqueueing is
+- **A failure in `onSituationChanged` must not break SX ingest.** The hand-off is
   wrapped so that any failure logs at WARN and returns; a situation that fails to
   trigger a republish is still correctly stored and still reaches the `situations`
   subscription.
@@ -275,8 +280,8 @@ existing latch-with-timeout pattern in `ApplicationGraphQlSchemaTests`.
   dated service journey, and via a call's stop, one test each.
 - **No subscribers, no work** — with `currentSubscribers() == 0`, assert on the
   republisher's scan counter that no scan runs. Not by inspecting logs.
-- **Coalescing** — two situation changes enqueued back to back produce one scan, not
-  two, asserted on the scan counter.
+- **Coalescing** — two situation changes handed off back to back accumulate into a
+  single taken ref set, so they cost one scan rather than two.
 - **Pacing** — a candidate set larger than the chunk size is emitted in more than one
   chunk. Assert on observed chunk boundaries, not on elapsed time.
 - **Unaffected journeys are not republished** — a stored journey naming none of the
