@@ -17,9 +17,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -125,11 +127,25 @@ public class SituationSnapshotServiceTest {
 
     @Test
     public void testDisabledServiceDoesNotFetch() {
+        // Asserting an empty repository alone is not enough here: a service that ignored the
+        // `enabled` guard entirely and simply failed to connect to localhost:1 would also leave
+        // the repository empty, so that assertion cannot distinguish "never fetched" from
+        // "fetched and failed". Overriding the fetch() seam makes the absence of a fetch directly
+        // observable instead of inferring it from a side effect that a broken guard would also
+        // produce.
+        AtomicBoolean fetchAttempted = new AtomicBoolean(false);
         SituationSnapshotService disabled = new SituationSnapshotService(
-                repository, "http://localhost:1/sx", "test", Duration.parse("PT1S"), false);
+                repository, "http://localhost:1/sx", "test", Duration.parse("PT1S"), false) {
+            @Override
+            protected String fetch() {
+                fetchAttempted.set(true);
+                throw new AssertionError("fetch() must not be called when the service is disabled");
+            }
+        };
 
         disabled.loadSnapshot();
 
+        assertFalse(fetchAttempted.get(), "a disabled service must never attempt a fetch");
         assertTrue(repository.getSituations(null).isEmpty());
     }
 }

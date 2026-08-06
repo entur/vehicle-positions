@@ -163,6 +163,17 @@ The whole thing is gated on the existing `entur.vehicle-positions.sx.enabled`
 flag. There is no second flag: if the SX stream is off there is nothing to
 bootstrap.
 
+This ordering has a counterpart gap in the other direction. Because the Pub/Sub
+subscription is created only *after* the snapshot load, and is fresh per pod (no
+backlog replay), any SX update published between when the snapshot was generated
+upstream and when this pod's subscription is created — roughly the load window,
+measured at ~1.5s, plus subscription setup — is never delivered to that pod. The
+in-memory map keeps the snapshot's copy of that situation until its producer
+happens to republish it. This is the accepted counterpart to eliminating the
+snapshot-overwrites-fresher-data hazard described above, and it is a far smaller
+problem: a handful of situations briefly stale at startup, versus a permanently
+incomplete picture for the service's whole lifetime.
+
 ### 2. Fetching
 
 A dedicated `WebClient`, not the shared `JourneyPlannerGraphQLClient` — that one

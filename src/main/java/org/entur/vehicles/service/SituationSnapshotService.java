@@ -45,6 +45,9 @@ public class SituationSnapshotService {
     /** The dev snapshot is ~10 MB; the shared Journey Planner client caps at 500 KB. */
     private static final int MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 
+    /** Beyond this many parse failures in one load, log the message only - not the full trace. */
+    private static final int MAX_STACK_TRACES_LOGGED = 5;
+
     private final SituationRepository situationRepository;
     private final String url;
     private final String etClientName;
@@ -75,8 +78,18 @@ public class SituationSnapshotService {
         try {
             String body = fetch();
             int loaded = load(body);
-            LOG.info("Loaded {} situations from snapshot in {} ms",
-                    loaded, System.currentTimeMillis() - start);
+            long elapsed = System.currentTimeMillis() - start;
+            if (loaded == 0) {
+                // A real snapshot is never empty. Zero here means the envelope shape didn't
+                // match what we expected (renamed field, a proxy returning {} with HTTP 200,
+                // an error body, ...) - path() swallows that silently, so surface it loudly.
+                LOG.warn("Loaded 0 situations from snapshot in {} ms - starting with an " +
+                        "incomplete situation set. This is not expected; check the response shape.",
+                        elapsed);
+            } else {
+                int stored = situationRepository.getSituations(null).size();
+                LOG.info("Loaded {} situations ({} in store) in {} ms", loaded, stored, elapsed);
+            }
         } catch (RuntimeException e) {
             // Non-fatal by design: the service still starts and serves the Pub/Sub stream,
             // it just begins with an incomplete set until producers republish.
@@ -84,12 +97,15 @@ public class SituationSnapshotService {
         }
     }
 
-    private String fetch() {
+    // Package-visible (not private) so tests can override it as a seam to verify that a
+    // disabled service never attempts a fetch, without performing real network I/O.
+    protected String fetch() {
         int timeoutMillis = (int) timeout.toMillis();
         WebClient webClient = WebClient.builder()
                 .defaultHeader("ET-Client-Name", etClientName)
                 .clientConnector(new ReactorClientHttpConnector(
                         HttpClient.create()
+                                .compress(true)
                                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeoutMillis)
                                 .doOnConnected(connection -> {
                                     connection.addHandlerLast(
@@ -128,7 +144,7 @@ public class SituationSnapshotService {
         int skipped = 0;
         for (JsonNode delivery : deliveries) {
             for (JsonNode situation : delivery.path("situations")) {
-                if (addSituation(situation)) {
+                if (addSituation(situation, skipped)) {
                     loaded++;
                 } else {
                     skipped++;
@@ -142,7 +158,12 @@ public class SituationSnapshotService {
         return loaded;
     }
 
-    private boolean addSituation(JsonNode situation) {
+    /**
+     * @param failuresSoFar the number of parse failures already seen in this load, used to cap
+     *                      how many full stack traces get logged - a systematic schema drift that
+     *                      breaks every record must not produce hundreds of stack traces.
+     */
+    private boolean addSituation(JsonNode situation, int failuresSoFar) {
         try {
             PtSituationElementRecord record = JsonReader.readPtSituationElement(
                     MAPPER.writeValueAsString(AvroJsonUnionWrapper.wrap(situation, SITUATION_SCHEMA)));
@@ -150,8 +171,13 @@ public class SituationSnapshotService {
             return true;
         } catch (Exception e) {
             // One malformed situation must not discard the rest of the snapshot.
-            LOG.warn("Ignoring unparseable situation {} in snapshot.",
-                    situation.path("situationNumber").asText("<unknown>"), e);
+            String situationNumber = situation.path("situationNumber").asText("<unknown>");
+            if (failuresSoFar < MAX_STACK_TRACES_LOGGED) {
+                LOG.warn("Ignoring unparseable situation {} in snapshot.", situationNumber, e);
+            } else {
+                LOG.warn("Ignoring unparseable situation {} in snapshot: {}",
+                        situationNumber, e.getMessage());
+            }
             return false;
         }
     }
