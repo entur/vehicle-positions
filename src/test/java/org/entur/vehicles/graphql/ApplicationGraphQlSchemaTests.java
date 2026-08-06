@@ -86,8 +86,8 @@ class ApplicationGraphQlSchemaTests {
     private static final String TWO_JOURNEY_LINE = "TST:Line:two-journey-probe";
     private static final String TWO_JOURNEY_DSJ_A = "TST:DatedServiceJourney:two-journey-probe-A";
     private static final String TWO_JOURNEY_DSJ_B = "TST:DatedServiceJourney:two-journey-probe-B";
-    private static final String TWO_JOURNEY_MATCHING_QUAY = "NSR:Quay:two-journey-probe-match";
-    private static final String TWO_JOURNEY_NON_MATCHING_QUAY = "NSR:Quay:two-journey-probe-nomatch";
+    private static final String TWO_JOURNEY_QUAY_A = "NSR:Quay:two-journey-probe-A";
+    private static final String TWO_JOURNEY_QUAY_B = "NSR:Quay:two-journey-probe-B";
     private static final String TWO_JOURNEY_SITUATION = "TST:SituationNumber:two-journey-probe";
 
     private static final String STALE_LINE = "TST:Line:subscription-stale-probe";
@@ -324,8 +324,8 @@ class ApplicationGraphQlSchemaTests {
 
         // Registered "B then A" on purpose - nothing about which key a DataLoader batch sees
         // first should change the outcome.
-        timetableRepository.add(journeyCallingAt(TWO_JOURNEY_LINE, TWO_JOURNEY_DSJ_B, TWO_JOURNEY_NON_MATCHING_QUAY));
-        timetableRepository.add(journeyCallingAt(TWO_JOURNEY_LINE, TWO_JOURNEY_DSJ_A, TWO_JOURNEY_MATCHING_QUAY));
+        timetableRepository.add(journeyCallingAt(TWO_JOURNEY_LINE, TWO_JOURNEY_DSJ_B, TWO_JOURNEY_QUAY_B));
+        timetableRepository.add(journeyCallingAt(TWO_JOURNEY_LINE, TWO_JOURNEY_DSJ_A, TWO_JOURNEY_QUAY_A));
 
         String document = """
                 query {

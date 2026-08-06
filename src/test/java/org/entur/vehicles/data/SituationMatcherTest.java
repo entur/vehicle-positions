@@ -2,6 +2,7 @@ package org.entur.vehicles.data;
 
 import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.Call;
+import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.ServiceJourney;
@@ -152,21 +153,25 @@ public class SituationMatcherTest {
      */
     @Test
     public void testStopScopedSituationIsNotAlsoListedOnTheJourney() {
-        SituationUpdate lineAtQuay1 = situation("TST:SituationNumber:lineAtQuay1");
-        lineAtQuay1.getAffects().addLine(new Line("TST:Line:1"));
-        lineAtQuay1.getAffects().addStopPoint(new StopPoint("NSR:Quay:1"));
+        // Deliberately the journey's LAST call, so a matcher that only consulted calls.get(0)
+        // would still list the situation on the journey and fail here.
+        SituationUpdate lineAtQuay3 = situation("TST:SituationNumber:lineAtQuay3");
+        lineAtQuay3.getAffects().addLine(new Line("TST:Line:1"));
+        lineAtQuay3.getAffects().addStopPoint(new StopPoint("NSR:Quay:3"));
 
-        SituationMatcher matcher = new SituationMatcher(List.of(lineAtQuay1));
+        SituationMatcher matcher = new SituationMatcher(List.of(lineAtQuay3));
 
         Call first = call("NSR:Quay:1", noon, noon.plusMinutes(1));
         Call second = call("NSR:Quay:2", noon.plusMinutes(10), noon.plusMinutes(11));
+        Call third = call("NSR:Quay:3", noon.plusMinutes(20), noon.plusMinutes(21));
 
-        assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1", first, second)))
+        assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1", first, second, third)))
                 .withFailMessage("a situation already reported against a call must not be repeated on the journey")
                 .isEmpty();
-        assertThat(matcher.match(first))
+        assertThat(matcher.match(third))
                 .extracting(SituationUpdate::getSituationNumber)
-                .containsExactly("TST:SituationNumber:lineAtQuay1");
+                .containsExactly("TST:SituationNumber:lineAtQuay3");
+        assertThat(matcher.match(first)).isEmpty();
         assertThat(matcher.match(second)).isEmpty();
     }
 
@@ -223,6 +228,36 @@ public class SituationMatcherTest {
         assertThat(matcher.match(third)).isEmpty();
         assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1", first, second, third)))
                 .isEmpty();
+    }
+
+    /**
+     * {@code situationNumber} alone does not identify a situation - {@code SituationRepository}
+     * keys by codespace and number together. Two codespaces publishing the same number must not
+     * interfere: one operator's stop-scoped situation must not knock another operator's
+     * line-scoped situation off the journey.
+     */
+    @Test
+    public void testSameSituationNumberInTwoCodespacesDoesNotInterfere() {
+        SituationUpdate byLine = situation("TST:SituationNumber:shared");
+        byLine.setCodespace(Codespace.getCodespace("AAA"));
+        byLine.getAffects().addLine(new Line("TST:Line:1"));
+
+        SituationUpdate byStop = situation("TST:SituationNumber:shared");
+        byStop.setCodespace(Codespace.getCodespace("BBB"));
+        byStop.getAffects().addStopPoint(new StopPoint("NSR:Quay:1"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(byLine, byStop));
+
+        Call call = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+
+        assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1", call)))
+                .withFailMessage("codespace BBB's stop-scoped situation must not remove codespace "
+                        + "AAA's line-scoped one, which merely shares a situation number")
+                .extracting(SituationUpdate::getCodespace)
+                .containsExactly(Codespace.getCodespace("AAA"));
+        assertThat(matcher.match(call))
+                .extracting(SituationUpdate::getCodespace)
+                .containsExactly(Codespace.getCodespace("BBB"));
     }
 
     @Test

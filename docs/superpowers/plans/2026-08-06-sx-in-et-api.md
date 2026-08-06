@@ -1,5 +1,11 @@
 # Situations on the Estimated Timetable API — Implementation Plan
 
+> **Superseded in one respect.** This plan specifies `EstimatedTimetableUpdate.situations`
+> as the **union** of the journey-level matches and every call's stop matches. That rule was
+> replaced after implementation: a situation reported against one of the journey's calls is
+> now excluded from the journey, so the two fields partition. See "The relationship between
+> the two fields" in the design spec. Do not reinstate the union from the code blocks below.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Attach relevant SIRI-SX situations to estimated timetable data — `EstimatedTimetableUpdate.situations` for the whole journey, and `Call.situations` for the specific stop while the vehicle is there.

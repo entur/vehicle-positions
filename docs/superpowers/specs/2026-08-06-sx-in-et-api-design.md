@@ -15,9 +15,14 @@ query the standalone `situations` feed and correlate the two themselves.
 
 Two new fields:
 
-- `EstimatedTimetableUpdate.situations` — everything affecting this journey
-- `Call.situations` — the subset affecting that specific stop, at the time the
-  vehicle is there
+- `EstimatedTimetableUpdate.situations` — those affecting the journey as a whole
+- `Call.situations` — those affecting that specific stop, at the time the vehicle
+  is there
+
+The two partition: a situation reported against a call is not repeated on the
+journey, so a client selecting both never sees the same disruption twice — and a
+client selecting only the journey field does not see the whole picture. See "The
+relationship between the two fields".
 
 This is the join that the original SX design deliberately deferred. Its
 "Non-goals" section stated that the flat identifier sets on `Affects` were built

@@ -2,6 +2,7 @@ package org.entur.vehicles.data;
 
 import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.Call;
+import org.entur.vehicles.data.model.Codespace;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -70,7 +71,7 @@ public class SituationMatcher {
      * disruption affecting a journey must select {@code calls { situations }} as well.
      */
     public List<SituationUpdate> match(EstimatedTimetableUpdate timetable) {
-        Map<String, SituationUpdate> matched = new LinkedHashMap<>();
+        Map<Identity, SituationUpdate> matched = new LinkedHashMap<>();
 
         ZonedDateTime spanStart = null;
         ZonedDateTime spanEnd = null;
@@ -99,10 +100,13 @@ public class SituationMatcher {
                     spanStart, spanEnd, matched);
         }
 
+        // Skipping the walk when nothing matched at journey level is a pure shortcut: the loop
+        // body only removes, so it cannot change an empty result. Revisit if match(Call) ever
+        // gains a side effect.
         if (calls != null && !matched.isEmpty()) {
             for (Call call : calls) {
                 for (SituationUpdate situation : match(call)) {
-                    matched.remove(situation.getSituationNumber());
+                    matched.remove(Identity.of(situation));
                 }
             }
         }
@@ -122,7 +126,7 @@ public class SituationMatcher {
         if (call.getStopPoint() == null || call.getStopPoint().getId() == null) {
             return List.of();
         }
-        Map<String, SituationUpdate> matched = new LinkedHashMap<>();
+        Map<Identity, SituationUpdate> matched = new LinkedHashMap<>();
         collect(byStopRef.get(call.getStopPoint().getId()),
                 call.getWindowStart(), call.getWindowEnd(), matched);
         return new ArrayList<>(matched.values());
@@ -131,14 +135,27 @@ public class SituationMatcher {
     private static void collect(List<SituationUpdate> candidates,
                                 ZonedDateTime from,
                                 ZonedDateTime to,
-                                Map<String, SituationUpdate> matched) {
+                                Map<Identity, SituationUpdate> matched) {
         if (candidates == null) {
             return;
         }
         for (SituationUpdate situation : candidates) {
             if (situation.isValidDuring(from, to)) {
-                matched.putIfAbsent(situation.getSituationNumber(), situation);
+                matched.putIfAbsent(Identity.of(situation), situation);
             }
+        }
+    }
+
+    /**
+     * What identifies a situation, for deduplicating the journey's matches and for excluding
+     * the ones already reported against a call. {@code situationNumber} alone is not enough -
+     * {@code SituationRepository} keys by codespace and number together, so two codespaces
+     * publishing the same number are different situations and must not displace each other.
+     */
+    private record Identity(Codespace codespace, String situationNumber) {
+
+        static Identity of(SituationUpdate situation) {
+            return new Identity(situation.getCodespace(), situation.getSituationNumber());
         }
     }
 }
