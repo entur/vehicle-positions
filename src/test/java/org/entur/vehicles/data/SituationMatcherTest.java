@@ -127,19 +127,7 @@ public class SituationMatcherTest {
     }
 
     @Test
-    public void testLateCallDoesNotPullTheStopSituationOntoTheJourneyEither() {
-        SituationUpdate untilNoon = situation("TST:SituationNumber:quay",
-                new ValidityPeriod(noon.minusHours(3), noon));
-        untilNoon.getAffects().addStopPoint(new StopPoint("NSR:Quay:1"));
-
-        SituationMatcher matcher = new SituationMatcher(List.of(untilNoon));
-
-        assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1",
-                call("NSR:Quay:1", noon.plusMinutes(30), noon.plusMinutes(31))))).isEmpty();
-    }
-
-    @Test
-    public void testStopSituationAppearsOnTheJourneyAndOnlyOnItsOwnCall() {
+    public void testStopOnlySituationAppearsOnlyOnItsOwnCall() {
         SituationUpdate atQuay1 = situation("TST:SituationNumber:quay1");
         atQuay1.getAffects().addStopPoint(new StopPoint("NSR:Quay:1"));
 
@@ -149,18 +137,99 @@ public class SituationMatcherTest {
         Call second = call("NSR:Quay:2", noon.plusMinutes(10), noon.plusMinutes(11));
 
         assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1", first, second)))
+                .withFailMessage("a stop-scoped situation belongs on its call, not on the journey")
+                .isEmpty();
+        assertThat(matcher.match(first))
                 .extracting(SituationUpdate::getSituationNumber)
                 .containsExactly("TST:SituationNumber:quay1");
-        assertThat(matcher.match(first)).hasSize(1);
         assertThat(matcher.match(second)).isEmpty();
+    }
+
+    /**
+     * The stop is the more specific placement, so a situation naming both a line and one of
+     * the journey's stops is reported against that call alone. Listing it on the journey too
+     * would make a client rendering both fields show the same disruption twice.
+     */
+    @Test
+    public void testStopScopedSituationIsNotAlsoListedOnTheJourney() {
+        SituationUpdate lineAtQuay1 = situation("TST:SituationNumber:lineAtQuay1");
+        lineAtQuay1.getAffects().addLine(new Line("TST:Line:1"));
+        lineAtQuay1.getAffects().addStopPoint(new StopPoint("NSR:Quay:1"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(lineAtQuay1));
+
+        Call first = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+        Call second = call("NSR:Quay:2", noon.plusMinutes(10), noon.plusMinutes(11));
+
+        assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1", first, second)))
+                .withFailMessage("a situation already reported against a call must not be repeated on the journey")
+                .isEmpty();
+        assertThat(matcher.match(first))
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:lineAtQuay1");
+        assertThat(matcher.match(second)).isEmpty();
+    }
+
+    /**
+     * The journey keeps a situation whose stop match did not actually fire. Exclusion is
+     * driven by what matched, not by what the situation happens to name - otherwise a
+     * line-wide disruption would vanish from the journey because of a stop reference whose
+     * validity had already lapsed by the time the vehicle got there.
+     */
+    @Test
+    public void testJourneyKeepsTheSituationWhenTheStopMatchDidNotFire() {
+        SituationUpdate untilNoon = situation("TST:SituationNumber:lapsedAtQuay",
+                new ValidityPeriod(noon.minusHours(1), noon));
+        untilNoon.getAffects().addLine(new Line("TST:Line:1"));
+        untilNoon.getAffects().addStopPoint(new StopPoint("NSR:Quay:2"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(untilNoon));
+
+        // Journey spans 11:30-12:46, so the line match holds; the vehicle reaches Quay:2 at
+        // 12:45, by which time the situation has lapsed, so the stop match does not fire.
+        Call early = call("NSR:Quay:1", noon.minusMinutes(30), noon.minusMinutes(29));
+        Call late = call("NSR:Quay:2", noon.plusMinutes(45), noon.plusMinutes(46));
+
+        assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1", early, late)))
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:lapsedAtQuay");
+        assertThat(matcher.match(late)).isEmpty();
+    }
+
+    /**
+     * A situation naming several of the journey's stops is reported against every one of
+     * them - a client marks each affected stop, so it needs the situation on all of them.
+     * It still does not appear at journey level.
+     */
+    @Test
+    public void testSituationOnSeveralStopsIsReportedOnEveryAffectedCall() {
+        SituationUpdate atBothQuays = situation("TST:SituationNumber:bothQuays");
+        atBothQuays.getAffects().addStopPoint(new StopPoint("NSR:Quay:1"));
+        atBothQuays.getAffects().addStopPoint(new StopPoint("NSR:Quay:2"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(atBothQuays));
+
+        Call first = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+        Call second = call("NSR:Quay:2", noon.plusMinutes(10), noon.plusMinutes(11));
+        Call third = call("NSR:Quay:3", noon.plusMinutes(20), noon.plusMinutes(21));
+
+        assertThat(matcher.match(first))
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:bothQuays");
+        assertThat(matcher.match(second))
+                .withFailMessage("every affected stop needs the situation so the client can mark it")
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:bothQuays");
+        assertThat(matcher.match(third)).isEmpty();
+        assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1", first, second, third)))
+                .isEmpty();
     }
 
     @Test
     public void testSituationMatchingSeveralWaysAppearsOnceOnTheJourney() {
         SituationUpdate broad = situation("TST:SituationNumber:broad");
         broad.getAffects().addLine(new Line("TST:Line:1"));
-        broad.getAffects().addStopPoint(new StopPoint("NSR:Quay:1"));
-        broad.getAffects().addStopPoint(new StopPoint("NSR:Quay:2"));
+        broad.getAffects().addServiceJourney(new ServiceJourney("TST:ServiceJourney:1"));
 
         SituationMatcher matcher = new SituationMatcher(List.of(broad));
 

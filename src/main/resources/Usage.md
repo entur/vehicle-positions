@@ -126,7 +126,22 @@ receives the disruptions affecting it without querying the situations feed separ
 }
 ```
 
-A situation attaches to a journey when it names that journey, its dated journey or its line
-and overlaps the journey in time, or when it affects a stop the journey calls at. A situation
-attached to a call is in force while the vehicle is at that stop specifically — a quay message
-that ends before the vehicle arrives is not included. Closed situations are never attached.
+The two fields partition — no situation appears in both, so there is nothing to deduplicate
+across them:
+
+- `situations` on the journey holds those naming the journey, its dated journey or its line
+  and overlapping the journey in time.
+- `situations` on a call holds those affecting that stop while the vehicle is there. A quay
+  message that ends before the vehicle arrives is not included.
+
+A situation reported against a call is deliberately left off the journey, because the stop is
+the more specific placement. So a message naming both a line and one of the journey's stops
+appears on that call only. **Select both fields to see every disruption affecting a journey** —
+a great many situations are scoped to stops and reach you only through `calls { situations }`.
+
+The exclusion follows what actually matched, not what the situation names: if a stop reference
+had already lapsed by the time the vehicle called there, the stop match never fired and the
+journey keeps the situation.
+
+A situation naming several of the journey's stops is reported against every one of them, so a
+client can mark each affected stop. Closed situations are never attached.

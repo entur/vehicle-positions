@@ -110,14 +110,38 @@ service. A situation with no validity periods at all is treated the same way.
 
 ### The relationship between the two fields
 
-`Call.situations` is the per-stop result: situations naming that call's stop,
-valid during that call's window.
+The two fields **partition**. No situation appears in both, so a client
+rendering both lists never has to deduplicate across them.
 
-`EstimatedTimetableUpdate.situations` is the union of the journey-level matches
-(journey, dated journey, line) and every call's stop matches, deduplicated by
-situation number. So a stop-triggered situation appears both on the journey and
-on the specific call it came from, which is what lets a client show it against
-the right stop while still seeing it in the journey's overall list.
+`Call.situations` is the per-stop result: situations naming that call's stop,
+valid during that call's window. A situation naming several of the journey's
+stops is reported against every one of them — a client marks each affected stop,
+so it needs the situation on all of them. Duplication *across calls* is the
+point; duplication *between the two fields* is not.
+
+`EstimatedTimetableUpdate.situations` is the journey-level matches (journey,
+dated journey, line) overlapping the journey span, deduplicated by situation
+number, **minus any situation that also matched one of the journey's calls**.
+The stop is the more specific placement, so a situation naming both a line and
+one of the journey's stops is reported against that call alone.
+
+Exclusion follows what actually matched, not what the situation names. If a stop
+reference had already lapsed by the time the vehicle called there, the stop match
+never fired and the journey keeps the situation — otherwise a line-wide
+disruption would vanish from the journey because of a stop reference that was
+never in force when it mattered.
+
+**The cost of this rule**, accepted deliberately: a client selecting only
+`timetables { situations }` no longer sees stop-scoped disruptions. In the
+measured production snapshot that is 81 of 306 open situations — a quarter of all
+disruption information — reachable only through `calls { situations }`. The
+alternative was listing those situations in both places, which pushes
+deduplication onto every client.
+
+This reverses the union rule the first version of this design specified. It was
+changed because SIRI-SX producers normally scope stops *within* a line or journey
+rather than in addition to it, so the union reported one disruption twice in the
+common case.
 
 ## Mechanics
 
@@ -194,10 +218,16 @@ paths and everything VM-related are untouched.
 - **Open-ended** — a situation with no validity end attaches regardless of the
   call's time; one with no validity periods at all behaves the same.
 - **Closed** — a closed situation never attaches, on either field.
-- **Deduplication** — a situation matching both the line and two of the journey's
-  stops appears exactly once in `EstimatedTimetableUpdate.situations`.
-- **Union** — a stop-triggered situation appears on both the journey and the
-  specific call, and not on the journey's other calls.
+- **Deduplication** — a situation matching both the line and the service journey
+  appears exactly once in `EstimatedTimetableUpdate.situations`.
+- **Partition** — a stop-triggered situation appears on its own call, not on the
+  journey and not on the journey's other calls. A situation naming both a line
+  and one of the journey's stops appears on that call alone.
+- **Every affected stop** — a situation naming two of the journey's stops is
+  reported against both calls, since a client marks each affected stop.
+- **Exclusion follows the match, not the tag** — a situation naming a line and a
+  stop, whose validity has lapsed by the time the vehicle reaches that stop,
+  stays on the journey via its line match and appears on no call.
 - **Wiring** — extend the existing `ApplicationGraphQlSchemaTests` with a query
   selecting `timetables { situations { situationNumber } calls { situations { situationNumber } } }`,
   proving both fields resolve through the real schema.
@@ -209,7 +239,8 @@ paths and everything VM-related are untouched.
 ## Success criteria
 
 1. `timetables { situations { situationNumber severity } }` returns the
-   situations affecting each journey.
+   situations affecting each journey as a whole, and none that is already
+   reported against one of its calls.
 2. `timetables { calls { stopPoint { id } situations { situationNumber } } }`
    returns, per call, only the situations affecting that stop while the vehicle is
    there.

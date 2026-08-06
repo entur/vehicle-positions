@@ -204,9 +204,10 @@ type EstimatedTimetableUpdate {
 
     calls: [Call]
 
-    # Situations affecting this journey: those naming the journey, its dated journey or its
-    # line and overlapping the journey, plus those affecting any stop it calls at while the
-    # vehicle is there. Closed situations are never included.
+    # Situations affecting this journey as a whole: those naming the journey, its dated
+    # journey or its line and overlapping the journey. A situation reported against one of
+    # the journey's calls is not repeated here, so select calls { situations } as well to
+    # see every disruption affecting this journey. Closed situations are never included.
     situations: [Situation]
 }
 
@@ -233,7 +234,8 @@ type Call {
     occupancyStatus: OccupancyStatus
 
     # Situations affecting this stop while the vehicle is here. A situation on a quay that
-    # ends before the vehicle arrives is not included.
+    # ends before the vehicle arrives is not included. A situation affecting several of the
+    # journey's stops is reported against every one of them.
     situations: [Situation]
 }
 

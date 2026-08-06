@@ -4,6 +4,7 @@ import graphql.ExecutionResult;
 import org.entur.avro.realtime.siri.model.AffectedLineRecord;
 import org.entur.avro.realtime.siri.model.AffectedNetworkRecord;
 import org.entur.avro.realtime.siri.model.AffectedStopPointRecord;
+import org.entur.avro.realtime.siri.model.AffectedVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.AffectsRecord;
 import org.entur.avro.realtime.siri.model.EstimatedCallRecord;
 import org.entur.avro.realtime.siri.model.EstimatedVehicleJourneyRecord;
@@ -80,6 +81,7 @@ class ApplicationGraphQlSchemaTests {
     private static final String QUAY_JOIN_QUAY_1 = "NSR:Quay:quay-join-probe-1";
     private static final String QUAY_JOIN_QUAY_2 = "NSR:Quay:quay-join-probe-2";
     private static final String QUAY_JOIN_SITUATION = "TST:SituationNumber:quay-join-probe";
+    private static final String QUAY_JOIN_LINE_SITUATION = "TST:SituationNumber:quay-join-probe-line";
 
     private static final String TWO_JOURNEY_LINE = "TST:Line:two-journey-probe";
     private static final String TWO_JOURNEY_DSJ_A = "TST:DatedServiceJourney:two-journey-probe-A";
@@ -229,9 +231,16 @@ class ApplicationGraphQlSchemaTests {
         }
     }
 
+    /**
+     * The two fields partition rather than overlap: a situation scoped to a stop is reported
+     * against that call, a situation affecting the line as a whole against the journey, and
+     * neither appears in both places. A client rendering both lists therefore never has to
+     * deduplicate across them.
+     */
     @Test
     void situationsResolveOnBothTheJourneyAndTheSpecificCall() {
         situationRepository.add(situationAffectingStop(QUAY_JOIN_SITUATION, QUAY_JOIN_QUAY_1));
+        situationRepository.add(situationAffectingLine(QUAY_JOIN_LINE_SITUATION, QUAY_JOIN_LINE));
         timetableRepository.add(journeyCallingAt(QUAY_JOIN_LINE, QUAY_JOIN_DSJ, QUAY_JOIN_QUAY_1, QUAY_JOIN_QUAY_2));
 
         String document = """
@@ -254,8 +263,12 @@ class ApplicationGraphQlSchemaTests {
         assertThat(response).isNotNull();
         assertThat(response.getErrors()).isEmpty();
 
+        // The line-wide situation is the journey's; the stop-scoped one is not repeated here.
         List<String> journeySituations = situationNumbersOf(response.field("timetables[0].situations").getValue());
-        assertThat(journeySituations).containsExactly(QUAY_JOIN_SITUATION);
+        assertThat(journeySituations)
+                .withFailMessage("the journey lists the line-wide situation only - the stop-scoped one "
+                        + "is reported against its call instead, so a client need not deduplicate")
+                .containsExactly(QUAY_JOIN_LINE_SITUATION);
 
         // The stop-triggered situation belongs to the call it came from.
         List<String> firstCallSituations =
@@ -304,7 +317,10 @@ class ApplicationGraphQlSchemaTests {
      */
     @Test
     void twoDistinctJourneysOnTheSameLineGetTheirOwnSituationsNotEachOthers() {
-        situationRepository.add(situationAffectingStop(TWO_JOURNEY_SITUATION, TWO_JOURNEY_MATCHING_QUAY));
+        // Scoped to journey A's dated service journey, not to a stop: a stop-scoped situation
+        // is reported against its call rather than on the journey, which would leave both
+        // journeys' situations empty and make this test pass no matter what.
+        situationRepository.add(situationAffectingDatedServiceJourney(TWO_JOURNEY_SITUATION, TWO_JOURNEY_DSJ_A));
 
         // Registered "B then A" on purpose - nothing about which key a DataLoader batch sees
         // first should change the outcome.
@@ -336,10 +352,10 @@ class ApplicationGraphQlSchemaTests {
         }
 
         assertThat(situationsByJourneyId.get(TWO_JOURNEY_DSJ_A))
-                .withFailMessage("journey A calls at the affected quay and must see the situation")
+                .withFailMessage("the situation names journey A's dated service journey, so A must see it")
                 .containsExactly(TWO_JOURNEY_SITUATION);
         assertThat(situationsByJourneyId.get(TWO_JOURNEY_DSJ_B))
-                .withFailMessage("journey B does not call at the affected quay and must not inherit "
+                .withFailMessage("the situation does not name journey B, which must not inherit "
                         + "journey A's situations through a shared DataLoader cache key")
                 .isEmpty();
     }
@@ -396,7 +412,9 @@ class ApplicationGraphQlSchemaTests {
 
         try {
             // The situation appears only after the first (initial-snapshot) event has gone out.
-            situationRepository.add(situationAffectingStop(STALE_SITUATION, STALE_QUAY));
+            // Scoped to the dated service journey rather than to the stop, because a
+            // stop-scoped situation is reported against its call and never on the journey.
+            situationRepository.add(situationAffectingDatedServiceJourney(STALE_SITUATION, STALE_DSJ));
 
             // The same journey - equal to its earlier self under AbstractUpdate's value
             // equality - republished. This is the second event under test.
@@ -452,6 +470,60 @@ class ApplicationGraphQlSchemaTests {
     }
 
     private PtSituationElementRecord situationAffectingStop(String situationNumber, String stopRef) {
+        PtSituationElementRecord record = openSituation(situationNumber);
+
+        AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+        stopPoint.setStopPointRef(stopRef);
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setStopPoints(List.of(stopPoint));
+        record.setAffects(affects);
+
+        return record;
+    }
+
+    /**
+     * Names a line and nothing else, so it matches at journey level. The stop-scoped
+     * fixtures above deliberately cannot: a situation matching one of the journey's calls
+     * is reported against that call instead of on the journey.
+     */
+    private PtSituationElementRecord situationAffectingLine(String situationNumber, String lineRef) {
+        PtSituationElementRecord record = openSituation(situationNumber);
+
+        AffectedLineRecord line = new AffectedLineRecord();
+        line.setLineRef(lineRef);
+
+        AffectedNetworkRecord network = new AffectedNetworkRecord();
+        network.setAffectedLines(List.of(line));
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setNetworks(List.of(network));
+        record.setAffects(affects);
+
+        return record;
+    }
+
+    /**
+     * Names one dated service journey and no stop, so it matches at journey level and only
+     * for that journey - which is what lets a test tell two journeys on the same line apart
+     * through the {@code situations} field.
+     */
+    private PtSituationElementRecord situationAffectingDatedServiceJourney(String situationNumber,
+                                                                          String datedServiceJourneyId) {
+        PtSituationElementRecord record = openSituation(situationNumber);
+
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setDatedVehicleJourneyRefs(List.of(datedServiceJourneyId));
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setVehicleJourneys(List.of(journey));
+        record.setAffects(affects);
+
+        return record;
+    }
+
+    /** The scaffolding every fixture shares: published, open-ended, no validity periods. */
+    private PtSituationElementRecord openSituation(String situationNumber) {
         PtSituationElementRecord record = new PtSituationElementRecord();
         record.setSituationNumber(situationNumber);
         record.setParticipantRef("TST");
@@ -467,14 +539,6 @@ class ApplicationGraphQlSchemaTests {
         record.setDetails(List.of());
         record.setAdvices(List.of());
         record.setInfoLinks(List.of());
-
-        AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
-        stopPoint.setStopPointRef(stopRef);
-
-        AffectsRecord affects = new AffectsRecord();
-        affects.setStopPoints(List.of(stopPoint));
-        record.setAffects(affects);
-
         return record;
     }
 
