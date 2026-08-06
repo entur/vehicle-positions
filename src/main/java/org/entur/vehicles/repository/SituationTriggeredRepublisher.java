@@ -5,6 +5,7 @@ import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.Call;
 import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,14 +17,15 @@ import jakarta.annotation.PreDestroy;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 /**
  * Republishes stored estimated timetables when a situation affecting them changes.
@@ -39,6 +41,13 @@ public class SituationTriggeredRepublisher {
 
     private static final Logger LOG = LoggerFactory.getLogger(SituationTriggeredRepublisher.class);
 
+    /** Upper bound on {@code chunkDelay}: past this, a misconfigured value stalls the single
+     * worker thread for the whole fan-out with no operator-visible signal beyond a slow
+     * subscription. */
+    private static final Duration MAX_CHUNK_DELAY = Duration.ofSeconds(5);
+    private static final Duration DEFAULT_CHUNK_DELAY = Duration.ofMillis(50);
+
+    private final PrometheusMetricsService metricsService;
     private final AutoPurgingTimetableMap timetableMap;
     private final EstimatedTimetableUpdateRxPublisher etPublisher;
 
@@ -46,6 +55,7 @@ public class SituationTriggeredRepublisher {
 
     private final int chunkSize;
     private final Duration chunkDelay;
+    private final int largeFanoutThreshold;
 
     // Refs accumulate here while the worker is busy; the worker takes the whole set at once,
     // so a burst of situation changes costs one scan. A set has no capacity and therefore no
@@ -61,10 +71,13 @@ public class SituationTriggeredRepublisher {
     private volatile boolean running;
 
     public SituationTriggeredRepublisher(
+            @Autowired PrometheusMetricsService metricsService,
             @Autowired AutoPurgingTimetableMap timetableMap,
             @Autowired EstimatedTimetableUpdateRxPublisher etPublisher,
             @Value("${vehicle.sx.republish.chunk.size:100}") int chunkSize,
-            @Value("${vehicle.sx.republish.chunk.delay:PT0.05S}") Duration chunkDelay) {
+            @Value("${vehicle.sx.republish.chunk.delay:PT0.05S}") Duration chunkDelay,
+            @Value("${vehicle.sx.republish.large.fanout.threshold:2000}") int largeFanoutThreshold) {
+        this.metricsService = metricsService;
         this.timetableMap = timetableMap;
         this.etPublisher = etPublisher;
         // chunkSize < 1 would never advance `from` in the emission loop in republishNow(),
@@ -77,7 +90,16 @@ public class SituationTriggeredRepublisher {
         } else {
             this.chunkSize = chunkSize;
         }
-        this.chunkDelay = chunkDelay;
+        // A negative chunkDelay throws out of Thread.sleep, and an unreasonably large one (a
+        // misconfigured PT1M, say) stalls the single worker thread for minutes per fan-out.
+        if (chunkDelay.isNegative() || chunkDelay.compareTo(MAX_CHUNK_DELAY) > 0) {
+            LOG.warn("vehicle.sx.republish.chunk.delay={} is out of range (must be between 0 and {}) "
+                    + "- falling back to {}.", chunkDelay, MAX_CHUNK_DELAY, DEFAULT_CHUNK_DELAY);
+            this.chunkDelay = DEFAULT_CHUNK_DELAY;
+        } else {
+            this.chunkDelay = chunkDelay;
+        }
+        this.largeFanoutThreshold = largeFanoutThreshold;
     }
 
     @PostConstruct
@@ -101,9 +123,19 @@ public class SituationTriggeredRepublisher {
      * Hands the change off to the worker and returns. The SX Pub/Sub executor threads must never
      * wait on a scan, and a republishing failure must never break SX ingest - a situation that
      * fails to trigger a republish is still stored and still reaches the situations subscription.
+     * <p>
+     * {@code version} is null on the large majority of real situations, so
+     * {@code SituationRepository}'s version guard cannot filter out a redelivery - an
+     * at-least-once Pub/Sub redelivery, a producer's periodic full resend of its active set, or a
+     * purged-then-resnapshotted situation all reach here. {@link #hasMatchRelevantChange} keeps
+     * the hand-off proportional to actual change rather than message volume: a plain redelivery
+     * that changed nothing {@code SituationMatcher} reads must not cost a scan and a fan-out.
      */
     public void onSituationChanged(SituationUpdate previous, SituationUpdate current) {
         try {
+            if (!hasMatchRelevantChange(previous, current)) {
+                return;
+            }
             Set<String> refs = triggerRefs(previous, current);
             if (refs.isEmpty()) {
                 return;
@@ -126,6 +158,9 @@ public class SituationTriggeredRepublisher {
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                // Republishing stops permanently from here on, while the rest of the service
+                // keeps looking healthy - this must not be a silent return.
+                LOG.warn("Situation-triggered republish worker interrupted - republishing has stopped.");
                 return;
             } catch (RuntimeException e) {
                 // The worker must never die: a dead worker silently stops all republishing
@@ -138,9 +173,14 @@ public class SituationTriggeredRepublisher {
     /**
      * Takes everything accumulated since the last call, leaving the pending set empty.
      * <p>
-     * Refs added between the copy and the removal stay pending, and the permit released for them
-     * survives the {@code drainPermits()} above, so the next loop picks them up. The worst case is
-     * one extra pass that finds nothing, which {@link #run()} skips.
+     * A ref added between the copy and the removal is not guaranteed to survive here: if it was
+     * already present in {@code taken}, {@code removeAll} deletes it too, and the permit released
+     * for it finds an empty pending set on the next pass. That is still safe, but for a different
+     * reason than surviving the race: {@code SituationRepository} only calls
+     * {@code onSituationChanged} after the situation is already stored, and any scan that runs
+     * re-resolves against the timetable map's current state rather than a snapshot from when the
+     * ref was queued - so a scan starting after this {@code removeAll} always sees the change that
+     * triggered it, regardless of which particular ref made it into {@code taken}.
      */
     Set<String> takePending() {
         Set<String> taken = new HashSet<>(pending);
@@ -154,23 +194,57 @@ public class SituationTriggeredRepublisher {
      * Returns immediately when nothing is subscribed. That is not only an optimisation: it makes
      * the 343-situation startup snapshot cost nothing, since no subscriber can exist yet, and it
      * makes the whole mechanism free for deployments that never use timetables subscriptions.
+     * <p>
+     * Subscriber presence is re-checked at the top of every chunk, not only once at the start: a
+     * multi-second fan-out must not keep emitting into a sink whose last subscriber has since
+     * left, and the check is free.
      */
     void republishNow(Set<String> refs) {
         if (etPublisher.currentSubscribers() == 0) {
             return;
         }
 
-        long started = System.currentTimeMillis();
+        // Timed on its own, separate from the paced emission loop below: mixing the two blamed
+        // "scan cost" for what was actually chunkDelay sleeps, and warned routinely for any
+        // legitimately wide situation rather than for what was actually slow.
+        long scanStarted = System.currentTimeMillis();
         List<EstimatedTimetableUpdate> affected = findAffected(refs);
+        long scanDuration = System.currentTimeMillis() - scanStarted;
         scanCount.incrementAndGet();
+        metricsService.markSituationRepublishScan();
 
+        if (scanDuration > 1000) {
+            LOG.warn("Situation-triggered scan took {} ms for {} refs, matching {} candidate "
+                    + "journeys - the timetable map may have outgrown a full scan per situation change.",
+                    scanDuration, refs.size(), affected.size());
+        }
+
+        // Do NOT drop candidates here - silently not republishing is exactly the failure this
+        // feature exists to prevent. This only makes a large fan-out visible to an operator;
+        // emission below still completes in full.
+        if (affected.size() >= largeFanoutThreshold) {
+            LOG.warn("Situation-triggered republish for {} refs matched {} candidate journeys, at "
+                    + "or above the large fan-out threshold of {} - emitting in chunks over "
+                    + "several seconds so it does not crowd out ordinary timetable updates.",
+                    refs.size(), affected.size(), largeFanoutThreshold);
+        }
+
+        long emissionStarted = System.currentTimeMillis();
+        int emitted = 0;
         for (int from = 0; from < affected.size(); from += chunkSize) {
+            if (etPublisher.currentSubscribers() == 0) {
+                break;
+            }
             int to = Math.min(from + chunkSize, affected.size());
             for (EstimatedTimetableUpdate timetable : affected.subList(from, to)) {
                 etPublisher.publishUpdate(timetable);
             }
-            republishedCount.addAndGet(to - from);
+            int chunkEmitted = to - from;
+            emitted += chunkEmitted;
+            republishedCount.addAndGet(chunkEmitted);
             chunkCount.incrementAndGet();
+            metricsService.markSituationRepublishedJourneys(chunkEmitted);
+            metricsService.markSituationRepublishChunk();
 
             if (to < affected.size()) {
                 try {
@@ -182,14 +256,9 @@ public class SituationTriggeredRepublisher {
             }
         }
 
-        long duration = System.currentTimeMillis() - started;
-        if (duration > 1000) {
-            LOG.warn("Situation-triggered republish took {} ms for {} refs and {} journeys - the "
-                    + "timetable map may have outgrown a full scan per situation change.",
-                    duration, refs.size(), affected.size());
-        } else {
-            LOG.debug("Republished {} journeys for {} refs in {} ms.", affected.size(), refs.size(), duration);
-        }
+        long emissionDuration = System.currentTimeMillis() - emissionStarted;
+        LOG.debug("Republished {} of {} candidate journeys for {} refs - {} ms scan, {} ms emission.",
+                emitted, affected.size(), refs.size(), scanDuration, emissionDuration);
     }
 
     public long getScanCount() {
@@ -234,6 +303,36 @@ public class SituationTriggeredRepublisher {
     }
 
     /**
+     * True when the transition from {@code previous} to {@code current} could change what
+     * {@code SituationMatcher} decides for some journey. A plain redelivery of an unchanged
+     * situation - which {@code version} being null on most real situations cannot rule out, see
+     * {@link #onSituationChanged} - must not schedule a scan.
+     * <p>
+     * What the matcher reads is exactly: {@code progress}, the four match-dimension ref sets, and
+     * {@code validityPeriods}. Codespace and situationNumber cannot differ - they are the map key
+     * a redelivery of the same situation is stored under.
+     * <p>
+     * {@code previous == null} - a situation's first sighting - always counts as changed: there is
+     * nothing to compare against, and it is also not a state a redelivery of an already-stored
+     * situation can produce.
+     */
+    static boolean hasMatchRelevantChange(SituationUpdate previous, SituationUpdate current) {
+        if (previous == null) {
+            return true;
+        }
+        return previous.getProgress() != current.getProgress()
+                || !matchRefs(previous, Affects::getLineRefs).equals(matchRefs(current, Affects::getLineRefs))
+                || !matchRefs(previous, Affects::getStopRefs).equals(matchRefs(current, Affects::getStopRefs))
+                || !matchRefs(previous, Affects::getServiceJourneyIds).equals(matchRefs(current, Affects::getServiceJourneyIds))
+                || !matchRefs(previous, Affects::getDatedServiceJourneyIds).equals(matchRefs(current, Affects::getDatedServiceJourneyIds))
+                || !Objects.equals(previous.getValidityPeriods(), current.getValidityPeriods());
+    }
+
+    private static Set<String> matchRefs(SituationUpdate situation, Function<Affects, Set<String>> getter) {
+        return situation.getAffects() != null ? getter.apply(situation.getAffects()) : Set.of();
+    }
+
+    /**
      * Stored journeys touching any of these refs.
      * <p>
      * Deliberately looser than the read-path match rule: validity windows and {@code progress} are
@@ -254,12 +353,22 @@ public class SituationTriggeredRepublisher {
                 if (isAffected(timetable, refs)) {
                     affected.add(timetable);
                 }
-            } catch (ConcurrentModificationException e) {
+            } catch (RuntimeException e) {
                 // TimetableRepository.add() mutates a stored update in place, including
-                // getCalls().clear(), so a journey being updated right now can throw here.
+                // getCalls().clear(), so a journey being updated right now can throw here - and
+                // not only ConcurrentModificationException from the iterator's modCount check.
+                // clear() bumps modCount and then nulls elements, so an iterator that already
+                // passed checkForComodification() can still read a nulled slot and NPE. addCall()
+                // also lazily assigns a non-final, non-volatile calls field, so a concurrently
+                // reading thread is not guaranteed to see a fully published list either. Catching
+                // broadly is what keeps one journey's race from silently costing every journey
+                // still left in this scan - by the time a narrower catch let it escape to run()'s
+                // batch-level handler, takePending() had already cleared the refs, so none of them
+                // would be retried.
                 // Skipping is safe: that journey is mid-update, so an ET event for it is about
                 // to be published anyway, carrying the fresh situations with it.
                 skippedCount.incrementAndGet();
+                metricsService.markSituationRepublishSkipped();
             }
         }
         return affected;

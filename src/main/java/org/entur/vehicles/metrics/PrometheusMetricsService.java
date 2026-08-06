@@ -43,6 +43,11 @@ public class PrometheusMetricsService {
     private static final String TIMETABLE_DATA_COUNTER_NAME = METRICS_PREFIX + "timetable.data";
     private static final String SITUATION_DATA_COUNTER_NAME = METRICS_PREFIX + "situation.data";
 
+    private static final String SITUATION_REPUBLISH_SCAN_COUNTER_NAME = METRICS_PREFIX + "situation.republish.scan";
+    private static final String SITUATION_REPUBLISH_JOURNEY_COUNTER_NAME = METRICS_PREFIX + "situation.republish.journey";
+    private static final String SITUATION_REPUBLISH_CHUNK_COUNTER_NAME = METRICS_PREFIX + "situation.republish.chunk";
+    private static final String SITUATION_REPUBLISH_SKIPPED_COUNTER_NAME = METRICS_PREFIX + "situation.republish.skipped";
+
     private static final String QUERY_TYPE_LABEL = "query";
     private static final String SUBSCRIPTION_TYPE_LABEL = "subscription";
     private static final String QUERY_COUNTER_NAME = METRICS_PREFIX + QUERY_TYPE_LABEL;
@@ -123,6 +128,29 @@ public class PrometheusMetricsService {
             LOG.debug("Processed {} situation-updates. Current rate: {}/s", currentCount,
                 calculateRate(currentCount, lastLoggedSituationCount, lastLoggedSituationCountTimeMillis));
         }
+    }
+
+    /**
+     * One scan of the timetable map triggered by a situation change (as opposed to a
+     * redelivery/resend that {@code SituationTriggeredRepublisher} recognised as unchanged
+     * and skipped). This is the counter that shows whether the cost model - a scan per
+     * actual change, not per SX message - is holding in production.
+     */
+    public void markSituationRepublishScan() {
+        prometheusMeterRegistry.counter(SITUATION_REPUBLISH_SCAN_COUNTER_NAME).increment();
+    }
+
+    public void markSituationRepublishedJourneys(int count) {
+        prometheusMeterRegistry.counter(SITUATION_REPUBLISH_JOURNEY_COUNTER_NAME).increment(count);
+    }
+
+    public void markSituationRepublishChunk() {
+        prometheusMeterRegistry.counter(SITUATION_REPUBLISH_CHUNK_COUNTER_NAME).increment();
+    }
+
+    /** A journey skipped mid-scan because it was concurrently being mutated by ET ingest. */
+    public void markSituationRepublishSkipped() {
+        prometheusMeterRegistry.counter(SITUATION_REPUBLISH_SKIPPED_COUNTER_NAME).increment();
     }
 
     private long calculateRate(int currentCount, AtomicInteger lastLoggedCount, AtomicLong lastLoggedCountTimeMillis) {

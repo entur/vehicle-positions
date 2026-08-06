@@ -65,10 +65,12 @@ public class SituationGraphQLTests {
         // refs and releases a semaphore permit, which is harmless with no worker thread
         // running to consume it - these tests exercise queries, not republishing.
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(
+                metricsService,
                 new AutoPurgingTimetableMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 new EstimatedTimetableUpdateRxPublisher(),
                 100,
-                Duration.ofMillis(50));
+                Duration.ofMillis(50),
+                2000);
         repository = new SituationRepository(
                 metricsService,
                 new SituationMapper(new LineService(false), nsrService),
