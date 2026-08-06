@@ -67,7 +67,16 @@ public class SituationTriggeredRepublisher {
             @Value("${vehicle.sx.republish.chunk.delay:PT0.05S}") Duration chunkDelay) {
         this.timetableMap = timetableMap;
         this.etPublisher = etPublisher;
-        this.chunkSize = chunkSize;
+        // chunkSize < 1 would never advance `from` in the emission loop in republishNow(),
+        // spinning forever while sleeping chunkDelay each pass; negative also throws out of
+        // subList(from, to). Both are configuration mistakes, not states worth honouring.
+        if (chunkSize < 1) {
+            LOG.warn("vehicle.sx.republish.chunk.size={} is not a positive number - falling back to 100.",
+                    chunkSize);
+            this.chunkSize = 100;
+        } else {
+            this.chunkSize = chunkSize;
+        }
         this.chunkDelay = chunkDelay;
     }
 

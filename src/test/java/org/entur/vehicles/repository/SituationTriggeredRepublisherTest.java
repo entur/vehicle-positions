@@ -15,6 +15,7 @@ import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
@@ -285,6 +286,39 @@ public class SituationTriggeredRepublisherTest {
         } finally {
             subscription.dispose();
             republisher.stop();
+        }
+    }
+
+    /**
+     * A configured chunk size of 0 must not be trusted as-is: with {@code chunkSize == 0},
+     * {@code from += chunkSize} in the emission loop never advances, so {@code republishNow}
+     * would sleep {@code chunkDelay} forever without emitting anything. The 5-second timeout
+     * turns that hang into a reported failure instead of stalling the whole build; the
+     * constructor is expected to fall back to 100 so this terminates well within it.
+     */
+    @Test
+    @Timeout(5)
+    public void testChunkSizeZeroFallsBackAndEmitsEveryCandidateExactlyOnce() {
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        SituationTriggeredRepublisher republisher =
+                new SituationTriggeredRepublisher(timetableMap, etPublisher, 0, Duration.ofMillis(1));
+
+        storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
+        storeJourney("TST:Line:1", "TST:ServiceJourney:2", "TST:DatedServiceJourney:2", "NSR:Quay:1");
+
+        Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
+                .subscribe(batch -> { });
+
+        try {
+            republisher.republishNow(Set.of("TST:Line:1"));
+
+            assertThat(republisher.getRepublishedCount())
+                    .withFailMessage("a chunk size of 0 must fall back to a positive default and "
+                            + "still emit every matching candidate exactly once")
+                    .isEqualTo(2);
+            assertThat(republisher.getChunkCount()).isEqualTo(1);
+        } finally {
+            subscription.dispose();
         }
     }
 
