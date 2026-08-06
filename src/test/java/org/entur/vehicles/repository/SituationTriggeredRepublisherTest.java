@@ -1,6 +1,8 @@
 package org.entur.vehicles.repository;
 
 import org.entur.vehicles.data.EstimatedTimetableUpdate;
+import org.entur.vehicles.data.MetricType;
+import org.entur.vehicles.data.QueryFilter;
 import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.Call;
@@ -13,10 +15,14 @@ import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,7 +35,15 @@ public class SituationTriggeredRepublisherTest {
     public void setUp() {
         timetableMap = new AutoPurgingTimetableMap(Duration.parse("PT1M"), Duration.parse("PT10M"));
         republisher = new SituationTriggeredRepublisher(
-                timetableMap, new EstimatedTimetableUpdateRxPublisher());
+                timetableMap, new EstimatedTimetableUpdateRxPublisher(), 100, Duration.ofMillis(1));
+    }
+
+    /** A filter that matches everything, with the small buffer the publisher requires. */
+    private QueryFilter matchAll() {
+        return new QueryFilter(
+                null, MetricType.SUBSCRIPTION,
+                null, null, null, null, null, null, null, null, null, null, null, null,
+                1, 1);
     }
 
     private SituationUpdate situation() {
@@ -155,5 +169,132 @@ public class SituationTriggeredRepublisherTest {
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
 
         assertThat(republisher.findAffected(Set.of())).isEmpty();
+    }
+
+    @Test
+    public void testPendingRefsAccumulateIntoASingleTake() {
+        SituationUpdate first = situation();
+        first.getAffects().addLine(new Line("TST:Line:1"));
+
+        SituationUpdate second = situation();
+        second.getAffects().addStopPoint(new StopPoint("NSR:Quay:2"));
+
+        republisher.onSituationChanged(null, first);
+        republisher.onSituationChanged(null, second);
+
+        assertThat(republisher.takePending())
+                .withFailMessage("a burst of situation changes must cost one scan, not one each")
+                .containsExactlyInAnyOrder("TST:Line:1", "NSR:Quay:2");
+        assertThat(republisher.takePending())
+                .withFailMessage("taking must clear the pending set, or every later scan would "
+                        + "redo all the work of every earlier one")
+                .isEmpty();
+    }
+
+    @Test
+    public void testNoScanHappensWhenNobodyIsSubscribed() {
+        storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
+
+        republisher.republishNow(Set.of("TST:Line:1"));
+
+        assertThat(republisher.getScanCount())
+                .withFailMessage("with no timetables subscribers there is nobody to tell, so the "
+                        + "scan must not run at all - this is what makes the startup snapshot free")
+                .isZero();
+        assertThat(republisher.getRepublishedCount()).isZero();
+    }
+
+    @Test
+    public void testRepublishesAffectedJourneysToSubscribers() {
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        SituationTriggeredRepublisher republisher =
+                new SituationTriggeredRepublisher(timetableMap, etPublisher, 100, Duration.ofMillis(1));
+
+        EstimatedTimetableUpdate affected =
+                storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
+        storeJourney("TST:Line:2", "TST:ServiceJourney:2", "TST:DatedServiceJourney:2", "NSR:Quay:2");
+
+        List<EstimatedTimetableUpdate> received = new ArrayList<>();
+        Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
+                .subscribe(received::addAll);
+
+        try {
+            republisher.republishNow(Set.of("TST:Line:1"));
+
+            assertThat(received).containsExactly(affected);
+            assertThat(republisher.getScanCount()).isEqualTo(1);
+            assertThat(republisher.getRepublishedCount()).isEqualTo(1);
+        } finally {
+            subscription.dispose();
+        }
+    }
+
+    @Test
+    public void testLargeFanOutIsEmittedInChunksRatherThanOneBurst() {
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        SituationTriggeredRepublisher republisher =
+                new SituationTriggeredRepublisher(timetableMap, etPublisher, 100, Duration.ofMillis(1));
+
+        for (int i = 0; i < 250; i++) {
+            storeJourney("TST:Line:1", "TST:ServiceJourney:" + i, "TST:DatedServiceJourney:" + i, "NSR:Quay:1");
+        }
+
+        Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
+                .subscribe(batch -> { });
+
+        try {
+            republisher.republishNow(Set.of("TST:Line:1"));
+
+            assertThat(republisher.getRepublishedCount()).isEqualTo(250);
+            assertThat(republisher.getChunkCount())
+                    .withFailMessage("250 journeys at a chunk size of 100 must go out as 3 chunks - "
+                            + "emitting them in one tight loop would discard messages for slower "
+                            + "subscribers on a directBestEffort sink")
+                    .isEqualTo(3);
+        } finally {
+            subscription.dispose();
+        }
+    }
+
+    @Test
+    public void testHandOffEventuallyRunsAScan() throws Exception {
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        SituationTriggeredRepublisher republisher =
+                new SituationTriggeredRepublisher(timetableMap, etPublisher, 100, Duration.ofMillis(1));
+        republisher.start();
+
+        storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
+
+        Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
+                .subscribe(batch -> { });
+
+        try {
+            SituationUpdate current = situation();
+            current.getAffects().addLine(new Line("TST:Line:1"));
+
+            republisher.onSituationChanged(null, current);
+
+            long deadline = System.currentTimeMillis() + 5000;
+            while (republisher.getRepublishedCount() == 0 && System.currentTimeMillis() < deadline) {
+                TimeUnit.MILLISECONDS.sleep(10);
+            }
+            assertThat(republisher.getRepublishedCount())
+                    .withFailMessage("onSituationChanged must hand off to the worker, which must "
+                            + "then scan and emit")
+                    .isEqualTo(1);
+        } finally {
+            subscription.dispose();
+            republisher.stop();
+        }
+    }
+
+    @Test
+    public void testHandOffDoesNotThrowWhenTheWorkerIsNotRunning() {
+        SituationUpdate current = situation();
+        current.getAffects().addLine(new Line("TST:Line:1"));
+
+        // SX ingest must never be broken by a republishing failure - a situation that fails to
+        // trigger a republish is still stored and still reaches the situations subscription.
+        republisher.onSituationChanged(null, current);
     }
 }
