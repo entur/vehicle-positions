@@ -155,3 +155,11 @@ that journey's producer happens to send another message.
 
 A situation affecting a large number of journeys is re-sent over a few seconds rather than all at
 once, so that one wide-reaching disruption does not crowd out ordinary timetable updates.
+
+A republished event does not advance the journey's `lastUpdated` - it re-sends the journey exactly
+as last received from its producer, not as freshly observed. A subscription filtering with
+`maxDataAge` resolves that argument to a fixed cutoff once, at subscription-open time, so a quiet
+journey published before the subscription started is excluded by `maxDataAge` **permanently**, not
+just until its next event. That quiet-producer population is exactly what this feature targets, so
+a client combining `maxDataAge` with `timetables` should know a situation-triggered republish for
+such a journey will not reach it.
