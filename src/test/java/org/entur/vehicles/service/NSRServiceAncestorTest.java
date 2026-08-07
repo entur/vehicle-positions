@@ -103,14 +103,18 @@ public class NSRServiceAncestorTest {
 
     /**
      * Exercises the populated map via the package-private constructor seam, rather than only
-     * the empty (NSR lookup disabled) path every other test in this class uses.
+     * the empty (NSR lookup disabled) path every other test in this class uses. {@code enabled}
+     * is passed as {@code false} because it is irrelevant here: {@code ancestorsOf} and
+     * {@code expandWithAncestors} read {@code ancestorsByRef} unconditionally, and this seam
+     * populates that map directly without going through {@code warmUpCache} (which is what
+     * {@code enabled} actually gates).
      */
     private NSRService quayThroughMultimodalParent() {
         Map<String, String> childToParent = new LinkedHashMap<>();
         childToParent.put("NSR:Quay:749", "NSR:StopPlace:451");
         childToParent.put("NSR:StopPlace:451", "NSR:StopPlace:MULTIMODAL");
 
-        return new NSRService(true, "", childToParent);
+        return new NSRService(false, "", childToParent);
     }
 
     @Test

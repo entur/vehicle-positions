@@ -15,6 +15,7 @@ import org.rutebanken.netex.model.Quays_RelStructure;
 import org.rutebanken.netex.model.SiteRefStructure;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +39,7 @@ public class NSRService {
 
     private final boolean enabled;
 
+    @Autowired
     public NSRService(
             @Value("${vehicle.nsr.lookup.enabled:false}") boolean enabled,
             @Value("${vehicle.nsr.lookup.url:}") String url
@@ -50,10 +52,12 @@ public class NSRService {
      * Test seam: populates {@link #ancestorsByRef} directly from a supplied child-to-parent
      * map, via the same {@link #flattenAncestors} used by the real NeTEx warm-up, without
      * downloading or parsing a NeTEx file. Package-private - not part of the public surface.
+     * Delegates to the primary constructor rather than duplicating its field assignments; the
+     * {@code enabled}/{@code url} it forwards only ever govern {@link #warmUpCache} (never run
+     * here - this bypasses it) and {@link #getStop} lookup, neither of which this seam is for.
      */
     NSRService(boolean enabled, String url, Map<String, String> childToParent) {
-        this.enabled = enabled;
-        this.url = url;
+        this(enabled, url);
         this.ancestorsByRef.putAll(flattenAncestors(childToParent));
     }
 
