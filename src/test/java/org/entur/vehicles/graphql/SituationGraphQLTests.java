@@ -85,7 +85,7 @@ public class SituationGraphQLTests {
                 closedSituation()
         ));
 
-        queryService = new Query(null, null, repository, metricsService);
+        queryService = new Query(null, null, repository, new NSRService(false, null), metricsService);
     }
 
     private PtSituationElementRecord baseRecord(String situationNumber) {

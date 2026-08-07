@@ -7,6 +7,7 @@ import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.util.Collections;
 import java.util.Set;
 import java.util.StringJoiner;
 
@@ -34,7 +35,12 @@ public class SituationFilter {
     private final Codespace codespace;
     private final String operatorRef;
     private final String lineRef;
-    private final String stopRef;
+    /**
+     * The queried stop ref together with every ancestor above it, already resolved by the
+     * caller. Null means no stop filter at all - an empty set would mean "match nothing",
+     * which is not the same thing.
+     */
+    private final Set<String> stopRefs;
     private final String serviceJourneyId;
     private final String datedServiceJourneyId;
     private final VehicleModeEnumeration mode;
@@ -54,7 +60,7 @@ public class SituationFilter {
                            String codespaceId,
                            String operatorRef,
                            String lineRef,
-                           String stopRef,
+                           Set<String> stopRefs,
                            String serviceJourneyId,
                            String datedServiceJourneyId,
                            VehicleModeEnumeration mode,
@@ -72,7 +78,7 @@ public class SituationFilter {
         this.codespace = codespaceId != null ? Codespace.getCodespace(codespaceId) : null;
         this.operatorRef = operatorRef;
         this.lineRef = lineRef;
-        this.stopRef = stopRef;
+        this.stopRefs = stopRefs;
         this.serviceJourneyId = serviceJourneyId;
         this.datedServiceJourneyId = datedServiceJourneyId;
         this.mode = mode;
@@ -124,7 +130,7 @@ public class SituationFilter {
         if (lineRef != null && (affects == null || !affects.getLineRefs().contains(lineRef))) {
             return false;
         }
-        if (stopRef != null && (affects == null || !affects.getStopRefs().contains(stopRef))) {
+        if (stopRefs != null && (affects == null || Collections.disjoint(affects.getStopRefs(), stopRefs))) {
             return false;
         }
         if (serviceJourneyId != null && (affects == null || !affects.getServiceJourneyIds().contains(serviceJourneyId))) {
@@ -167,7 +173,7 @@ public class SituationFilter {
                 .add("codespace=" + codespace)
                 .add("operatorRef='" + operatorRef + "'")
                 .add("lineRef='" + lineRef + "'")
-                .add("stopRef='" + stopRef + "'")
+                .add("stopRefs=" + stopRefs)
                 .add("serviceJourneyId='" + serviceJourneyId + "'")
                 .add("datedServiceJourneyId='" + datedServiceJourneyId + "'")
                 .add("mode=" + mode)

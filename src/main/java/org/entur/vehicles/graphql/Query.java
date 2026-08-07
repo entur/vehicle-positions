@@ -18,6 +18,7 @@ import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
 import org.entur.vehicles.repository.VehicleRepository;
+import org.entur.vehicles.service.NSRService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -36,16 +37,19 @@ class Query {
     private final VehicleRepository vehicleRepository;
     private final TimetableRepository timetableRepository;
     private final SituationRepository situationRepository;
+    private final NSRService nsrService;
 
     PrometheusMetricsService metricsService;
 
     public Query(VehicleRepository vehicleRepository,
                  TimetableRepository timetableRepository,
                  SituationRepository situationRepository,
+                 NSRService nsrService,
                  PrometheusMetricsService metricsService) {
         this.vehicleRepository = vehicleRepository;
         this.timetableRepository = timetableRepository;
         this.situationRepository = situationRepository;
+        this.nsrService = nsrService;
         this.metricsService = metricsService;
     }
 
@@ -172,7 +176,7 @@ class Query {
                 codespaceId,
                 operatorRef,
                 lineRef,
-                stopRef,
+                stopRef == null ? null : nsrService.expandWithAncestors(stopRef),
                 serviceJourneyId,
                 datedServiceJourneyId,
                 mode,
