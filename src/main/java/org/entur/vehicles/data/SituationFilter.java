@@ -37,8 +37,9 @@ public class SituationFilter {
     private final String lineRef;
     /**
      * The queried stop ref together with every ancestor above it, already resolved by the
-     * caller. Null means no stop filter at all - an empty set would mean "match nothing",
-     * which is not the same thing.
+     * caller. Null means no stop filter at all. The constructor normalises an empty set to
+     * null too, since the only way to end up with one is a null ref expanded upstream - an
+     * empty set here must never be read as "match nothing".
      */
     private final Set<String> stopRefs;
     private final String serviceJourneyId;
@@ -78,7 +79,10 @@ public class SituationFilter {
         this.codespace = codespaceId != null ? Codespace.getCodespace(codespaceId) : null;
         this.operatorRef = operatorRef;
         this.lineRef = lineRef;
-        this.stopRefs = stopRefs;
+        // An empty set can only arise from a null ref expanded by a caller that skipped the
+        // null ternary (e.g. nsrService.expandWithAncestors(stopRef) called directly) - treat
+        // it the same as null, "no filter", rather than as "match nothing".
+        this.stopRefs = (stopRefs == null || stopRefs.isEmpty()) ? null : stopRefs;
         this.serviceJourneyId = serviceJourneyId;
         this.datedServiceJourneyId = datedServiceJourneyId;
         this.mode = mode;

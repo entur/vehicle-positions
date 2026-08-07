@@ -136,6 +136,7 @@ class ApplicationGraphQlSchemaTests {
     void stubNsrServiceDefaults() {
         when(nsrService.getStop(anyString())).thenAnswer(i -> new StopPoint(i.getArgument(0)));
         when(nsrService.ancestorsOf(anyString())).thenReturn(Set.of());
+        when(nsrService.expandWithAncestors(anyString())).thenAnswer(i -> Set.of(i.getArgument(0)));
     }
 
     @Test

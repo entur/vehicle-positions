@@ -291,4 +291,29 @@ public class SituationFilterTest {
                         + "unfiltered situations query")
                 .isTrue();
     }
+
+    /**
+     * An empty (as opposed to null) stopRefs set can only arise from a caller expanding a
+     * null ref without the ternary both current call sites use - e.g. a future
+     * {@code nsrService.expandWithAncestors(stopRef)} written directly. The constructor
+     * normalises that to null, so it must mean "no stop filter", never "match nothing".
+     */
+    @Test
+    void testAnEmptyStopRefSetAlsoMeansNoStopFilter() {
+        SituationUpdate anywhere = new SituationUpdate();
+        anywhere.setSituationNumber("TST:SituationNumber:anywhere-empty");
+        anywhere.setAffects(new Affects());
+        anywhere.getAffects().addLine(new Line("TST:Line:1"));
+
+        SituationFilter filter = new SituationFilter(
+                null, MetricType.QUERY, null, null, null, null,
+                Set.of(),
+                null, null, null, null, null, null, null, null, true, null, null);
+
+        assertThat(filter.isMatch(anywhere))
+                .withFailMessage("an empty stopRefs set must be normalised the same as null - "
+                        + "reading it as 'match nothing' would silently empty every unfiltered "
+                        + "situations query a future caller writes without the null ternary")
+                .isTrue();
+    }
 }

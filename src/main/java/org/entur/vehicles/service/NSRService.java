@@ -46,6 +46,17 @@ public class NSRService {
         this.url = url;
     }
 
+    /**
+     * Test seam: populates {@link #ancestorsByRef} directly from a supplied child-to-parent
+     * map, via the same {@link #flattenAncestors} used by the real NeTEx warm-up, without
+     * downloading or parsing a NeTEx file. Package-private - not part of the public surface.
+     */
+    NSRService(boolean enabled, String url, Map<String, String> childToParent) {
+        this.enabled = enabled;
+        this.url = url;
+        this.ancestorsByRef.putAll(flattenAncestors(childToParent));
+    }
+
     private final LoadingCache<String, StopPoint> stopPointCache = CacheBuilder.newBuilder()
             .build(new CacheLoader<>() {
                 @Override
@@ -151,9 +162,10 @@ public class NSRService {
     }
 
     /**
-     * Every ancestor above this ref, nearest first. Returns the stored set rather than a copy,
-     * so this allocates nothing - {@code SituationTriggeredRepublisher} calls it for every call
-     * of every stored journey on every situation change.
+     * Every ancestor above this ref, in no particular order - the set is unordered. Returns
+     * the stored set rather than a copy, so this allocates nothing - {@code
+     * SituationTriggeredRepublisher} calls it for every call of every stored journey on every
+     * situation change.
      */
     public Set<String> ancestorsOf(String stopRef) {
         if (stopRef == null) {
@@ -163,9 +175,10 @@ public class NSRService {
     }
 
     /**
-     * This ref plus every ancestor above it. Allocates, so prefer {@link #ancestorsOf} on a hot
-     * path. A null ref yields an empty set; an unknown ref yields just itself, so a caller never
-     * has to special-case missing NeTEx data.
+     * This ref plus every ancestor above it, in no particular order - the set is unordered.
+     * Allocates, so prefer {@link #ancestorsOf} on a hot path. A null ref yields an empty set;
+     * an unknown ref yields just itself, so a caller never has to special-case missing NeTEx
+     * data.
      */
     public Set<String> expandWithAncestors(String stopRef) {
         if (stopRef == null) {

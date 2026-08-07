@@ -231,6 +231,47 @@ public class SituationGraphQLTests {
     }
 
     /**
+     * Exercises the real {@code Query.getSituations} wiring at Query.java:179 rather than
+     * calling {@code SituationFilter} directly: {@code stopRef} is resolved via
+     * {@code nsrService.expandWithAncestors}, so a situation tagged only on an ancestor of the
+     * queried ref (e.g. the stop place above a quay) must still come back. Swapping that call
+     * site to {@code ancestorsOf} would drop the queried ref itself from the expansion - here
+     * that would not matter, since the situation is tagged on the ancestor, not the ref - so
+     * this alone does not catch that regression; see the queried-ref case covered by
+     * {@code testFilterByLineStopAndMode}, which matches a situation tagged directly on the
+     * queried stop.
+     */
+    @Test
+    public void testFilterByStopRefResolvesThroughAncestors() {
+        PtSituationElementRecord record = baseRecord("TST:SituationNumber:ancestor");
+        record.setProgress("PUBLISHED");
+        record.setSeverity("SEVERE");
+
+        AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+        stopPoint.setStopPointRef("NSR:StopPlace:451");
+        stopPoint.setStopPointNames(List.of());
+        stopPoint.setStopConditions(List.of());
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setStopPoints(List.of(stopPoint));
+        record.setAffects(affects);
+
+        repository.add(record);
+
+        NSRService ancestorAwareNsrService = Mockito.mock(NSRService.class);
+        Mockito.when(ancestorAwareNsrService.expandWithAncestors("NSR:Quay:749"))
+                .thenReturn(Set.of("NSR:Quay:749", "NSR:StopPlace:451"));
+
+        Query ancestorQueryService = new Query(null, null, repository, ancestorAwareNsrService, metricsService);
+
+        Collection<SituationUpdate> situations = ancestorQueryService.getSituations(
+                null, null, null, null, "NSR:Quay:749", null, null, null, null, null, null, null, null, null);
+
+        assertEquals(1, situations.size());
+        assertEquals("TST:SituationNumber:ancestor", situations.iterator().next().getSituationNumber());
+    }
+
+    /**
      * Regression test for Subscription.situations' includeClosed default (true, unlike
      * Query.situations' false): a subscriber must observe a PUBLISHED -> CLOSED
      * transition, not have it silently swallowed by the filter.

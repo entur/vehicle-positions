@@ -100,4 +100,40 @@ public class NSRServiceAncestorTest {
 
         assertThat(service.expandWithAncestors(null)).isEmpty();
     }
+
+    /**
+     * Exercises the populated map via the package-private constructor seam, rather than only
+     * the empty (NSR lookup disabled) path every other test in this class uses.
+     */
+    private NSRService quayThroughMultimodalParent() {
+        Map<String, String> childToParent = new LinkedHashMap<>();
+        childToParent.put("NSR:Quay:749", "NSR:StopPlace:451");
+        childToParent.put("NSR:StopPlace:451", "NSR:StopPlace:MULTIMODAL");
+
+        return new NSRService(true, "", childToParent);
+    }
+
+    @Test
+    public void testExpandWithAncestorsUnionsTheRefWithEveryAncestor() {
+        NSRService service = quayThroughMultimodalParent();
+
+        assertThat(service.expandWithAncestors("NSR:Quay:749"))
+                .containsExactlyInAnyOrder("NSR:Quay:749", "NSR:StopPlace:451", "NSR:StopPlace:MULTIMODAL");
+    }
+
+    @Test
+    public void testAncestorsOfDoesNotIncludeTheRefItself() {
+        NSRService service = quayThroughMultimodalParent();
+
+        assertThat(service.ancestorsOf("NSR:Quay:749"))
+                .containsExactlyInAnyOrder("NSR:StopPlace:451", "NSR:StopPlace:MULTIMODAL");
+    }
+
+    @Test
+    public void testExpandWithAncestorsOfARefAbsentFromThePopulatedMapIsJustTheRef() {
+        NSRService service = quayThroughMultimodalParent();
+
+        assertThat(service.expandWithAncestors("NSR:Quay:unknown"))
+                .containsExactly("NSR:Quay:unknown");
+    }
 }
