@@ -56,7 +56,8 @@ public class SituationRepositoryTest {
                 new EstimatedTimetableUpdateRxPublisher(),
                 100,
                 Duration.ofMillis(50),
-                2000);
+                2000,
+                nsrService);
         repository = new SituationRepository(
                 metricsService,
                 new SituationMapper(new LineService(false), nsrService),

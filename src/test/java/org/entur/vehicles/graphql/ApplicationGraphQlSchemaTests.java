@@ -3,14 +3,18 @@ package org.entur.vehicles.graphql;
 import graphql.ExecutionResult;
 import org.entur.avro.realtime.siri.model.AffectedLineRecord;
 import org.entur.avro.realtime.siri.model.AffectedNetworkRecord;
+import org.entur.avro.realtime.siri.model.AffectedStopPlaceRecord;
 import org.entur.avro.realtime.siri.model.AffectedStopPointRecord;
 import org.entur.avro.realtime.siri.model.AffectedVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.AffectsRecord;
 import org.entur.avro.realtime.siri.model.EstimatedCallRecord;
 import org.entur.avro.realtime.siri.model.EstimatedVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
+import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
+import org.entur.vehicles.service.NSRService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivestreams.Publisher;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.graphql.ExecutionGraphQlResponse;
 import org.springframework.graphql.ExecutionGraphQlService;
 import org.springframework.graphql.support.DefaultExecutionGraphQlRequest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -28,14 +33,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * No test anywhere in this suite previously booted a Spring context, so nothing verified
@@ -99,6 +108,42 @@ class ApplicationGraphQlSchemaTests {
     private static final String REPUBLISH_DSJ = "TST:DatedServiceJourney:republish-probe";
     private static final String REPUBLISH_QUAY = "NSR:Quay:republish-probe";
     private static final String REPUBLISH_SITUATION = "TST:SituationNumber:republish-probe";
+
+    private static final String QUAY_ANCESTOR_LINE = "TST:Line:ancestor-probe";
+    private static final String QUAY_ANCESTOR_DSJ = "TST:DatedServiceJourney:ancestor-probe";
+    private static final String QUAY_ANCESTOR_QUAY = "NSR:Quay:ancestor-probe";
+    private static final String QUAY_ANCESTOR_STOP_PLACE = "NSR:StopPlace:ancestor-probe";
+    private static final String QUAY_ANCESTOR_SITUATION = "TST:SituationNumber:ancestor-probe";
+    private static final String TAGGED_PLACE_LINE = "TST:Line:tagged-place-probe";
+    private static final String TAGGED_PLACE_DSJ = "TST:DatedServiceJourney:tagged-place-probe";
+    private static final String TAGGED_PLACE_QUAY = "NSR:Quay:tagged-place-probe";
+    private static final String TAGGED_PLACE_STOP_PLACE = "NSR:StopPlace:tagged-place-probe";
+    private static final String TAGGED_PLACE_SITUATION = "TST:SituationNumber:tagged-place-probe";
+
+    /**
+     * NSR lookup is disabled in the test context, so the real hierarchy is empty and this test
+     * has to supply one. It replaces NSRService with a stub whose only knowledge is that the
+     * probe quay sits under the probe stop place - which is exactly the relationship under test.
+     */
+    @MockitoBean
+    private NSRService nsrService;
+
+    /**
+     * Every other test in this class was written against the real (disabled) NSRService, whose
+     * fallback behaviour is {@code getStop(ref) -> new StopPoint(ref)} and
+     * {@code ancestorsOf(ref) -> Set.of()}. {@code @MockitoBean} substitutes a bare mock for the
+     * whole class - resetting its stubbing after every test, not restoring the original bean -
+     * so without reinstating that fallback here, every other test's call-level stop resolution
+     * would silently start returning null. Individual tests (see
+     * {@link #aSituationOnAStopPlaceReachesTheCallAtItsQuay}) layer more specific stubbing on
+     * top, which Mockito prefers over this default.
+     */
+    @BeforeEach
+    void stubNsrServiceDefaults() {
+        when(nsrService.getStop(anyString())).thenAnswer(i -> new StopPoint(i.getArgument(0)));
+        when(nsrService.ancestorsOf(anyString())).thenReturn(Set.of());
+        when(nsrService.expandWithAncestors(anyString())).thenAnswer(i -> Set.of(i.getArgument(0)));
+    }
 
     @Test
     void contextLoads() {
@@ -556,6 +601,111 @@ class ApplicationGraphQlSchemaTests {
         } finally {
             subscription.dispose();
         }
+    }
+
+    @Test
+    void aSituationOnAStopPlaceReachesTheCallAtItsQuay() {
+        when(nsrService.ancestorsOf(QUAY_ANCESTOR_QUAY)).thenReturn(Set.of(QUAY_ANCESTOR_STOP_PLACE));
+        when(nsrService.ancestorsOf(argThat(ref -> !QUAY_ANCESTOR_QUAY.equals(ref)))).thenReturn(Set.of());
+        when(nsrService.getStop(anyString())).thenAnswer(i -> new StopPoint(i.getArgument(0)));
+
+        situationRepository.add(situationAffectingStop(QUAY_ANCESTOR_SITUATION, QUAY_ANCESTOR_STOP_PLACE));
+        timetableRepository.add(journeyCallingAt(QUAY_ANCESTOR_LINE, QUAY_ANCESTOR_DSJ, QUAY_ANCESTOR_QUAY));
+
+        String document = """
+                query {
+                  timetables(lineRef: "%s") {
+                    calls {
+                      stopPoint { id }
+                      situations { situationNumber }
+                    }
+                  }
+                }
+                """.formatted(QUAY_ANCESTOR_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-ancestor", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        List<String> callSituations =
+                situationNumbersOf(response.field("timetables[0].calls[0].situations").getValue());
+        assertThat(callSituations)
+                .withFailMessage("a situation tagged on NSR:StopPlace must appear on the call at its quay")
+                .containsExactly(QUAY_ANCESTOR_SITUATION);
+    }
+
+    /**
+     * The production path for the reported bug. {@code aSituationOnAStopPlaceReachesTheCallAtItsQuay}
+     * above proves resolution end to end, but ingests the stop place ref through the
+     * {@code AffectedStopPoint} branch - so the branch a real SIRI-SX producer actually uses to
+     * tag a stop place was only ever covered separately, in {@code SituationMapperTest}. This
+     * closes that chain: an {@code AffectedStopPlace} record all the way to the call at the quay.
+     * <p>
+     * It also asserts that {@code affects} still reports what the producer named and nothing more -
+     * the stop place under {@code stopPlaces}, and no quay invented under {@code stopPoints}.
+     */
+    @Test
+    void aSituationTaggedAsAnAffectedStopPlaceReachesTheCallAtItsQuay() {
+        when(nsrService.ancestorsOf(TAGGED_PLACE_QUAY)).thenReturn(Set.of(TAGGED_PLACE_STOP_PLACE));
+        when(nsrService.ancestorsOf(argThat(ref -> !TAGGED_PLACE_QUAY.equals(ref)))).thenReturn(Set.of());
+        when(nsrService.getStop(anyString())).thenAnswer(i -> new StopPoint(i.getArgument(0)));
+
+        situationRepository.add(situationAffectingStopPlace(TAGGED_PLACE_SITUATION, TAGGED_PLACE_STOP_PLACE));
+        timetableRepository.add(journeyCallingAt(TAGGED_PLACE_LINE, TAGGED_PLACE_DSJ, TAGGED_PLACE_QUAY));
+
+        String document = """
+                query {
+                  timetables(lineRef: "%s") {
+                    calls {
+                      stopPoint { id }
+                      situations {
+                        situationNumber
+                        affects { stopPlaces { id } stopPoints { id } }
+                      }
+                    }
+                  }
+                }
+                """.formatted(TAGGED_PLACE_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-tagged-place", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        List<String> callSituations =
+                situationNumbersOf(response.field("timetables[0].calls[0].situations").getValue());
+        assertThat(callSituations)
+                .withFailMessage("a situation tagged as an AffectedStopPlace must appear on the call at its quay")
+                .containsExactly(TAGGED_PLACE_SITUATION);
+
+        String affectedStopPlaceId =
+                response.field("timetables[0].calls[0].situations[0].affects.stopPlaces[0].id").getValue();
+        assertThat(affectedStopPlaceId)
+                .withFailMessage("affects must still name the stop place the producer tagged")
+                .isEqualTo(TAGGED_PLACE_STOP_PLACE);
+        List<Object> affectedStopPoints =
+                response.field("timetables[0].calls[0].situations[0].affects.stopPoints").getValue();
+        assertThat(affectedStopPoints)
+                .withFailMessage("resolution must not write the resolved quay back onto affects")
+                .isEmpty();
+    }
+
+    private PtSituationElementRecord situationAffectingStopPlace(String situationNumber, String stopPlaceRef) {
+        PtSituationElementRecord record = openSituation(situationNumber);
+
+        AffectedStopPlaceRecord stopPlace = new AffectedStopPlaceRecord();
+        stopPlace.setStopPlaceRef(stopPlaceRef);
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setStopPlaces(List.of(stopPlace));
+        record.setAffects(affects);
+
+        return record;
     }
 
     /** Flattens the situationNumbers across every call of a timetable in a subscription payload. */

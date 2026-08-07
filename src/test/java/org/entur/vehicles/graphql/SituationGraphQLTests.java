@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,7 +71,8 @@ public class SituationGraphQLTests {
                 new EstimatedTimetableUpdateRxPublisher(),
                 100,
                 Duration.ofMillis(50),
-                2000);
+                2000,
+                nsrService);
         repository = new SituationRepository(
                 metricsService,
                 new SituationMapper(new LineService(false), nsrService),
@@ -85,7 +87,7 @@ public class SituationGraphQLTests {
                 closedSituation()
         ));
 
-        queryService = new Query(null, null, repository, metricsService);
+        queryService = new Query(null, null, repository, new NSRService(false, null), metricsService);
     }
 
     private PtSituationElementRecord baseRecord(String situationNumber) {
@@ -227,6 +229,63 @@ public class SituationGraphQLTests {
                 null, null, null, null, null, null, null, null, null, null, true, null, null, null);
 
         assertEquals(2, situations.size());
+    }
+
+    /**
+     * Exercises the real {@code Query.getSituations} wiring at Query.java:179 rather than
+     * calling {@code SituationFilter} directly: {@code stopRef} is resolved via
+     * {@code nsrService.expandWithAncestors}, which unions the queried ref with its ancestors.
+     * {@code ancestorsOf} is stubbed to its true semantics here too ({@code NSR:StopPlace:451}
+     * only, without the ref itself) rather than left unstubbed - Mockito's default answer for
+     * an unstubbed {@code Set}-returning method is an empty set, which (via the Finding 3
+     * normalisation of an empty {@code stopRefs} to "no filter") would make swapping the call
+     * site to {@code ancestorsOf} fail for the wrong reason: every situation in the shared
+     * repository coming back, rather than the quay-tagged one specifically going missing.
+     * <p>
+     * Two situations are tagged: one directly on the queried quay, one only on the stop place
+     * above it. Both must come back - that union is exactly what distinguishes
+     * {@code expandWithAncestors} from {@code ancestorsOf}, which omits the queried ref itself
+     * and would silently drop the quay-tagged situation while still returning the other one.
+     */
+    @Test
+    public void testFilterByStopRefResolvesThroughAncestors() {
+        PtSituationElementRecord atQuay = baseRecord("TST:SituationNumber:at-quay");
+        atQuay.setProgress("PUBLISHED");
+        atQuay.setSeverity("SEVERE");
+        atQuay.setAffects(stopPointAffects("NSR:Quay:749"));
+        repository.add(atQuay);
+
+        PtSituationElementRecord atAncestor = baseRecord("TST:SituationNumber:at-ancestor");
+        atAncestor.setProgress("PUBLISHED");
+        atAncestor.setSeverity("SEVERE");
+        atAncestor.setAffects(stopPointAffects("NSR:StopPlace:451"));
+        repository.add(atAncestor);
+
+        NSRService ancestorAwareNsrService = Mockito.mock(NSRService.class);
+        Mockito.when(ancestorAwareNsrService.ancestorsOf("NSR:Quay:749"))
+                .thenReturn(Set.of("NSR:StopPlace:451"));
+        Mockito.when(ancestorAwareNsrService.expandWithAncestors("NSR:Quay:749"))
+                .thenReturn(Set.of("NSR:Quay:749", "NSR:StopPlace:451"));
+
+        Query ancestorQueryService = new Query(null, null, repository, ancestorAwareNsrService, metricsService);
+
+        Collection<SituationUpdate> situations = ancestorQueryService.getSituations(
+                null, null, null, null, "NSR:Quay:749", null, null, null, null, null, null, null, null, null);
+
+        assertEquals(
+                Set.of("TST:SituationNumber:at-quay", "TST:SituationNumber:at-ancestor"),
+                situations.stream().map(SituationUpdate::getSituationNumber).collect(Collectors.toSet()));
+    }
+
+    private AffectsRecord stopPointAffects(String stopRef) {
+        AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+        stopPoint.setStopPointRef(stopRef);
+        stopPoint.setStopPointNames(List.of());
+        stopPoint.setStopConditions(List.of());
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setStopPoints(List.of(stopPoint));
+        return affects;
     }
 
     /**

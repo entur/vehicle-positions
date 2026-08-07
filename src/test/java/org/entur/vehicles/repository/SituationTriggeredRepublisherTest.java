@@ -57,7 +57,7 @@ public class SituationTriggeredRepublisherTest {
         registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         metricsService = new PrometheusMetricsService(registry);
         republisher = new SituationTriggeredRepublisher(metricsService, timetableMap,
-                new EstimatedTimetableUpdateRxPublisher(), 100, Duration.ofMillis(1), DEFAULT_THRESHOLD);
+                new EstimatedTimetableUpdateRxPublisher(), 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
     }
 
     /** A filter that matches everything, with the small buffer the publisher requires. */
@@ -230,7 +230,7 @@ public class SituationTriggeredRepublisherTest {
     public void testRepublishesAffectedJourneysToSubscribers() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
         EstimatedTimetableUpdate affected =
                 storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
@@ -255,7 +255,7 @@ public class SituationTriggeredRepublisherTest {
     public void testLargeFanOutIsEmittedInChunksRatherThanOneBurst() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
         for (int i = 0; i < 250; i++) {
             storeJourney("TST:Line:1", "TST:ServiceJourney:" + i, "TST:DatedServiceJourney:" + i, "NSR:Quay:1");
@@ -282,7 +282,7 @@ public class SituationTriggeredRepublisherTest {
     public void testHandOffEventuallyRunsAScan() throws Exception {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
         republisher.start();
 
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
@@ -322,7 +322,7 @@ public class SituationTriggeredRepublisherTest {
     public void testChunkSizeZeroFallsBackAndEmitsEveryCandidateExactlyOnce() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 0, Duration.ofMillis(1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 0, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
         storeJourney("TST:Line:1", "TST:ServiceJourney:2", "TST:DatedServiceJourney:2", "NSR:Quay:1");
@@ -608,7 +608,7 @@ public class SituationTriggeredRepublisherTest {
     public void testChunkDelayNegativeFallsBackToDefault() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 1, Duration.ofSeconds(-1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 1, Duration.ofSeconds(-1), DEFAULT_THRESHOLD, ref -> Set.of());
 
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
         storeJourney("TST:Line:1", "TST:ServiceJourney:2", "TST:DatedServiceJourney:2", "NSR:Quay:1");
@@ -643,7 +643,7 @@ public class SituationTriggeredRepublisherTest {
     public void testChunkDelayAboveMaximumFallsBackToDefault() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 1, Duration.ofMinutes(1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 1, Duration.ofMinutes(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
         storeJourney("TST:Line:1", "TST:ServiceJourney:2", "TST:DatedServiceJourney:2", "NSR:Quay:1");
@@ -670,7 +670,7 @@ public class SituationTriggeredRepublisherTest {
     public void testLargeFanoutCrossingThresholdStillEmitsEveryCandidate() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 100, Duration.ofMillis(1), 2);
+                timetableMap, etPublisher, 100, Duration.ofMillis(1), 2, ref -> Set.of());
 
         for (int i = 0; i < 5; i++) {
             storeJourney("TST:Line:1", "TST:ServiceJourney:" + i, "TST:DatedServiceJourney:" + i, "NSR:Quay:1");
@@ -703,7 +703,7 @@ public class SituationTriggeredRepublisherTest {
     public void testLargeFanoutThresholdNonPositiveFallsBackToDefaultAndStillEmits() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 100, Duration.ofMillis(1), 0);
+                timetableMap, etPublisher, 100, Duration.ofMillis(1), 0, ref -> Set.of());
 
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
         Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
@@ -730,7 +730,7 @@ public class SituationTriggeredRepublisherTest {
         Mockito.when(etPublisher.currentSubscribers()).thenReturn(1, 1, 0);
 
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 1, Duration.ofMillis(1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 1, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
         storeJourney("TST:Line:1", "TST:ServiceJourney:2", "TST:DatedServiceJourney:2", "NSR:Quay:1");
@@ -749,7 +749,7 @@ public class SituationTriggeredRepublisherTest {
     public void testScanRepublishAndChunkCountsAreAlsoRecordedOnPrometheusMetricsService() {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
-                timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD);
+                timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
         storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
         Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
@@ -779,5 +779,34 @@ public class SituationTriggeredRepublisherTest {
         // SX ingest must never be broken by a republishing failure - a situation that fails to
         // trigger a republish is still stored and still reaches the situations subscription.
         republisher.onSituationChanged(null, current);
+    }
+
+    @Test
+    public void testFindsAJourneyByAnAncestorOfItsCalledAtStop() {
+        EstimatedTimetableUpdate journey = storeJourney(
+                "VYG:Line:1", "VYG:ServiceJourney:80808_548292-R",
+                "VYG:DatedServiceJourney:80808_548292-R", "NSR:Quay:749");
+
+        SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(
+                metricsService, timetableMap, new EstimatedTimetableUpdateRxPublisher(),
+                100, Duration.ofMillis(1), DEFAULT_THRESHOLD,
+                ref -> "NSR:Quay:749".equals(ref) ? Set.of("NSR:StopPlace:451") : Set.of());
+
+        assertThat(republisher.findAffected(Set.of("NSR:StopPlace:451")))
+                .withFailMessage("a situation on a stop place must republish the journeys calling "
+                        + "at its quays, or the join works on a query but never reaches a subscriber")
+                .containsExactly(journey);
+    }
+
+    @Test
+    public void testDoesNotFindAJourneyByAnUnrelatedAncestor() {
+        storeJourney("VYG:Line:1", "VYG:ServiceJourney:1", "VYG:DatedServiceJourney:1", "NSR:Quay:749");
+
+        SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(
+                metricsService, timetableMap, new EstimatedTimetableUpdateRxPublisher(),
+                100, Duration.ofMillis(1), DEFAULT_THRESHOLD,
+                ref -> "NSR:Quay:749".equals(ref) ? Set.of("NSR:StopPlace:451") : Set.of());
+
+        assertThat(republisher.findAffected(Set.of("NSR:StopPlace:999"))).isEmpty();
     }
 }

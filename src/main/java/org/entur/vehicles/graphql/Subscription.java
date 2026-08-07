@@ -14,6 +14,7 @@ import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher
 import org.entur.vehicles.graphql.publishers.SituationUpdateRxPublisher;
 import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.NSRService;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,16 +35,19 @@ class Subscription {
     private final VehicleUpdateRxPublisher vehicleUpdater;
     private final EstimatedTimetableUpdateRxPublisher timetableUpdater;
     private final SituationUpdateRxPublisher situationUpdater;
+    private final NSRService nsrService;
 
     PrometheusMetricsService metricsService;
 
     Subscription(VehicleUpdateRxPublisher vehicleUpdater,
                  EstimatedTimetableUpdateRxPublisher timetableUpdater,
                  SituationUpdateRxPublisher situationUpdater,
+                 NSRService nsrService,
                  PrometheusMetricsService metricsService) {
         this.vehicleUpdater = vehicleUpdater;
         this.timetableUpdater = timetableUpdater;
         this.situationUpdater = situationUpdater;
+        this.nsrService = nsrService;
         this.metricsService = metricsService;
     }
 
@@ -172,7 +176,7 @@ class Subscription {
                 codespaceId,
                 operatorRef,
                 lineRef,
-                stopRef,
+                stopRef == null ? null : nsrService.expandWithAncestors(stopRef),
                 serviceJourneyId,
                 datedServiceJourneyId,
                 mode,

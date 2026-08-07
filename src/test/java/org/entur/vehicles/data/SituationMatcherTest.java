@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -313,5 +314,87 @@ public class SituationMatcherTest {
         assertThat(matcher.match(timetable("TST:Line:1", "TST:ServiceJourney:1",
                 call("NSR:Quay:1", noon, noon.plusMinutes(1)),
                 call("NSR:Quay:2", noon.plusMinutes(30), noon.plusMinutes(31))))).hasSize(1);
+    }
+
+    /** The reported production case: BNR:SituationNumber:1234-1234 on NSR:StopPlace:451. */
+    @Test
+    public void testStopPlaceSituationAttachesToTheCallAtItsQuay() {
+        SituationUpdate atStopPlace = situation("BNR:SituationNumber:1234-1234");
+        atStopPlace.getAffects().addStopPoint(new StopPoint("NSR:StopPlace:451"));
+
+        SituationMatcher matcher = new SituationMatcher(
+                List.of(atStopPlace),
+                ref -> "NSR:Quay:749".equals(ref) ? Set.of("NSR:StopPlace:451") : Set.of());
+
+        Call call = call("NSR:Quay:749", noon, noon.plusMinutes(1));
+
+        assertThat(matcher.match(call))
+                .withFailMessage("a situation tagged on a stop place must reach the calls at its quays")
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("BNR:SituationNumber:1234-1234");
+    }
+
+    @Test
+    public void testSituationOnAMultimodalParentReachesTheQuay() {
+        SituationUpdate atParent = situation("TST:SituationNumber:multimodal");
+        atParent.getAffects().addStopPoint(new StopPoint("NSR:StopPlace:999"));
+
+        SituationMatcher matcher = new SituationMatcher(
+                List.of(atParent),
+                ref -> "NSR:Quay:749".equals(ref)
+                        ? Set.of("NSR:StopPlace:451", "NSR:StopPlace:999")
+                        : Set.of());
+
+        assertThat(matcher.match(call("NSR:Quay:749", noon, noon.plusMinutes(1))))
+                .withFailMessage("resolution must climb past the immediate stop place")
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:multimodal");
+    }
+
+    @Test
+    public void testSituationNamingBothQuayAndStopPlaceAppearsOnce() {
+        SituationUpdate both = situation("TST:SituationNumber:both");
+        both.getAffects().addStopPoint(new StopPoint("NSR:Quay:749"));
+        both.getAffects().addStopPoint(new StopPoint("NSR:StopPlace:451"));
+
+        SituationMatcher matcher = new SituationMatcher(
+                List.of(both),
+                ref -> "NSR:Quay:749".equals(ref) ? Set.of("NSR:StopPlace:451") : Set.of());
+
+        assertThat(matcher.match(call("NSR:Quay:749", noon, noon.plusMinutes(1))))
+                .withFailMessage("matching by two routes must not list the situation twice")
+                .hasSize(1);
+    }
+
+    /**
+     * Ancestor resolution must not weaken the per-call temporal rule, which is the reason
+     * stop matching is safe to do at all.
+     */
+    @Test
+    public void testAnAncestorMatchIsStillTestedAgainstTheCallsWindow() {
+        SituationUpdate untilNoon = situation("TST:SituationNumber:lapsed",
+                new ValidityPeriod(noon.minusHours(3), noon));
+        untilNoon.getAffects().addStopPoint(new StopPoint("NSR:StopPlace:451"));
+
+        SituationMatcher matcher = new SituationMatcher(
+                List.of(untilNoon),
+                ref -> "NSR:Quay:749".equals(ref) ? Set.of("NSR:StopPlace:451") : Set.of());
+
+        assertThat(matcher.match(call("NSR:Quay:749", noon.plusMinutes(30), noon.plusMinutes(31))))
+                .withFailMessage("a stop place message ending at 12:00 must not attach to a call at 12:30")
+                .isEmpty();
+    }
+
+    @Test
+    public void testWithoutAResolverMatchingStaysLiteral() {
+        SituationUpdate atStopPlace = situation("TST:SituationNumber:stopplace");
+        atStopPlace.getAffects().addStopPoint(new StopPoint("NSR:StopPlace:451"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(atStopPlace));
+
+        assertThat(matcher.match(call("NSR:Quay:749", noon, noon.plusMinutes(1))))
+                .withFailMessage("with NSR lookup disabled there is no hierarchy, so matching must "
+                        + "fall back to literal stop ids exactly as it does today")
+                .isEmpty();
     }
 }

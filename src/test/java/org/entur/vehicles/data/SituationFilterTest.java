@@ -15,6 +15,7 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,7 +55,8 @@ public class SituationFilterTest {
                                    String serviceJourneyId, VehicleModeEnumeration mode,
                                    SeverityEnumeration severity, Boolean validNow, Boolean openEnded,
                                    Duration minAge, Boolean includeClosed) {
-        return new SituationFilter(null, MetricType.QUERY, null, codespaceId, operatorRef, lineRef, stopRef,
+        return new SituationFilter(null, MetricType.QUERY, null, codespaceId, operatorRef, lineRef,
+                stopRef == null ? null : Set.of(stopRef),
                 serviceJourneyId, null, mode, severity, null, validNow, openEnded, minAge, includeClosed,
                 null, null);
     }
@@ -213,5 +215,105 @@ public class SituationFilterTest {
                 null, null, null, null, null, null, null, null, null, null, 5, 100);
         assertTrue(explicit.getBufferSize() == 5);
         assertTrue(explicit.getBufferTimeMillis() == 100);
+    }
+
+    @Test
+    void testMatchesASituationTaggedOnAnAncestorOfTheQueriedRef() {
+        SituationUpdate atStopPlace = new SituationUpdate();
+        atStopPlace.setSituationNumber("BNR:SituationNumber:1234-1234");
+        atStopPlace.setAffects(new Affects());
+        atStopPlace.getAffects().addStopPoint(new StopPoint("NSR:StopPlace:451"));
+
+        SituationFilter filter = new SituationFilter(
+                null, MetricType.QUERY, null, null, null, null,
+                Set.of("NSR:Quay:749", "NSR:StopPlace:451"),
+                null, null, null, null, null, null, null, null, true, null, null);
+
+        assertThat(filter.isMatch(atStopPlace))
+                .withFailMessage("asking for a quay must also find situations on the stop place above it")
+                .isTrue();
+    }
+
+    @Test
+    void testDoesNotDescendFromAStopPlaceToItsQuays() {
+        SituationUpdate atQuay = new SituationUpdate();
+        atQuay.setSituationNumber("TST:SituationNumber:quay-only");
+        atQuay.setAffects(new Affects());
+        atQuay.getAffects().addStopPoint(new StopPoint("NSR:Quay:749"));
+
+        // Expanding a stop place yields the stop place and anything above it - never its quays.
+        SituationFilter filter = new SituationFilter(
+                null, MetricType.QUERY, null, null, null, null,
+                Set.of("NSR:StopPlace:451"),
+                null, null, null, null, null, null, null, null, true, null, null);
+
+        assertThat(filter.isMatch(atQuay))
+                .withFailMessage("resolution climbs, never descends - asserting the non-goal so a "
+                        + "later change cannot widen the contract silently")
+                .isFalse();
+    }
+
+    @Test
+    void testAStopPlaceQueryStillClimbsToItsMultimodalParent() {
+        SituationUpdate atParent = new SituationUpdate();
+        atParent.setSituationNumber("TST:SituationNumber:multimodal");
+        atParent.setAffects(new Affects());
+        atParent.getAffects().addStopPoint(new StopPoint("NSR:StopPlace:999"));
+
+        // Expanding NSR:StopPlace:451 yields itself plus the multimodal parent above it.
+        SituationFilter filter = new SituationFilter(
+                null, MetricType.QUERY, null, null, null, null,
+                Set.of("NSR:StopPlace:451", "NSR:StopPlace:999"),
+                null, null, null, null, null, null, null, null, true, null, null);
+
+        assertThat(filter.isMatch(atParent))
+                .withFailMessage("climbing is uniform - a stop place resolves to its own ancestors "
+                        + "too, not just quays. A rule with an exception is what a later change "
+                        + "gets quietly wrong.")
+                .isTrue();
+    }
+
+    @Test
+    void testANullStopRefSetStillMeansNoStopFilter() {
+        SituationUpdate anywhere = new SituationUpdate();
+        anywhere.setSituationNumber("TST:SituationNumber:anywhere");
+        anywhere.setAffects(new Affects());
+        anywhere.getAffects().addLine(new Line("TST:Line:1"));
+
+        SituationFilter filter = new SituationFilter(
+                null, MetricType.QUERY, null, null, null, null,
+                null,
+                null, null, null, null, null, null, null, null, true, null, null);
+
+        assertThat(filter.isMatch(anywhere))
+                .withFailMessage("a query with no stopRef must not be filtered by stop at all - "
+                        + "treating an absent filter as 'match nothing' would empty every "
+                        + "unfiltered situations query")
+                .isTrue();
+    }
+
+    /**
+     * An empty (as opposed to null) stopRefs set can only arise from a caller expanding a
+     * null ref without the ternary both current call sites use - e.g. a future
+     * {@code nsrService.expandWithAncestors(stopRef)} written directly. The constructor
+     * normalises that to null, so it must mean "no stop filter", never "match nothing".
+     */
+    @Test
+    void testAnEmptyStopRefSetAlsoMeansNoStopFilter() {
+        SituationUpdate anywhere = new SituationUpdate();
+        anywhere.setSituationNumber("TST:SituationNumber:anywhere-empty");
+        anywhere.setAffects(new Affects());
+        anywhere.getAffects().addLine(new Line("TST:Line:1"));
+
+        SituationFilter filter = new SituationFilter(
+                null, MetricType.QUERY, null, null, null, null,
+                Set.of(),
+                null, null, null, null, null, null, null, null, true, null, null);
+
+        assertThat(filter.isMatch(anywhere))
+                .withFailMessage("an empty stopRefs set must be normalised the same as null - "
+                        + "reading it as 'match nothing' would silently empty every unfiltered "
+                        + "situations query a future caller writes without the null ternary")
+                .isTrue();
     }
 }
