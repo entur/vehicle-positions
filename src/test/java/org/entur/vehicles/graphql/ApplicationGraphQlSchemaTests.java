@@ -9,8 +9,11 @@ import org.entur.avro.realtime.siri.model.AffectsRecord;
 import org.entur.avro.realtime.siri.model.EstimatedCallRecord;
 import org.entur.avro.realtime.siri.model.EstimatedVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
+import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
+import org.entur.vehicles.service.NSRService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivestreams.Publisher;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.graphql.ExecutionGraphQlResponse;
 import org.springframework.graphql.ExecutionGraphQlService;
 import org.springframework.graphql.support.DefaultExecutionGraphQlRequest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -28,14 +32,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * No test anywhere in this suite previously booted a Spring context, so nothing verified
@@ -99,6 +107,36 @@ class ApplicationGraphQlSchemaTests {
     private static final String REPUBLISH_DSJ = "TST:DatedServiceJourney:republish-probe";
     private static final String REPUBLISH_QUAY = "NSR:Quay:republish-probe";
     private static final String REPUBLISH_SITUATION = "TST:SituationNumber:republish-probe";
+
+    private static final String QUAY_ANCESTOR_LINE = "TST:Line:ancestor-probe";
+    private static final String QUAY_ANCESTOR_DSJ = "TST:DatedServiceJourney:ancestor-probe";
+    private static final String QUAY_ANCESTOR_QUAY = "NSR:Quay:ancestor-probe";
+    private static final String QUAY_ANCESTOR_STOP_PLACE = "NSR:StopPlace:ancestor-probe";
+    private static final String QUAY_ANCESTOR_SITUATION = "TST:SituationNumber:ancestor-probe";
+
+    /**
+     * NSR lookup is disabled in the test context, so the real hierarchy is empty and this test
+     * has to supply one. It replaces NSRService with a stub whose only knowledge is that the
+     * probe quay sits under the probe stop place - which is exactly the relationship under test.
+     */
+    @MockitoBean
+    private NSRService nsrService;
+
+    /**
+     * Every other test in this class was written against the real (disabled) NSRService, whose
+     * fallback behaviour is {@code getStop(ref) -> new StopPoint(ref)} and
+     * {@code ancestorsOf(ref) -> Set.of()}. {@code @MockitoBean} substitutes a bare mock for the
+     * whole class - resetting its stubbing after every test, not restoring the original bean -
+     * so without reinstating that fallback here, every other test's call-level stop resolution
+     * would silently start returning null. Individual tests (see
+     * {@link #aSituationOnAStopPlaceReachesTheCallAtItsQuay}) layer more specific stubbing on
+     * top, which Mockito prefers over this default.
+     */
+    @BeforeEach
+    void stubNsrServiceDefaults() {
+        when(nsrService.getStop(anyString())).thenAnswer(i -> new StopPoint(i.getArgument(0)));
+        when(nsrService.ancestorsOf(anyString())).thenReturn(Set.of());
+    }
 
     @Test
     void contextLoads() {
@@ -556,6 +594,40 @@ class ApplicationGraphQlSchemaTests {
         } finally {
             subscription.dispose();
         }
+    }
+
+    @Test
+    void aSituationOnAStopPlaceReachesTheCallAtItsQuay() {
+        when(nsrService.ancestorsOf(QUAY_ANCESTOR_QUAY)).thenReturn(Set.of(QUAY_ANCESTOR_STOP_PLACE));
+        when(nsrService.ancestorsOf(argThat(ref -> !QUAY_ANCESTOR_QUAY.equals(ref)))).thenReturn(Set.of());
+        when(nsrService.getStop(anyString())).thenAnswer(i -> new StopPoint(i.getArgument(0)));
+
+        situationRepository.add(situationAffectingStop(QUAY_ANCESTOR_SITUATION, QUAY_ANCESTOR_STOP_PLACE));
+        timetableRepository.add(journeyCallingAt(QUAY_ANCESTOR_LINE, QUAY_ANCESTOR_DSJ, QUAY_ANCESTOR_QUAY));
+
+        String document = """
+                query {
+                  timetables(lineRef: "%s") {
+                    calls {
+                      stopPoint { id }
+                      situations { situationNumber }
+                    }
+                  }
+                }
+                """.formatted(QUAY_ANCESTOR_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-ancestor", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        List<String> callSituations =
+                situationNumbersOf(response.field("timetables[0].calls[0].situations").getValue());
+        assertThat(callSituations)
+                .withFailMessage("a situation tagged on NSR:StopPlace must appear on the call at its quay")
+                .containsExactly(QUAY_ANCESTOR_SITUATION);
     }
 
     /** Flattens the situationNumbers across every call of a timetable in a subscription payload. */

@@ -6,6 +6,7 @@ import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.Call;
 import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.NSRService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 /**
  * Republishes stored estimated timetables when a situation affecting them changes.
@@ -55,6 +57,7 @@ public class SituationTriggeredRepublisher {
     private final int chunkSize;
     private final Duration chunkDelay;
     private final int largeFanoutThreshold;
+    private final Function<String, Set<String>> ancestorResolver;
 
     // Refs accumulate here while the worker is busy; the worker takes the whole set at once,
     // so a burst of situation changes costs one scan. A set has no capacity and therefore no
@@ -69,16 +72,35 @@ public class SituationTriggeredRepublisher {
     private volatile Thread worker;
     private volatile boolean running;
 
+    @Autowired
     public SituationTriggeredRepublisher(
             @Autowired PrometheusMetricsService metricsService,
             @Autowired AutoPurgingTimetableMap timetableMap,
             @Autowired EstimatedTimetableUpdateRxPublisher etPublisher,
             @Value("${vehicle.sx.republish.chunk.size:100}") int chunkSize,
             @Value("${vehicle.sx.republish.chunk.delay:PT0.05S}") Duration chunkDelay,
-            @Value("${vehicle.sx.republish.large.fanout.threshold:2000}") int largeFanoutThreshold) {
+            @Value("${vehicle.sx.republish.large.fanout.threshold:2000}") int largeFanoutThreshold,
+            @Autowired NSRService nsrService) {
+        this(metricsService, timetableMap, etPublisher, chunkSize, chunkDelay, largeFanoutThreshold,
+                nsrService::ancestorsOf);
+    }
+
+    /**
+     * Test-only overload: supplies the ancestor hierarchy directly, without a Spring context or
+     * a real {@link NSRService}.
+     */
+    SituationTriggeredRepublisher(
+            PrometheusMetricsService metricsService,
+            AutoPurgingTimetableMap timetableMap,
+            EstimatedTimetableUpdateRxPublisher etPublisher,
+            int chunkSize,
+            Duration chunkDelay,
+            int largeFanoutThreshold,
+            Function<String, Set<String>> ancestorResolver) {
         this.metricsService = metricsService;
         this.timetableMap = timetableMap;
         this.etPublisher = etPublisher;
+        this.ancestorResolver = ancestorResolver;
         // chunkSize < 1 would never advance `from` in the emission loop in republishNow(),
         // spinning forever while sleeping chunkDelay each pass; negative also throws out of
         // subList(from, to). Both are configuration mistakes, not states worth honouring.
@@ -438,7 +460,7 @@ public class SituationTriggeredRepublisher {
         return affected;
     }
 
-    private static boolean isAffected(EstimatedTimetableUpdate timetable, Set<String> refs) {
+    private boolean isAffected(EstimatedTimetableUpdate timetable, Set<String> refs) {
         if (timetable.getLine() != null && refs.contains(timetable.getLine().getLineRef())) {
             return true;
         }
@@ -452,9 +474,32 @@ public class SituationTriggeredRepublisher {
         List<Call> calls = timetable.getCalls();
         if (calls != null) {
             for (Call call : calls) {
-                if (call.getStopPoint() != null && refs.contains(call.getStopPoint().getId())) {
+                if (call.getStopPoint() != null && touchesStop(refs, call.getStopPoint().getId())) {
                     return true;
                 }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether the situation's refs name this stop or any ancestor above it - the stop place
+     * that owns the quay, or a multimodal parent above that.
+     * <p>
+     * Uses {@code ancestorsOf} rather than {@code expandWithAncestors} deliberately: this runs
+     * for every call of every stored journey on every situation change, and the former returns
+     * the stored set while the latter allocates a new one per call.
+     */
+    private boolean touchesStop(Set<String> refs, String stopId) {
+        if (stopId == null) {
+            return false;
+        }
+        if (refs.contains(stopId)) {
+            return true;
+        }
+        for (String ancestor : ancestorResolver.apply(stopId)) {
+            if (refs.contains(ancestor)) {
+                return true;
             }
         }
         return false;

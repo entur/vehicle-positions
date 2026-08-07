@@ -146,6 +146,18 @@ journey keeps the situation.
 A situation naming several of the journey's stops is reported against every one of them, so a
 client can mark each affected stop. Closed situations are never attached.
 
+A situation tagged on a StopPlace also reaches the calls at that stop place's quays. In NeTEx a
+StopPlace is the parent object and the timetable references its Quays, so a message about a station
+as a whole is matched against every platform beneath it — including when it is tagged on a
+multimodal parent above the stop place.
+
+The same applies when filtering the `situations` feed: `stopRef: "NSR:Quay:749"` returns situations
+tagged on that quay, on the stop place above it, and on any multimodal parent above that.
+
+Resolution only ever climbs. `stopRef: "NSR:StopPlace:451"` returns situations naming that stop
+place or a parent above it, but **not** ones naming its individual quays — so use a quay ref when
+you want everything affecting a specific platform.
+
 A `timetables` subscription is also told when a situation affecting one of its journeys changes,
 even if the journey's own timetable data has not. The affected journeys are re-sent on the normal
 stream, identical in shape to any other update, so no special client handling is needed — apply
