@@ -3,13 +3,18 @@ package org.entur.vehicles.graphql;
 import org.entur.vehicles.data.EstimatedTimetableUpdate;
 import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.QueryFilter;
+import org.entur.vehicles.data.SeverityEnumeration;
+import org.entur.vehicles.data.SituationFilter;
+import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.model.BoundingBox;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
+import org.entur.vehicles.graphql.publishers.SituationUpdateRxPublisher;
 import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.NSRService;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,14 +34,20 @@ class Subscription {
 
     private final VehicleUpdateRxPublisher vehicleUpdater;
     private final EstimatedTimetableUpdateRxPublisher timetableUpdater;
+    private final SituationUpdateRxPublisher situationUpdater;
+    private final NSRService nsrService;
 
     PrometheusMetricsService metricsService;
 
     Subscription(VehicleUpdateRxPublisher vehicleUpdater,
                  EstimatedTimetableUpdateRxPublisher timetableUpdater,
+                 SituationUpdateRxPublisher situationUpdater,
+                 NSRService nsrService,
                  PrometheusMetricsService metricsService) {
         this.vehicleUpdater = vehicleUpdater;
         this.timetableUpdater = timetableUpdater;
+        this.situationUpdater = situationUpdater;
+        this.nsrService = nsrService;
         this.metricsService = metricsService;
     }
 
@@ -137,5 +148,48 @@ class Subscription {
         );
         LOG.debug("Creating new subscription with filter: {}", filter);
         return timetableUpdater.getPublisher(filter, uuid);
+    }
+
+    @SubscriptionMapping
+    Publisher<List<SituationUpdate>> situations(@Argument Set<String> situationNumbers,
+                                                @Argument String codespaceId,
+                                                @Argument String operatorRef,
+                                                @Argument String lineRef,
+                                                @Argument String stopRef,
+                                                @Argument String serviceJourneyId,
+                                                @Argument String datedServiceJourneyId,
+                                                @Argument VehicleModeEnumeration mode,
+                                                @Argument SeverityEnumeration severity,
+                                                @Argument String reportType,
+                                                @Argument Boolean validNow,
+                                                @Argument Boolean openEnded,
+                                                @Argument Duration minAge,
+                                                @Argument Boolean includeClosed,
+                                                @Argument Integer bufferSize,
+                                                @Argument Integer bufferTime) {
+        final String uuid = UUID.randomUUID().toString();
+
+        final SituationFilter filter = new SituationFilter(
+                metricsService,
+                MetricType.SUBSCRIPTION,
+                situationNumbers,
+                codespaceId,
+                operatorRef,
+                lineRef,
+                stopRef == null ? null : nsrService.expandWithAncestors(stopRef),
+                serviceJourneyId,
+                datedServiceJourneyId,
+                mode,
+                severity,
+                reportType,
+                validNow,
+                openEnded,
+                minAge,
+                includeClosed,
+                bufferSize,
+                bufferTime
+        );
+        LOG.debug("Creating new situation-subscription with filter: {}", filter);
+        return situationUpdater.getPublisher(filter, uuid);
     }
 }

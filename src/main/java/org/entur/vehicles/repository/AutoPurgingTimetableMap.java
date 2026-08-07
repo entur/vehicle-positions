@@ -10,7 +10,7 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 
 @Component
-public class AutoPurgingTimetableMap extends AutoPurgingMap<EstimatedTimetableUpdate> {
+public class AutoPurgingTimetableMap extends AutoPurgingMap<StorageKey, EstimatedTimetableUpdate> {
 
     private static final Logger LOG = LoggerFactory.getLogger(AutoPurgingTimetableMap.class);
 
@@ -20,7 +20,7 @@ public class AutoPurgingTimetableMap extends AutoPurgingMap<EstimatedTimetableUp
         super(purgeInterval, gracePeriod);
     }
 
-    public void removeExpiredVehicles() {
+    public void removeExpiredEntries() {
         long before = System.currentTimeMillis();
 
         int sizeBefore = this.size();

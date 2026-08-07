@@ -41,6 +41,26 @@ type Query {
         monitored: Boolean
         cancellation: Boolean) : [EstimatedTimetableUpdate] @deprecated(reason: "Experimental.")
 
+    situations(
+        situationNumbers: [String]
+        codespaceId: String
+        operatorRef: String
+        lineRef: String
+        # Matches affected stop points and stop places alike.
+        stopRef: String
+        serviceJourneyId: String
+        datedServiceJourneyId: String
+        mode: VehicleModeEnumeration
+        severity: SeverityEnumeration
+        reportType: String
+        # When true, only situations that are valid at the time of the request.
+        validNow: Boolean
+        # When true, only situations where no validity period carries an end time.
+        openEnded: Boolean
+        # Only situations created longer ago than this, as Duration (e.g. `P30D`).
+        minAge: Duration
+        includeClosed: Boolean = false) : [Situation]
+
     lines(codespaceId: String) : [Line]
 
     codespaces : [Codespace]
@@ -89,6 +109,32 @@ type Subscription {
         bufferSize: Int = 20
         # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
         bufferTime: Int = 250) : [EstimatedTimetableUpdate] @deprecated(reason: "Experimental.")
+
+    situations(
+        situationNumbers: [String]
+        codespaceId: String
+        operatorRef: String
+        lineRef: String
+        # Matches affected stop points and stop places alike.
+        stopRef: String
+        serviceJourneyId: String
+        datedServiceJourneyId: String
+        mode: VehicleModeEnumeration
+        severity: SeverityEnumeration
+        reportType: String
+        validNow: Boolean
+        openEnded: Boolean
+        minAge: Duration
+        # Defaults to true here (unlike Query.situations, which defaults to false):
+        # a live subscriber needs to observe a situation transitioning to
+        # progress: closed so it can remove it from display. One consequence:
+        # a new subscriber's initial snapshot also includes situations closed
+        # within the grace period, not just live ones.
+        includeClosed: Boolean = true
+        # Number of updates buffered before data is pushed. May be used in combination with bufferTime.
+        bufferSize: Int = 20
+        # How long - in milliseconds - data is buffered before data is pushed. May be used in combination with bufferSize.
+        bufferTime: Int = 250) : [Situation]  @deprecated(reason: "Experimental.")
 }
 
 type VehicleUpdate {
@@ -157,6 +203,12 @@ type EstimatedTimetableUpdate {
     vehicleStatus: VehicleStatusEnumeration
 
     calls: [Call]
+
+    # Situations affecting this journey as a whole: those naming the journey, its dated
+    # journey or its line and overlapping the journey. A situation reported against one of
+    # the journey's calls is not repeated here, so select calls { situations } as well to
+    # see every disruption affecting this journey. Closed situations are never included.
+    situations: [Situation]
 }
 
 type Call {
@@ -180,6 +232,11 @@ type Call {
     departureBoardingActivity: String
     forBoarding: Boolean
     occupancyStatus: OccupancyStatus
+
+    # Situations affecting this stop while the vehicle is here. A situation on a quay that
+    # ends before the vehicle arrives is not included. A situation affecting several of the
+    # journey's stops is reported against every one of them.
+    situations: [Situation]
 }
 
 type Stop {
@@ -251,6 +308,67 @@ input BoundingBox {
     minLon: Float!
     maxLat: Float!
     maxLon: Float!
+}
+
+type Situation {
+    situationNumber: String!
+    participantRef: String
+    codespace: Codespace
+    # The subscription stream is only eventually consistent: two concurrent updates
+    # to the same situation can be published in reverse version order. Clients should
+    # keep the highest version seen per situationNumber and discard a regression.
+    version: Int
+    sourceType: String
+    progress: WorkflowStatusEnumeration
+    severity: SeverityEnumeration
+    priority: Int
+    reportType: String
+    keywords: [String]
+    planned: Boolean
+    creationTime: DateTime
+    versionedAtTime: DateTime
+    validityPeriods: [ValidityPeriod]
+    summary: [TranslatedString]
+    description: [TranslatedString]
+    advice: [TranslatedString]
+    detail: [TranslatedString]
+    infoLinks: [InfoLink]
+    affects: Affects
+    lastUpdated: DateTime
+    lastUpdatedEpochSecond: Float
+    # Null when the situation never expires.
+    expiration: DateTime
+    expirationEpochSecond: Float
+
+    # True when no validity period carries an end time.
+    openEnded: Boolean
+    # Time elapsed since creationTime. Null when creationTime is absent.
+    age: Duration
+}
+
+type Affects {
+    lines: [Line]
+    stopPoints: [Stop]
+    stopPlaces: [Stop]
+    serviceJourneys: [ServiceJourney]
+    datedServiceJourneys: [DatedServiceJourney]
+    operators: [Operator]
+    vehicleModes: [VehicleModeEnumeration]
+}
+
+type ValidityPeriod {
+    startTime: DateTime
+    endTime: DateTime
+}
+
+type TranslatedString {
+    value: String
+    language: String
+}
+
+type InfoLink {
+    uri: String
+    labels: [TranslatedString]
 }
 
 enum VehicleModeEnumeration {
@@ -340,4 +458,25 @@ enum VehicleStatusEnumeration {
 enum CallTypeEnumeration {
     RECORDED
     ESTIMATED
+}
+
+enum WorkflowStatusEnumeration {
+    draft
+    pendingApproval
+    approvedDraft
+    open
+    published
+    closing
+    closed
+}
+
+enum SeverityEnumeration {
+    unknown
+    verySlight
+    slight
+    normal
+    severe
+    verySevere
+    noImpact
+    undefined
 }

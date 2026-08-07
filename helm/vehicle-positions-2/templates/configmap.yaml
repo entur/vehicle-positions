@@ -12,9 +12,14 @@ data:
       entur.vehicle-positions.gcp.subscription.project.name={{.Values.configMap.subscriptionProjectId}}
       entur.vehicle-positions.gcp.subscription.name.vm=${HOSTNAME}-graphql-vm
       entur.vehicle-positions.gcp.subscription.name.et=${HOSTNAME}-graphql-et
+      entur.vehicle-positions.gcp.subscription.name.sx=${HOSTNAME}-graphql-sx
       entur.vehicle-positions.gcp.topic.project.name={{.Values.configMap.topicProjectId}}
       entur.vehicle-positions.gcp.topic.name.vm={{.Values.configMap.topicName.vm}}
       entur.vehicle-positions.gcp.topic.name.et={{.Values.configMap.topicName.et}}
+      # sx: the snapshot URL below and this topic's project must move together - pointing the
+      # snapshot at one environment while the stream reads another's topic merges two
+      # inconsistent datasets into one map.
+      entur.vehicle-positions.gcp.topic.name.sx={{.Values.configMap.topicName.sx}}
       entur.vehicle-positions.gcp.labels={app:'vehicle-positions',team:'ror', slack:'talk-ror', manager:'application'}
       
       # Number of pubsub-streams to open
@@ -54,6 +59,9 @@ data:
 
       entur.vehicle-positions.et.enabled={{ .Values.configMap.etEnabled }}
       entur.vehicle-positions.vm.enabled={{ .Values.configMap.vmEnabled }}
+      entur.vehicle-positions.sx.enabled={{ .Values.configMap.sxEnabled }}
+
+      vehicle.sx.snapshot.url={{ .Values.configMap.sxSnapshotUrl }}
 
       vehicle.nsr.lookup.url=https://storage.googleapis.com/marduk-production/tiamat/CurrentAndFuture_latest.zip
       vehicle.nsr.lookup.enabled=true

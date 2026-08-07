@@ -15,6 +15,7 @@ import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.AutoPurgingVehicleMap;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,7 @@ public class VehicleGraphQLTests {
                 publisher
         );
         publisher = new VehicleUpdateRxPublisher();
-        queryService = new Query(repository, null, metricsService);
+        queryService = new Query(repository, null, null, new NSRService(false, null), metricsService);
 
         VehicleActivityRecord vehicleActivityRecord = new VehicleActivityRecord();
         vehicleActivityRecord.setRecordedAtTime(ZonedDateTime.now().toString());

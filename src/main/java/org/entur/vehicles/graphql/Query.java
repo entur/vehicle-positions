@@ -3,6 +3,9 @@ package org.entur.vehicles.graphql;
 import org.entur.vehicles.data.EstimatedTimetableUpdate;
 import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.QueryFilter;
+import org.entur.vehicles.data.SeverityEnumeration;
+import org.entur.vehicles.data.SituationFilter;
+import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.model.BoundingBox;
@@ -12,8 +15,10 @@ import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
 import org.entur.vehicles.repository.VehicleRepository;
+import org.entur.vehicles.service.NSRService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -31,14 +36,20 @@ class Query {
 
     private final VehicleRepository vehicleRepository;
     private final TimetableRepository timetableRepository;
+    private final SituationRepository situationRepository;
+    private final NSRService nsrService;
 
     PrometheusMetricsService metricsService;
 
     public Query(VehicleRepository vehicleRepository,
                  TimetableRepository timetableRepository,
+                 SituationRepository situationRepository,
+                 NSRService nsrService,
                  PrometheusMetricsService metricsService) {
         this.vehicleRepository = vehicleRepository;
         this.timetableRepository = timetableRepository;
+        this.situationRepository = situationRepository;
+        this.nsrService = nsrService;
         this.metricsService = metricsService;
     }
 
@@ -140,6 +151,51 @@ class Query {
 
         metricsService.markVehicleQuery();
         return vehicles;
+    }
+
+    @QueryMapping(name = "situations")
+    Collection<SituationUpdate> getSituations(@Argument Set<String> situationNumbers,
+                                              @Argument String codespaceId,
+                                              @Argument String operatorRef,
+                                              @Argument String lineRef,
+                                              @Argument String stopRef,
+                                              @Argument String serviceJourneyId,
+                                              @Argument String datedServiceJourneyId,
+                                              @Argument VehicleModeEnumeration mode,
+                                              @Argument SeverityEnumeration severity,
+                                              @Argument String reportType,
+                                              @Argument Boolean validNow,
+                                              @Argument Boolean openEnded,
+                                              @Argument Duration minAge,
+                                              @Argument Boolean includeClosed) {
+
+        final SituationFilter filter = new SituationFilter(
+                metricsService,
+                MetricType.QUERY,
+                situationNumbers,
+                codespaceId,
+                operatorRef,
+                lineRef,
+                stopRef == null ? null : nsrService.expandWithAncestors(stopRef),
+                serviceJourneyId,
+                datedServiceJourneyId,
+                mode,
+                severity,
+                reportType,
+                validNow,
+                openEnded,
+                minAge,
+                includeClosed,
+                null,
+                null
+        );
+        LOG.debug("Requesting situations with filter: {}", filter);
+        final long start = System.currentTimeMillis();
+        final Collection<SituationUpdate> situations = situationRepository.getSituations(filter);
+        LOG.debug("Returning {} situations in {} ms", situations.size(), System.currentTimeMillis() - start);
+
+        metricsService.markSituationsQuery();
+        return situations;
     }
 
     @QueryMapping

@@ -178,4 +178,36 @@ public class Call {
     public String getDepartureBoardingActivity() {
         return departureBoardingActivity;
     }
+
+    /**
+     * Start of the window during which the vehicle is at this stop, resolved
+     * actual -> expected -> aimed. Falls back to the departure side when no arrival time
+     * is known, so a call with a single timestamp is an instant. Null when the call
+     * carries no timestamps at all, meaning an unbounded window.
+     * <p>
+     * Not exposed through GraphQL - the schema declares no such field.
+     */
+    public ZonedDateTime getWindowStart() {
+        ZonedDateTime arrival = firstNonNull(actualArrivalTime, expectedArrivalTime, aimedArrivalTime);
+        return arrival != null
+                ? arrival
+                : firstNonNull(actualDepartureTime, expectedDepartureTime, aimedDepartureTime);
+    }
+
+    /** End of the window during which the vehicle is at this stop. See {@link #getWindowStart()}. */
+    public ZonedDateTime getWindowEnd() {
+        ZonedDateTime departure = firstNonNull(actualDepartureTime, expectedDepartureTime, aimedDepartureTime);
+        return departure != null
+                ? departure
+                : firstNonNull(actualArrivalTime, expectedArrivalTime, aimedArrivalTime);
+    }
+
+    private static ZonedDateTime firstNonNull(ZonedDateTime... candidates) {
+        for (ZonedDateTime candidate : candidates) {
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
 }
