@@ -5,6 +5,7 @@ import org.entur.vehicles.data.SituationMatcher;
 import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.model.Call;
 import org.entur.vehicles.repository.SituationRepository;
+import org.entur.vehicles.service.NSRService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.graphql.data.method.annotation.BatchMapping;
 import org.springframework.stereotype.Controller;
@@ -26,9 +27,12 @@ import java.util.List;
 public class SituationJoinController {
 
     private final SituationRepository situationRepository;
+    private final NSRService nsrService;
 
-    public SituationJoinController(@Autowired SituationRepository situationRepository) {
+    public SituationJoinController(@Autowired SituationRepository situationRepository,
+                                   @Autowired NSRService nsrService) {
         this.situationRepository = situationRepository;
+        this.nsrService = nsrService;
     }
 
     /**
@@ -70,6 +74,6 @@ public class SituationJoinController {
     }
 
     private SituationMatcher matcher() {
-        return new SituationMatcher(situationRepository.getSituations(null));
+        return new SituationMatcher(situationRepository.getSituations(null), nsrService::ancestorsOf);
     }
 }

@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Matches situations to estimated timetable data.
@@ -31,7 +32,26 @@ public class SituationMatcher {
     private final Map<String, List<SituationUpdate>> byServiceJourneyId = new HashMap<>();
     private final Map<String, List<SituationUpdate>> byDatedServiceJourneyId = new HashMap<>();
 
+    private final Function<String, Set<String>> ancestorResolver;
+
+    /**
+     * Matches on literal stop ids only. Used where no stop hierarchy is available - which is
+     * every deployment with {@code vehicle.nsr.lookup.enabled=false}, and every unit test that
+     * is not specifically about hierarchy.
+     */
     public SituationMatcher(Collection<SituationUpdate> situations) {
+        this(situations, ref -> Set.of());
+    }
+
+    /**
+     * @param ancestorResolver a ref's ancestors, NOT including the ref itself - typically
+     *                         {@code NSRService::ancestorsOf}. Passed as a function rather than
+     *                         the service so this class stays free of Spring, which is what lets
+     *                         the match rule be unit-tested directly.
+     */
+    public SituationMatcher(Collection<SituationUpdate> situations,
+                            Function<String, Set<String>> ancestorResolver) {
+        this.ancestorResolver = ancestorResolver;
         for (SituationUpdate situation : situations) {
             if (situation.getProgress() != null && situation.getProgress().isClosed()) {
                 continue;
@@ -121,14 +141,22 @@ public class SituationMatcher {
      * <p>
      * A situation naming several of the journey's stops is reported against every one of
      * them, so a client can mark each affected stop.
+     * <p>
+     * A stop is also matched by any ancestor above it - its stop place, and any multimodal
+     * parent above that - because timetable data references quays while a situation may be
+     * tagged on the stop place that owns them. The temporal rule is unchanged: an
+     * ancestor-matched situation is still tested against this call's own window.
      */
     public List<SituationUpdate> match(Call call) {
         if (call.getStopPoint() == null || call.getStopPoint().getId() == null) {
             return List.of();
         }
+        String stopId = call.getStopPoint().getId();
         Map<Identity, SituationUpdate> matched = new LinkedHashMap<>();
-        collect(byStopRef.get(call.getStopPoint().getId()),
-                call.getWindowStart(), call.getWindowEnd(), matched);
+        collect(byStopRef.get(stopId), call.getWindowStart(), call.getWindowEnd(), matched);
+        for (String ancestor : ancestorResolver.apply(stopId)) {
+            collect(byStopRef.get(ancestor), call.getWindowStart(), call.getWindowEnd(), matched);
+        }
         return new ArrayList<>(matched.values());
     }
 
