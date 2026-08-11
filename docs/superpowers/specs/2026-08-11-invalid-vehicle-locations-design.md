@@ -53,7 +53,8 @@ boolean isInvalid(Location location)
   this case does not arise in practice; returning `false` keeps the method total.
 - Matching is exact double equality against the configured set. The three default values
   (`0.0`, `1.0`, `-1.0`) are exactly representable in binary floating point, so no epsilon
-  is required.
+  is required. The single exception is signed zero: `-0.0` is normalised to `0.0` on both
+  sides of the comparison, so a feed reporting `-0.0` still matches a configured `0.0`.
 
 Deliberate trade-off: only the exact configured coordinates are treated as invalid. A new
 variant of the same upstream bug — say `0.0, 0.5` — is not caught until the property is
