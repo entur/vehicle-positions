@@ -9,6 +9,7 @@ import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.OperatorService;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
@@ -36,6 +37,9 @@ public class QueryFilter extends AbstractUpdate {
   private ZonedDateTime maxDataAge;
 
   private MetricType metricType = UNDEFINED;
+
+  private InvalidLocationRegistry invalidLocations;
+  private boolean includeInvalidLocations;
 
   public QueryFilter(
           PrometheusMetricsService metricsService, MetricType metricType,
@@ -103,6 +107,17 @@ public class QueryFilter extends AbstractUpdate {
     }
   }
 
+  /**
+   * Enables filtering of vehicles reported at known-invalid coordinates. Only the vehicle query
+   * and subscription call this; filters that never do - timetables and situations - keep matching
+   * every location.
+   */
+  public QueryFilter withLocationValidity(InvalidLocationRegistry invalidLocations, boolean includeInvalidLocations) {
+    this.invalidLocations = invalidLocations;
+    this.includeInvalidLocations = includeInvalidLocations;
+    return this;
+  }
+
   public int getBufferSize() {
     return bufferSize;
   }
@@ -117,6 +132,9 @@ public class QueryFilter extends AbstractUpdate {
 
     if (boundingBox != null) {
       isCompleteMatch = boundingBox.contains(vehicleUpdate.getLocation());
+    }
+    if (isCompleteMatch && !includeInvalidLocations && invalidLocations != null) {
+      isCompleteMatch = !invalidLocations.isInvalid(vehicleUpdate.getLocation());
     }
     if (isCompleteMatch && serviceJourneys != null) {
       if (vehicleUpdate.getDatedServiceJourney() == null) {
@@ -287,6 +305,7 @@ public class QueryFilter extends AbstractUpdate {
         .add("serviceJourneyIds='" + serviceJourneys + "'")
         .add("vehicleIds='" + vehicleIds + "'")
         .add("boundingBox=" + boundingBox)
+        .add("includeInvalidLocations=" + includeInvalidLocations)
         .add("mode=" + mode)
         .add("bufferSize=" + bufferSize)
         .add("bufferTime=" + bufferTimeMillis)

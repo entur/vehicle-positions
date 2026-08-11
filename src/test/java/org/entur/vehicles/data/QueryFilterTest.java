@@ -2,8 +2,10 @@ package org.entur.vehicles.data;
 
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.Location;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
+import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -185,5 +187,78 @@ class QueryFilterTest {
     );
 
     assertFalse(filterNoMatch.isMatch(update));
+  }
+
+  private static QueryFilter emptyFilter() {
+    return new QueryFilter(
+            null,
+            MetricType.QUERY,
+            null, null, null, null, null, null,
+            null, null,
+            null, null, null, null
+    );
+  }
+
+  private static VehicleUpdate vehicleAt(double latitude, double longitude) {
+    VehicleUpdate update = new VehicleUpdate();
+    // NOTE: Location takes (longitude, latitude) - longitude first.
+    update.setLocation(new Location(longitude, latitude));
+    return update;
+  }
+
+  @Test
+  void testInvalidLocationExcludedByDefault() {
+    InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0");
+    QueryFilter filter = emptyFilter().withLocationValidity(registry, false);
+
+    assertFalse(filter.isMatch(vehicleAt(0.0, 0.0)));
+    assertFalse(filter.isMatch(vehicleAt(-1.0, -1.0)));
+    assertFalse(filter.isMatch(vehicleAt(1.0, 1.0)));
+  }
+
+  @Test
+  void testValidLocationMatchesRegardlessOfFlag() {
+    InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0");
+
+    assertTrue(emptyFilter().withLocationValidity(registry, false).isMatch(vehicleAt(59.911491, 10.757933)));
+    assertTrue(emptyFilter().withLocationValidity(registry, true).isMatch(vehicleAt(59.911491, 10.757933)));
+  }
+
+  @Test
+  void testInvalidLocationIncludedWhenRequested() {
+    InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0");
+    QueryFilter filter = emptyFilter().withLocationValidity(registry, true);
+
+    assertTrue(filter.isMatch(vehicleAt(0.0, 0.0)));
+  }
+
+  @Test
+  void testFilterWithoutLocationValidityIsUnchanged() {
+    // Timetable and situation filters - and every pre-existing test - never call
+    // withLocationValidity, and must keep matching invalid locations.
+    assertTrue(emptyFilter().isMatch(vehicleAt(0.0, 0.0)));
+  }
+
+  @Test
+  void testNullRegistryDisablesTheCheck() {
+    assertTrue(emptyFilter().withLocationValidity(null, false).isMatch(vehicleAt(0.0, 0.0)));
+  }
+
+  @Test
+  void testInvalidLocationExcludedEvenWhenOtherCriteriaMatch() {
+    InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0");
+    QueryFilter filter = new QueryFilter(
+            null,
+            MetricType.QUERY,
+            null, null, null, null, null, null,
+            "TST:Line:123",
+            null,
+            null, null, null, null
+    ).withLocationValidity(registry, false);
+
+    VehicleUpdate update = vehicleAt(0.0, 0.0);
+    update.setLine(new Line("TST:Line:123", "A - B"));
+
+    assertFalse(filter.isMatch(update));
   }
 }
