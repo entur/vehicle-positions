@@ -6,6 +6,7 @@ import org.entur.avro.realtime.siri.model.FramedVehicleJourneyRefRecord;
 import org.entur.avro.realtime.siri.model.LocationRecord;
 import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
+import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
@@ -14,6 +15,7 @@ import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.AutoPurgingVehicleMap;
 import org.entur.vehicles.repository.VehicleRepository;
+import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.ServiceJourneyService;
@@ -23,6 +25,7 @@ import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -51,7 +54,8 @@ public class VehicleGraphQLTests {
                 publisher
         );
         publisher = new VehicleUpdateRxPublisher();
-        queryService = new Query(repository, null, null, new NSRService(false, null), metricsService);
+        queryService = new Query(repository, null, null, new NSRService(false, null), metricsService,
+                new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0"));
 
         VehicleActivityRecord vehicleActivityRecord = new VehicleActivityRecord();
         vehicleActivityRecord.setRecordedAtTime(ZonedDateTime.now().toString());
@@ -152,5 +156,67 @@ public class VehicleGraphQLTests {
         ServiceJourney serviceJourney1 = queryService.serviceJourney("DSJ:DatedServiceJourney:1234567890");
         ServiceJourney dsj_serviceJourney1 = queryService.serviceJourney("DSJ:ServiceJourney:1234567890");
         assertEquals(serviceJourney1, dsj_serviceJourney1);
+    }
+
+    private VehicleActivityRecord createVehicleActivity(String codespace, String vehicleRef, String lineRef,
+                                                        double latitude, double longitude) {
+        VehicleActivityRecord record = new VehicleActivityRecord();
+        record.setRecordedAtTime(ZonedDateTime.now().toString());
+        record.setValidUntilTime(ZonedDateTime.now().plusMinutes(10).toString());
+
+        MonitoredVehicleJourneyRecord journey = new MonitoredVehicleJourneyRecord();
+        journey.setLineRef(lineRef);
+        journey.setVehicleRef(vehicleRef);
+        journey.setMonitored(true);
+        journey.setDataSource(codespace);
+
+        LocationRecord location = new LocationRecord();
+        location.setLatitude(latitude);
+        location.setLongitude(longitude);
+        journey.setVehicleLocation(location);
+
+        record.setMonitoredVehicleJourney(journey);
+        return record;
+    }
+
+    private Collection<VehicleUpdate> queryVehicles(String codespaceId, Boolean includeInvalidLocations) {
+        return queryService.getVehicles(
+                null,   // serviceJourneyId
+                null,   // date
+                null,   // serviceJourneyIdAndDates
+                null,   // datedServiceJourneyId
+                null,   // datedServiceJourneyIds
+                null,   // operatorRef
+                codespaceId,
+                null,   // mode
+                null,   // vehicleId
+                null,   // vehicleIds
+                null,   // lineRef
+                null,   // lineName
+                null,   // monitored
+                null,   // boundingBox
+                null,   // maxDataAge
+                includeInvalidLocations
+        );
+    }
+
+    @Test
+    public void testInvalidLocationsAreExcludedUnlessRequested() {
+        repository.addAll(List.of(
+                createVehicleActivity("INV", "INV:Vehicle:valid", "INV:Line:1", 59.911491, 10.757933),
+                createVehicleActivity("INV", "INV:Vehicle:invalid", "INV:Line:1", 0.0, 0.0)
+        ));
+
+        // Argument omitted by the client - GraphQL applies the schema default of false
+        Collection<VehicleUpdate> defaultResult = queryVehicles("INV", null);
+        assertEquals(1, defaultResult.size());
+        assertEquals("INV:Vehicle:valid", defaultResult.iterator().next().getVehicleId());
+
+        Collection<VehicleUpdate> explicitlyExcluded = queryVehicles("INV", false);
+        assertEquals(1, explicitlyExcluded.size());
+
+        Collection<VehicleUpdate> included = queryVehicles("INV", true);
+        assertEquals(2, included.size());
+        assertTrue(included.stream().anyMatch(v -> "INV:Vehicle:invalid".equals(v.getVehicleId())));
     }
 }

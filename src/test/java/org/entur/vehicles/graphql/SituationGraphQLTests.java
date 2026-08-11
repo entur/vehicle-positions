@@ -87,7 +87,7 @@ public class SituationGraphQLTests {
                 closedSituation()
         ));
 
-        queryService = new Query(null, null, repository, new NSRService(false, null), metricsService);
+        queryService = new Query(null, null, repository, new NSRService(false, null), metricsService, null);
     }
 
     private PtSituationElementRecord baseRecord(String situationNumber) {
@@ -267,7 +267,7 @@ public class SituationGraphQLTests {
         Mockito.when(ancestorAwareNsrService.expandWithAncestors("NSR:Quay:749"))
                 .thenReturn(Set.of("NSR:Quay:749", "NSR:StopPlace:451"));
 
-        Query ancestorQueryService = new Query(null, null, repository, ancestorAwareNsrService, metricsService);
+        Query ancestorQueryService = new Query(null, null, repository, ancestorAwareNsrService, metricsService, null);
 
         Collection<SituationUpdate> situations = ancestorQueryService.getSituations(
                 null, null, null, null, "NSR:Quay:749", null, null, null, null, null, null, null, null, null);
