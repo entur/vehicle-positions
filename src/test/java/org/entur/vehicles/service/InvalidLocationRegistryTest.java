@@ -63,6 +63,22 @@ class InvalidLocationRegistryTest {
     assertThat(registry.isInvalid(location)).isFalse();
   }
 
+  /**
+   * The symmetric case to {@link #aLocationWithNullComponentsIsValid()}: a null longitude with a
+   * non-null latitude. {@code isInvalid} unboxes both {@code getLatitude()} and
+   * {@code getLongitude()} - if the null guard only checked latitude twice (by mistake), this
+   * would NPE instead of returning false.
+   */
+  @Test
+  void aLocationWithNullLongitudeIsValid() {
+    InvalidLocationRegistry registry = new InvalidLocationRegistry(DEFAULT_CONFIG);
+
+    Location location = location(0.0, 0.0);
+    location.setLongitude(null);
+
+    assertThat(registry.isInvalid(location)).isFalse();
+  }
+
   @Test
   void aCustomConfigurationReplacesTheDefaults() {
     InvalidLocationRegistry registry = new InvalidLocationRegistry("12.5/13.5");

@@ -9,10 +9,14 @@ import org.entur.avro.realtime.siri.model.AffectedVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.AffectsRecord;
 import org.entur.avro.realtime.siri.model.EstimatedCallRecord;
 import org.entur.avro.realtime.siri.model.EstimatedVehicleJourneyRecord;
+import org.entur.avro.realtime.siri.model.LocationRecord;
+import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
+import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
+import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.NSRService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +40,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,6 +85,9 @@ class ApplicationGraphQlSchemaTests {
     @Autowired
     private TimetableRepository timetableRepository;
 
+    @Autowired
+    private VehicleRepository vehicleRepository;
+
     // Every fixture below uses a line/quay/situationNumber unique to its own test. The
     // repositories are shared, mutable, singleton beans that persist state across every test
     // method in this class (and are never reset between them), so a query that isn't scoped
@@ -120,6 +128,18 @@ class ApplicationGraphQlSchemaTests {
     private static final String TAGGED_PLACE_STOP_PLACE = "NSR:StopPlace:tagged-place-probe";
     private static final String TAGGED_PLACE_SITUATION = "TST:SituationNumber:tagged-place-probe";
 
+    private static final String INVALID_LOCATION_QUERY_LINE = "TST:Line:invalid-location-query-probe";
+    private static final String INVALID_LOCATION_QUERY_VALID_VEHICLE = "TST:Vehicle:invalid-location-query-valid";
+    private static final String INVALID_LOCATION_QUERY_INVALID_VEHICLE = "TST:Vehicle:invalid-location-query-invalid";
+
+    private static final String INVALID_LOCATION_SUBSCRIPTION_LINE = "TST:Line:invalid-location-subscription-probe";
+    private static final String INVALID_LOCATION_SUBSCRIPTION_VALID_VEHICLE = "TST:Vehicle:invalid-location-subscription-valid";
+    private static final String INVALID_LOCATION_SUBSCRIPTION_INVALID_VEHICLE = "TST:Vehicle:invalid-location-subscription-invalid";
+
+    private static final String INVALID_LOCATION_SUBSCRIPTION_INCLUDE_LINE = "TST:Line:invalid-location-subscription-include-probe";
+    private static final String INVALID_LOCATION_SUBSCRIPTION_INCLUDE_INVALID_VEHICLE =
+            "TST:Vehicle:invalid-location-subscription-include-invalid";
+
     /**
      * NSR lookup is disabled in the test context, so the real hierarchy is empty and this test
      * has to supply one. It replaces NSRService with a stub whose only knowledge is that the
@@ -149,6 +169,172 @@ class ApplicationGraphQlSchemaTests {
     void contextLoads() {
         // If the schema fails to parse, or a field can't be wired to any resolver/getter,
         // context startup itself fails - this alone is a meaningful assertion.
+    }
+
+    /**
+     * Pins the schema default. {@code VehicleGraphQLTests.queryVehicles} calls the resolver
+     * method directly in Java with a null argument, which only exercises
+     * {@code Boolean.TRUE.equals(null)} - never the SDL default. This executes a real query
+     * document with {@code includeInvalidLocations} omitted, so flipping
+     * {@code Query.vehicles}'s {@code includeInvalidLocations: Boolean = false} to {@code = true}
+     * in vehicle-updates.graphqls makes this fail; a hand-built filter would not.
+     */
+    @Test
+    void vehiclesQueryOmittingTheArgumentExcludesTheKnownInvalidLocation() {
+        vehicleRepository.addAll(List.of(
+                vehicleActivity(INVALID_LOCATION_QUERY_VALID_VEHICLE, INVALID_LOCATION_QUERY_LINE, 59.911491, 10.757933),
+                vehicleActivity(INVALID_LOCATION_QUERY_INVALID_VEHICLE, INVALID_LOCATION_QUERY_LINE, 0.0, 0.0)
+        ));
+
+        String document = """
+                query {
+                  vehicles(lineRef: "%s") {
+                    vehicleId
+                  }
+                }
+                """.formatted(INVALID_LOCATION_QUERY_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-invalid-location-query", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        List<String> vehicleIds = vehicleIdsOf(response.field("vehicles").getValue());
+        assertThat(vehicleIds)
+                .withFailMessage("includeInvalidLocations was omitted from the document, so the schema default "
+                        + "(false) must apply - check Query.vehicles's `includeInvalidLocations: Boolean = false` "
+                        + "in vehicle-updates.graphqls")
+                .containsExactly(INVALID_LOCATION_QUERY_VALID_VEHICLE);
+    }
+
+    /**
+     * Companion to the query test above, and the first test in this class to exercise
+     * {@code Subscription.vehicles} at all - so it also proves the {@code @Argument} name
+     * actually binds to the resolver parameter: Spring GraphQL silently ignores a schema
+     * argument with no matching resolver parameter, so a misspelled {@code @Argument} name would
+     * leave every other test in the suite green.
+     * <p>
+     * The invalid-location vehicle is present before subscribing (covering the initial snapshot,
+     * which flows through the same {@code QueryFilter} as live events - see
+     * {@code VehicleUpdateRxPublisher.getPublisher}) and republished after subscribing (covering
+     * the live path). Neither publish may reach the subscriber.
+     */
+    @Test
+    void vehiclesSubscriptionOmittingTheArgumentExcludesTheKnownInvalidLocationFromSnapshotAndLiveUpdates() throws InterruptedException {
+        vehicleRepository.addAll(List.of(
+                vehicleActivity(INVALID_LOCATION_SUBSCRIPTION_VALID_VEHICLE, INVALID_LOCATION_SUBSCRIPTION_LINE, 59.911491, 10.757933),
+                vehicleActivity(INVALID_LOCATION_SUBSCRIPTION_INVALID_VEHICLE, INVALID_LOCATION_SUBSCRIPTION_LINE, 0.0, 0.0)
+        ));
+
+        String document = """
+                subscription {
+                  vehicles(lineRef: "%s", bufferSize: 1, bufferTime: 50) {
+                    vehicleId
+                  }
+                }
+                """.formatted(INVALID_LOCATION_SUBSCRIPTION_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-invalid-location-subscription", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        Publisher<ExecutionResult> publisher = response.getData();
+        AtomicBoolean invalidVehicleSeen = new AtomicBoolean(false);
+        // Counts down once for the initial snapshot and once for the live republish below - both
+        // must deliver the valid vehicle for this test to prove anything about the invalid one.
+        CountDownLatch validVehicleSeenTwice = new CountDownLatch(2);
+
+        Disposable subscription = Flux.from(publisher).subscribe(result -> {
+            Map<String, Object> data = result.getData();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> vehicles = (List<Map<String, Object>>) data.get("vehicles");
+            for (Map<String, Object> vehicle : vehicles) {
+                String vehicleId = (String) vehicle.get("vehicleId");
+                if (INVALID_LOCATION_SUBSCRIPTION_INVALID_VEHICLE.equals(vehicleId)) {
+                    invalidVehicleSeen.set(true);
+                } else if (INVALID_LOCATION_SUBSCRIPTION_VALID_VEHICLE.equals(vehicleId)) {
+                    validVehicleSeenTwice.countDown();
+                }
+            }
+        });
+
+        try {
+            // Republished after subscribing - the live path under test, as opposed to the
+            // initial snapshot fixture added above.
+            vehicleRepository.addAll(List.of(
+                    vehicleActivity(INVALID_LOCATION_SUBSCRIPTION_VALID_VEHICLE, INVALID_LOCATION_SUBSCRIPTION_LINE, 59.911491, 10.757934),
+                    vehicleActivity(INVALID_LOCATION_SUBSCRIPTION_INVALID_VEHICLE, INVALID_LOCATION_SUBSCRIPTION_LINE, 0.0, 0.0)
+            ));
+
+            assertThat(validVehicleSeenTwice.await(5, TimeUnit.SECONDS))
+                    .withFailMessage("the valid vehicle must be delivered once in the initial snapshot and once "
+                            + "on the live republish - if this times out, the live delivery path itself is "
+                            + "broken, not just the invalid-location filtering under test")
+                    .isTrue();
+        } finally {
+            subscription.dispose();
+        }
+
+        assertThat(invalidVehicleSeen.get())
+                .withFailMessage("includeInvalidLocations was omitted, so the vehicle at 0,0 must never reach "
+                        + "the subscriber - check Subscription.vehicles's @Argument name and its "
+                        + ".withLocationValidity(...) call")
+                .isFalse();
+    }
+
+    /**
+     * The other half of the pair above: with {@code includeInvalidLocations: true} passed
+     * explicitly, the vehicle at 0,0 must be delivered rather than filtered out.
+     */
+    @Test
+    void vehiclesSubscriptionWithIncludeInvalidLocationsTrueDeliversTheInvalidLocation() throws InterruptedException {
+        vehicleRepository.addAll(List.of(
+                vehicleActivity(INVALID_LOCATION_SUBSCRIPTION_INCLUDE_INVALID_VEHICLE,
+                        INVALID_LOCATION_SUBSCRIPTION_INCLUDE_LINE, 0.0, 0.0)
+        ));
+
+        String document = """
+                subscription {
+                  vehicles(lineRef: "%s", includeInvalidLocations: true, bufferSize: 1, bufferTime: 50) {
+                    vehicleId
+                  }
+                }
+                """.formatted(INVALID_LOCATION_SUBSCRIPTION_INCLUDE_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-invalid-location-subscription-include", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        Publisher<ExecutionResult> publisher = response.getData();
+        CountDownLatch invalidVehicleSeen = new CountDownLatch(1);
+
+        Disposable subscription = Flux.from(publisher).subscribe(result -> {
+            Map<String, Object> data = result.getData();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> vehicles = (List<Map<String, Object>>) data.get("vehicles");
+            for (Map<String, Object> vehicle : vehicles) {
+                if (INVALID_LOCATION_SUBSCRIPTION_INCLUDE_INVALID_VEHICLE.equals(vehicle.get("vehicleId"))) {
+                    invalidVehicleSeen.countDown();
+                }
+            }
+        });
+
+        try {
+            assertThat(invalidVehicleSeen.await(5, TimeUnit.SECONDS))
+                    .withFailMessage("includeInvalidLocations: true was passed explicitly, so the vehicle at "
+                            + "0,0 must appear in the initial snapshot")
+                    .isTrue();
+        } finally {
+            subscription.dispose();
+        }
     }
 
     @Test
@@ -693,6 +879,32 @@ class ApplicationGraphQlSchemaTests {
         assertThat(affectedStopPoints)
                 .withFailMessage("resolution must not write the resolved quay back onto affects")
                 .isEmpty();
+    }
+
+    private VehicleActivityRecord vehicleActivity(String vehicleRef, String lineRef, double latitude, double longitude) {
+        VehicleActivityRecord record = new VehicleActivityRecord();
+        record.setRecordedAtTime(ZonedDateTime.now().toString());
+        record.setValidUntilTime(ZonedDateTime.now().plusMinutes(10).toString());
+
+        MonitoredVehicleJourneyRecord journey = new MonitoredVehicleJourneyRecord();
+        journey.setDataSource("TST");
+        journey.setLineRef(lineRef);
+        journey.setVehicleRef(vehicleRef);
+        journey.setMonitored(true);
+
+        LocationRecord location = new LocationRecord();
+        location.setLatitude(latitude);
+        location.setLongitude(longitude);
+        journey.setVehicleLocation(location);
+
+        record.setMonitoredVehicleJourney(journey);
+        return record;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> vehicleIdsOf(Object value) {
+        List<Map<String, Object>> vehicles = (List<Map<String, Object>>) value;
+        return vehicles.stream().map(v -> (String) v.get("vehicleId")).toList();
     }
 
     private PtSituationElementRecord situationAffectingStopPlace(String situationNumber, String stopPlaceRef) {
