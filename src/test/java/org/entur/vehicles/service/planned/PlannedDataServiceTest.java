@@ -154,8 +154,8 @@ public class PlannedDataServiceTest {
         service.initialLoad();
         service.scheduledReload();
 
-        assertThat(registry.find("app.vehicles.planned.data.load.duration").gauges()).hasSize(1);
-        assertThat(registry.find("app.vehicles.planned.data.load.duration").gauges().iterator().next().value())
+        assertThat(registry.find("app.vehicles.planned.data.load.duration.millis").gauges()).hasSize(1);
+        assertThat(registry.find("app.vehicles.planned.data.load.duration.millis").gauges().iterator().next().value())
                 .isGreaterThan(0);
         assertThat(registry.find("app.vehicles.planned.data.entities").tag("type", "serviceJourney").gauge().value())
                 .isEqualTo(650);

@@ -234,7 +234,7 @@ a JourneyPlanner miss yields today.
 
 Replacing the JourneyPlanner request/response counters:
 
-- `planned_data_load_duration_seconds` (last load)
+- `planned_data_load_duration_millis` (last load)
 - `planned_data_last_success_timestamp`
 - `planned_data_entities{type=operator|line|serviceJourney|datedServiceJourney|journeyPattern|serviceLink}`
 - `planned_data_load_failures_total`

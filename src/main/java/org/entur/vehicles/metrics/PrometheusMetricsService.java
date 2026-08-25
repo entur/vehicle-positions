@@ -59,7 +59,7 @@ public class PrometheusMetricsService {
     private static final String RETURNED_VEHICLE_UPDATE_COUNTER_NAME = METRICS_PREFIX + "client.response";
     private static final String CODESPACE_TAG_NAME = "codespaceId";
 
-    private static final String PLANNED_DATA_LOAD_DURATION_NAME = METRICS_PREFIX + "planned.data.load.duration";
+    private static final String PLANNED_DATA_LOAD_DURATION_NAME = METRICS_PREFIX + "planned.data.load.duration.millis";
     private static final String PLANNED_DATA_LAST_SUCCESS_NAME = METRICS_PREFIX + "planned.data.last.success.epoch.seconds";
     private static final String PLANNED_DATA_ENTITIES_NAME = METRICS_PREFIX + "planned.data.entities";
     private static final String PLANNED_DATA_UNRESOLVED_NAME = METRICS_PREFIX + "planned.data.unresolved.refs";

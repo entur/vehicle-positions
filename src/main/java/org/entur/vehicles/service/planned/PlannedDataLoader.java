@@ -44,7 +44,7 @@ public class PlannedDataLoader {
                     }
                 } catch (Exception e) {
                     failedEntries++;
-                    LOG.error("Skipping NeTEx entry {} - {}", entry.getName(), e.toString());
+                    LOG.error("Skipping NeTEx entry {}", entry.getName(), e);
                 }
             }
         } catch (IOException e) {
