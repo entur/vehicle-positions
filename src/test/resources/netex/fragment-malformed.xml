@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PublicationDelivery xmlns="http://www.netex.org.uk/netex">
+  <dataObjects>
+    <Line version="0" id="TST:Line:before">
+      <Name>Parsed before the error</Name>
+    </Line>
+    <Line version="0" id="TST:Line:broken">
+      <Name>Unclosed
