@@ -18,6 +18,8 @@ import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.NSRService;
+import org.entur.vehicles.service.planned.PlannedDataset;
+import org.entur.vehicles.service.planned.PlannedDataService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivestreams.Publisher;
@@ -147,6 +149,19 @@ class ApplicationGraphQlSchemaTests {
      */
     @MockitoBean
     private NSRService nsrService;
+
+    /**
+     * Planned data is disabled in the test context (an empty dataset). Replacing the bean
+     * lets the catalogue tests below serve a hand-built dataset; every other test sees the
+     * same "nothing known" answers the disabled bean gives (mock defaults: null / false).
+     */
+    @MockitoBean
+    private PlannedDataService plannedDataService;
+
+    @BeforeEach
+    void stubPlannedDataDefaults() {
+        when(plannedDataService.current()).thenReturn(PlannedDataset.EMPTY);
+    }
 
     /**
      * Every other test in this class was written against the real (disabled) NSRService, whose
@@ -1082,5 +1097,61 @@ class ApplicationGraphQlSchemaTests {
         record.setAffects(affects);
 
         return record;
+    }
+
+    /**
+     * Catalogue journeys are created without geometry; {@code pointsOnLink} resolves from the
+     * dataset only when a client selects the field. A pattern with one two-point link must
+     * therefore come back with length 2 through the real schema.
+     */
+    @Test
+    void catalogueServiceJourneyResolvesPointsOnLinkLazilyFromPlannedData() {
+        when(plannedDataService.current()).thenReturn(new PlannedDataset.Builder()
+                .addLine("TST:Line:1", "One", "1")
+                .addServiceLink("TST:ServiceLink:1", new int[]{59_000_000, 10_000_000, 59_001_000, 10_001_000})
+                .addJourneyPattern("TST:JourneyPattern:1", List.of("TST:ServiceLink:1"))
+                .addServiceJourney("TST:ServiceJourney:1", "TST:JourneyPattern:1", "TST:Line:1")
+                .build());
+
+        String document = """
+                query {
+                  serviceJourneys(lineRef: "TST:Line:1") {
+                    id
+                    pointsOnLink { length points }
+                  }
+                }
+                """;
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-catalogue-geometry", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response.getExecutionResult().getErrors()).isEmpty();
+        Map<String, Object> data = response.getExecutionResult().getData();
+        List<Map<String, Object>> journeys = (List<Map<String, Object>>) data.get("serviceJourneys");
+        assertThat(journeys).hasSize(1);
+        assertThat(journeys.get(0).get("id")).isEqualTo("TST:ServiceJourney:1");
+        Map<String, Object> pointsOnLink = (Map<String, Object>) journeys.get(0).get("pointsOnLink");
+        assertThat(pointsOnLink).isNotNull();
+        assertThat(pointsOnLink.get("length")).isEqualTo(2.0);
+        assertThat((String) pointsOnLink.get("points")).isNotEmpty();
+    }
+
+    @Test
+    void serviceJourneysWithoutAFilterIsABadRequest() {
+        String document = """
+                query { serviceJourneys { id } }
+                """;
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-catalogue-filter", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response.getExecutionResult().getErrors()).hasSize(1);
+        var error = response.getExecutionResult().getErrors().get(0);
+        assertThat(error.getMessage()).contains("lineRef").contains("codespaceId");
+        // What a client sees: the classification is written into extensions on serialization
+        Map<String, Object> extensions = (Map<String, Object>) error.toSpecification().get("extensions");
+        assertThat(String.valueOf(extensions.get("classification"))).isEqualTo("BAD_REQUEST");
     }
 }

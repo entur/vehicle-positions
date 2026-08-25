@@ -60,9 +60,9 @@ what JourneyPlanner's own graph is built from. Measured cardinalities, 2023-11-2
 
 ## Non-goals
 
-- **`Query.lines`, `Query.operators`, `Query.serviceJourneys`** keep returning what they
-  return today (derived from active vehicles). Serving the full planned catalogue from the
-  dataset is a separate feature.
+- ~~`Query.lines`, `Query.operators`, `Query.serviceJourneys` keep returning what they
+  return today (derived from active vehicles).~~ Superseded 2026-08-25 - see "Planned
+  catalogue queries" below.
 - **No straight-line fallback for geometry-less ServiceLinks** (about 17k of 139k). OTP
   draws a straight line between stops there; we leave a gap. Follow-up if fidelity matters
   - it needs a ScheduledStopPoint -> Quay -> NSR coordinate chain.
@@ -207,6 +207,35 @@ place).
 | `vehicle.planned.data.url` | `https://storage.googleapis.com/marduk-production/outbound/netex/rb_norway-aggregated-netex.zip` | Verified reachable 2026-08-25. A `file:` URL works for local runs against a downloaded copy. |
 | `vehicle.planned.data.reload.cron` | `0 0 8 * * *` (Europe/Oslo) | The export observed on 2026-08-25 was written at 07:33 UTC, so a reload earlier than ~08:30 Oslo time would pick up the previous day's file. **Confirm Marduk's actual completion time before setting this in helm.** |
 | `vehicle.planned.data.min.service.journeys` | `50000` | A fresh dataset with fewer service journeys than this is rejected outright, before the relative shrink check and even on the very first load - guards a truncated-but-non-empty export against every restarting pod, since the relative `< 50%` guard has nothing to compare against on a first load. `0` in tests. |
+
+## Planned catalogue queries
+
+Added 2026-08-25, after the initial implementation. The catalogue queries answer from the
+dataset instead of from live vehicles, so they work before any vehicle has reported and
+cover everything the export declares:
+
+| Query | Source | Notes |
+|---|---|---|
+| `lines(codespaceId)` | `PlannedDataset.lines` | all lines, or those whose codespace matches the pattern |
+| `operators(codespaceId)` | `PlannedDataset.operators` | likewise |
+| `codespaces` | `PlannedDataset.codespaces` | every codespace declaring a line or an operator |
+| `serviceJourneys(lineRef, codespaceId)` | `PlannedDataset.serviceJourneyIds` | **requires at least one argument** - otherwise `BAD_REQUEST` ("serviceJourneys requires lineRef or codespaceId"); journeys whose line the export does not declare are not part of the catalogue |
+| `serviceJourney(id)` | `PlannedDataset.serviceJourney` | accepts a ServiceJourney id or a DatedServiceJourney id (then dated to its operating day); null if unknown |
+
+Filters keep the regex semantics of the old vehicle-backed resolvers (`ObjectRef.matches`),
+and results are sorted by ref, as before.
+
+To support `serviceJourneys(lineRef)`, the extractor also keeps the `ServiceJourney`'s own
+`LineRef`/`FlexibleLineRef` (depth 1 only - `Route` elements carry a `LineRef` too);
+`build()` derives line -> sorted service journey ids and the codespace list, and counts
+dangling line refs as `unresolvedLineRefs`.
+
+Catalogue `ServiceJourney`s are created without geometry. `ServiceJourney.pointsOnLink` is
+resolved by a `@SchemaMapping` field resolver (`ServiceJourneyGeometryController`): the
+object's own geometry if the vehicle/timetable path attached one, otherwise stitched from
+the dataset on demand - only for journeys a client actually selects the field on.
+
+The vehicle-derived catalogue methods on `VehicleRepository` are removed.
 
 ## Geometry
 

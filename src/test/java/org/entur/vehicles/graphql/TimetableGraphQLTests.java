@@ -52,7 +52,7 @@ public class TimetableGraphQLTests {
                 publisher
         );
         publisher = new EstimatedTimetableUpdateRxPublisher();
-        queryService = new Query(null, repository, null, new NSRService(false, null), metricsService, null);
+        queryService = new Query(null, repository, null, new NSRService(false, null), metricsService, null, PlannedDataService.disabled());
 
         EstimatedVehicleJourneyRecord journeyRecord = new EstimatedVehicleJourneyRecord();
         journeyRecord.setLineRef("TST:Line:123");
