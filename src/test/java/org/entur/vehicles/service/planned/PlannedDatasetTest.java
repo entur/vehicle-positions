@@ -82,6 +82,19 @@ public class PlannedDatasetTest {
     }
 
     @Test
+    public void datedServiceJourneyServiceJourneyIdIsCanonicalisedToTheDeclaredInstance() {
+        String declaredId = new String("X:ServiceJourney:1");
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addServiceJourney(declaredId, "X:JourneyPattern:1")
+                .addJourneyPattern("X:JourneyPattern:1", List.of())
+                .addDatedServiceJourney("X:DatedServiceJourney:1", new String("X:ServiceJourney:1"), null)
+                .build();
+
+        assertThat(dataset.datedServiceJourney("X:DatedServiceJourney:1").serviceJourneyId())
+                .isSameAs(declaredId);
+    }
+
+    @Test
     public void duplicateIdsLastOneWinsAndAreCounted() {
         PlannedDataset dataset = new PlannedDataset.Builder()
                 .addLine("X:Line:1", "first", "1")

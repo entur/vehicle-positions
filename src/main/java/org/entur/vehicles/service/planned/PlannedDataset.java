@@ -86,6 +86,9 @@ public final class PlannedDataset {
      * The encoded route geometry of a journey pattern, stitched from its service links on
      * first request and cached for the life of this snapshot. Null when the pattern is
      * unknown or none of its links carry geometry.
+     * <p>
+     * The returned instance is shared by every ServiceJourney on this pattern and by the
+     * cache; callers must treat it as read-only.
      */
     public PointsOnLink pointsOnLink(String journeyPatternId) {
         if (journeyPatternId == null || !patternLinks.containsKey(journeyPatternId)) {
@@ -197,6 +200,34 @@ public final class PlannedDataset {
         }
 
         public PlannedDataset build() {
+            // Canonicalise duplicate id Strings: every ref string comes fresh from the XML
+            // reader, so the same logical id declared once (e.g. a JourneyPattern) but
+            // referenced many times (e.g. from every ServiceJourney on it) is otherwise a
+            // distinct String instance per occurrence. Map each declared id to itself, then
+            // swap every referencing value through that map so all occurrences of one id
+            // share a single String instance.
+            Map<String, String> canonSj = new HashMap<>(serviceJourneyPattern.size());
+            for (String id : serviceJourneyPattern.keySet()) {
+                canonSj.put(id, id);
+            }
+            Map<String, String> canonPattern = new HashMap<>(patternLinks.size());
+            for (String id : patternLinks.keySet()) {
+                canonPattern.put(id, id);
+            }
+            Map<String, String> canonLink = new HashMap<>(linkGeometry.size());
+            for (String id : linkGeometry.keySet()) {
+                canonLink.put(id, id);
+            }
+
+            serviceJourneyPattern.replaceAll((sj, patternId) -> canonPattern.getOrDefault(patternId, patternId));
+            patternLinks.replaceAll((patternId, links) -> {
+                String[] canonicalised = new String[links.length];
+                for (int i = 0; i < links.length; i++) {
+                    canonicalised[i] = canonLink.getOrDefault(links[i], links[i]);
+                }
+                return canonicalised;
+            });
+
             int unresolvedPatternRefs = 0;
             int unresolvedLinkRefs = 0;
             int unresolvedServiceJourneyRefs = 0;
@@ -222,14 +253,15 @@ public final class PlannedDataset {
             Map<String, DatedJourneyRef> datedServiceJourneys = new HashMap<>(rawDatedServiceJourneys.size());
             for (Map.Entry<String, RawDatedServiceJourney> e : rawDatedServiceJourneys.entrySet()) {
                 RawDatedServiceJourney raw = e.getValue();
-                if (raw.serviceJourneyId() == null || !serviceJourneyPattern.containsKey(raw.serviceJourneyId())) {
+                String serviceJourneyId = canonSj.getOrDefault(raw.serviceJourneyId(), raw.serviceJourneyId());
+                if (serviceJourneyId == null || !serviceJourneyPattern.containsKey(serviceJourneyId)) {
                     unresolvedServiceJourneyRefs++;
                 }
                 String date = raw.operatingDayId() == null ? null : operatingDays.get(raw.operatingDayId());
                 if (date == null) {
                     unresolvedOperatingDayRefs++;
                 }
-                datedServiceJourneys.put(e.getKey(), new DatedJourneyRef(raw.serviceJourneyId(), date));
+                datedServiceJourneys.put(e.getKey(), new DatedJourneyRef(serviceJourneyId, date));
             }
 
             Stats stats = new Stats(
