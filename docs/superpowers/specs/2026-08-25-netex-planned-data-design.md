@@ -29,12 +29,19 @@ what JourneyPlanner's own graph is built from. Measured cardinalities, 2023-11-2
 | Entity | Count |
 |---|---|
 | ServiceJourney | 465,407 |
-| DatedServiceJourney | 152,730 |
+| DatedServiceJourney | 152,730 [^dsj-count] |
 | JourneyPattern | 27,147 |
 | ServiceLink | 139,151 (122,444 with geometry) |
 | Geometry coordinates | 19.8 M points |
 | Line / FlexibleLine | 4,190 / 141 |
 | Operator | 263 |
+
+[^dsj-count]: Re-confirmed by a direct parse (not grep) of this same 2023-11-23 file during
+    the 2026-08-25 re-measurement (see Deployment section): `Stats[... serviceJourneys=465407,
+    datedServiceJourneys=152730, ...]`, so this row is accurate for this export. A much newer
+    export used for Task 10's geometry comparison (`rb_norway-current.zip`, downloaded
+    2026-08-25, 283 MB) parsed to 353,851 ServiceJourneys and 2,284,956 DatedServiceJourneys -
+    NeTEx has grown substantially since 2023-11-23. Do not conflate the two files' numbers.
 
 ## Decisions already made
 
@@ -280,6 +287,24 @@ The miss counters are the signal that producers reference ids the export lacks.
   component that does run in prod; re-run this arithmetic with a real NSR
   warm-up number (from a prod log line after the next pod restart) before
   concluding 60 is definitely sufficient.
+
+### Measured (2026-08-25, full Norway export, local run, after id canonicalisation)
+
+- Same 262 MB zipped `rb_norway-aggregated-netex.zip` (2023-11-23) export,
+  `-Xmx5G -XX:+UseG1GC`, `-Dvehicle.planned.data.min.service.journeys=50000`, local run.
+  Load time: 20.5 s (download 0.3 s + parse/build 20.2 s) (`Download of ... took 297 ms`,
+  `Planned data loaded in 20225 ms: Stats[operators=258, lines=4331, serviceJourneys=465407,
+  datedServiceJourneys=152730, journeyPatterns=27147, serviceLinks=139151, duplicateIds=5,
+  unresolvedPatternRefs=0, unresolvedLinkRefs=0, unresolvedServiceJourneyRefs=0,
+  unresolvedOperatingDayRefs=0]`, `Started Application in 22.957 seconds`) - essentially
+  unchanged from the pre-canonicalisation load time, as expected (canonicalisation trades
+  a HashMap lookup per ref for a String allocation, not a speedup).
+- Retained heap after load and GC: 202 MB (`jcmd GC.run`, then re-read
+  `jvm.memory.used{area=heap}`) - down from 302 MB before id canonicalisation (F1), a ~33%
+  reduction, consistent with the ~2.9 M redundant Strings the canonicalisation removes.
+  Comfortably inside the 250-400 MB expected band.
+- Startup probe `failureThreshold`: unchanged at 60; the shorter retained heap does not
+  change the load-time arithmetic above.
 
 ## Testing
 
