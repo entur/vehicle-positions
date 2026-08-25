@@ -4,6 +4,8 @@ package org.entur.vehicles.service.planned;
  * Parses a {@code gis:posList} text node into interleaved microdegrees without allocating
  * a String per token. The full export holds ~20 million coordinates, so the per-token cost
  * of {@code split()} + {@code Double.parseDouble()} is what this avoids.
+ * Malformed tokens (no digits, or trailing non-numeric characters) yield 0 or the digits
+ * parsed so far; the parser never throws.
  */
 final class PosListParser {
 

@@ -29,4 +29,16 @@ public class PosListParserTest {
         assertThat(PosListParser.parse("")).isEmpty();
         assertThat(PosListParser.parse("   ")).isEmpty();
     }
+
+    @Test
+    public void roundsOnTheSeventhDigitIgnoringAnythingAfterIt() {
+        assertThat(PosListParser.parse("1.00000049 1.00000051 2.123456789"))
+                .containsExactly(1_000_000, 1_000_001, 2_123_457);
+    }
+
+    @Test
+    public void malformedTokensParseToZeroOrTruncated() {
+        assertThat(PosListParser.parse("- + . abc 1e5"))
+                .containsExactly(0, 0, 0, 0, 1_000_000);
+    }
 }
