@@ -56,8 +56,6 @@ public class PrometheusMetricsService {
     private static final String SUBSCRIPTION_STARTED_NAME = METRICS_PREFIX + "subscription.started";
     private static final String SUBSCRIPTION_ENDED_NAME = METRICS_PREFIX + "subscription.ended";
 
-    private static final String JOURNEY_PLANNER_REQUEST_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.request";
-    private static final String JOURNEY_PLANNER_RESPONSE_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.response";
     private static final String RETURNED_VEHICLE_UPDATE_COUNTER_NAME = METRICS_PREFIX + "client.response";
     private static final String CODESPACE_TAG_NAME = "codespaceId";
 
@@ -242,24 +240,6 @@ public class PrometheusMetricsService {
                 .counter(
                         SUBSCRIPTION_ENDED_NAME,
                         List.of(new ImmutableTag(CLIENT_HEADER_KEY, getClientNameIfExists()))
-                )
-                .increment();
-    }
-
-    public void markJourneyPlannerRequest(String queryType) {
-
-        prometheusMeterRegistry
-                .counter(
-                        JOURNEY_PLANNER_REQUEST_COUNTER_NAME,
-                        List.of(new ImmutableTag(QUERY_TYPE, queryType))
-                )
-                .increment();
-    }
-    public void markJourneyPlannerResponse(String queryType) {
-        prometheusMeterRegistry
-                .counter(
-                        JOURNEY_PLANNER_RESPONSE_COUNTER_NAME,
-                        List.of(new ImmutableTag(QUERY_TYPE, queryType))
                 )
                 .increment();
     }

@@ -30,22 +30,11 @@ data:
       entur.vehicle-positions.shutdownhook=false
       entur.default.gcp.credentials.enabled=true
 
-      vehicle.journeyplanner.url={{ .Values.configMap.journeyPlannerUrl }}
-      vehicle.journeyplanner.EtClientName={{ .Values.configMap.EtClientName }}
-      vehicle.serviceJourney.lookup.enabled={{ .Values.configMap.serviceJourneyLookupEnabled }}
       vehicle.updates.max.validity.minutes=60
       vehicle.updates.expiry.grace.period=PT10M
-      
-      vehicle.line.lookup.enabled=true
-      vehicle.operator.lookup.enabled=true
 
       # Coordinates treated as known-invalid vehicle locations and excluded from `vehicles` responses by default.
       vehicle.invalid.locations=0.0/0.0,-1.0/-1.0,1.0/1.0
-
-      vehicle.serviceJourney.concurrent.requests={{ .Values.configMap.journeyplanner.servicejourney.threadpoolsize }}
-      vehicle.serviceJourney.concurrent.sleeptime={{ .Values.configMap.journeyplanner.servicejourney.sleeptime }}
-      vehicle.line.concurrent.requests={{ .Values.configMap.journeyplanner.line.threadpoolsize }}
-      vehicle.line.concurrent.sleeptime={{ .Values.configMap.journeyplanner.line.sleeptime }}
 
       management.endpoints.web.exposure.include=info, health, prometheus, env, metrics, loggers
       management.endpoints.prometheus.enabled=true
@@ -65,6 +54,11 @@ data:
       entur.vehicle-positions.sx.enabled={{ .Values.configMap.sxEnabled }}
 
       vehicle.sx.snapshot.url={{ .Values.configMap.sxSnapshotUrl }}
+      vehicle.sx.snapshot.etClientName={{ .Values.configMap.sxSnapshotEtClientName }}
 
       vehicle.nsr.lookup.url=https://storage.googleapis.com/marduk-production/tiamat/CurrentAndFuture_latest.zip
       vehicle.nsr.lookup.enabled=true
+
+      vehicle.planned.data.enabled={{ .Values.configMap.plannedData.enabled }}
+      vehicle.planned.data.url={{ .Values.configMap.plannedData.url }}
+      vehicle.planned.data.reload.cron={{ .Values.configMap.plannedData.reloadCron }}

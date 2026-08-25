@@ -19,19 +19,16 @@ configMap:
     vm: siri.vehicle_monitoring
     et: siri.estimated_timetables
     sx: siri.situation_exchange
-  journeyPlannerUrl: https://api.entur.io/journey-planner/v3/graphql
-  EtClientName: ror.vehicle-positions.graphql
-  serviceJourneyLookupEnabled: false
   parallel:
     streamcount: 1
     threadcount: 5
-  journeyplanner:
-    servicejourney:
-      threadpoolsize: 2
-      sleeptime: 50
-    line:
-      threadpoolsize: 1
-      sleeptime: 100
+  plannedData:
+    enabled: true
+    url: https://storage.googleapis.com/marduk-production/outbound/netex/rb_norway-aggregated-netex.zip
+    # Europe/Oslo. Marduk's export lands around 07:30 UTC; confirm before moving this earlier.
+    reloadCron: "0 0 8 * * *"
+  # Client-name header sent when fetching the SX situation snapshot at startup.
+  sxSnapshotEtClientName: ror.vehicle-positions.graphql
   etEnabled: false
   vmEnabled: true
   # Deliberately off in every environment for now - turning the SX stream on in a real
