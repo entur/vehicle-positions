@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.net.URISyntaxException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -109,5 +110,46 @@ public class PlannedDataServiceTest {
             builder.addServiceJourney("SJ:" + i, "JP");
         }
         return builder.build();
+    }
+
+    @Test
+    public void failedDownloadLeavesNoTempFile(@TempDir Path dir) {
+        String missing = dir.resolve("missing.zip").toUri().toString();
+        PlannedDataService service = new PlannedDataService(true, missing, new PlannedDataLoader(), metrics());
+
+        int before = countPlannedNetexTempFiles();
+        assertThatThrownBy(service::initialLoad).isInstanceOf(IllegalStateException.class);
+        int after = countPlannedNetexTempFiles();
+
+        assertThat(after).isEqualTo(before);
+    }
+
+    private static int countPlannedNetexTempFiles() {
+        Path tmpDir = Path.of(System.getProperty("java.io.tmpdir"));
+        int count = 0;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(tmpDir, "planned-netex*")) {
+            for (Path ignored : stream) {
+                count++;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return count;
+    }
+
+    @Test
+    public void plannedDataGaugesAreRegisteredOnce() throws Exception {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        PrometheusMetricsService metrics = new PrometheusMetricsService(registry);
+        PlannedDataService service = new PlannedDataService(true, goaUrl(), new PlannedDataLoader(), metrics);
+
+        service.initialLoad();
+        service.scheduledReload();
+
+        assertThat(registry.find("app.vehicles.planned.data.load.duration").gauges()).hasSize(1);
+        assertThat(registry.find("app.vehicles.planned.data.load.duration").gauges().iterator().next().value())
+                .isGreaterThan(0);
+        assertThat(registry.find("app.vehicles.planned.data.entities").tag("type", "serviceJourney").gauge().value())
+                .isEqualTo(650);
     }
 }

@@ -98,6 +98,8 @@ public class PrometheusMetricsService {
 
     public PrometheusMetricsService(@Autowired PrometheusMeterRegistry prometheusMeterRegistry) {
         this.prometheusMeterRegistry = prometheusMeterRegistry;
+        prometheusMeterRegistry.gauge(PLANNED_DATA_LOAD_DURATION_NAME, plannedDataLoadDurationMillis);
+        prometheusMeterRegistry.gauge(PLANNED_DATA_LAST_SUCCESS_NAME, plannedDataLastSuccessEpochSeconds);
     }
 
     @PreDestroy
@@ -168,9 +170,7 @@ public class PrometheusMetricsService {
 
     public void markPlannedDataLoaded(long durationMillis, PlannedDataset.Stats stats) {
         plannedDataLoadDurationMillis.set(durationMillis);
-        prometheusMeterRegistry.gauge(PLANNED_DATA_LOAD_DURATION_NAME, plannedDataLoadDurationMillis);
         plannedDataLastSuccessEpochSeconds.set(System.currentTimeMillis() / 1000);
-        prometheusMeterRegistry.gauge(PLANNED_DATA_LAST_SUCCESS_NAME, plannedDataLastSuccessEpochSeconds);
 
         gauge(PLANNED_DATA_ENTITIES_NAME, "type", "operator", stats.operators());
         gauge(PLANNED_DATA_ENTITIES_NAME, "type", "line", stats.lines());

@@ -84,9 +84,17 @@ public class PlannedDataService {
 
     private void load() throws PlannedDataLoadException {
         long start = System.currentTimeMillis();
-        Path zip = null;
+        Path zip;
         try {
-            zip = download(url);
+            zip = Files.createTempFile("planned-netex", ".zip");
+        } catch (IOException e) {
+            if (metrics != null) {
+                metrics.markPlannedDataLoadFailure();
+            }
+            throw new PlannedDataLoadException("Could not create temp file for planned data download", e);
+        }
+        try {
+            download(url, zip);
             PlannedDataset fresh = loader.load(zip);
             PlannedDataset previous = current.get();
             if (isSuspiciouslySmall(fresh, previous)) {
@@ -106,12 +114,10 @@ public class PlannedDataService {
             }
             throw e;
         } finally {
-            if (zip != null) {
-                try {
-                    Files.deleteIfExists(zip);
-                } catch (IOException e) {
-                    LOG.warn("Could not delete temp file {}", zip, e);
-                }
+            try {
+                Files.deleteIfExists(zip);
+            } catch (IOException e) {
+                LOG.warn("Could not delete temp file {}", zip, e);
             }
         }
     }
@@ -128,13 +134,11 @@ public class PlannedDataService {
         return fresh.serviceJourneyCount() * 2 < previous.serviceJourneyCount();
     }
 
-    private static Path download(String url) throws PlannedDataLoadException {
+    private static void download(String url, Path target) throws PlannedDataLoadException {
         long start = System.currentTimeMillis();
         try {
-            Path tmp = Files.createTempFile("planned-netex", ".zip");
-            FileUtils.copyURLToFile(new URL(url), tmp.toFile(), DOWNLOAD_TIMEOUT_MILLIS, DOWNLOAD_TIMEOUT_MILLIS);
+            FileUtils.copyURLToFile(new URL(url), target.toFile(), DOWNLOAD_TIMEOUT_MILLIS, DOWNLOAD_TIMEOUT_MILLIS);
             LOG.info("Download of {} took {} ms", url, System.currentTimeMillis() - start);
-            return tmp;
         } catch (IOException e) {
             throw new PlannedDataLoadException("Could not download " + url, e);
         }
