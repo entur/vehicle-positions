@@ -16,6 +16,7 @@ import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
 import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.planned.PlannedDataService;
 import org.entur.vehicles.service.NSRService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,7 @@ public class SituationMapperTest {
         Mockito.when(nsrService.getStop(Mockito.anyString()))
                 .thenAnswer(invocation ->
                         new org.entur.vehicles.data.model.StopPoint(invocation.getArgument(0)));
-        mapper = new SituationMapper(new LineService(false), nsrService);
+        mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService);
     }
 
     private PtSituationElementRecord minimalRecord() {
@@ -234,7 +235,7 @@ public class SituationMapperTest {
         NSRService nsrService = Mockito.mock(NSRService.class);
         Mockito.when(nsrService.getStop("TST:Quay:1")).thenReturn(cachedQuay);
         Mockito.when(nsrService.getStop("TST:StopPlace:9")).thenReturn(cachedStopPlace);
-        SituationMapper mapper = new SituationMapper(new LineService(false), nsrService);
+        SituationMapper mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService);
 
         SituationUpdate first = mapper.map(situationNamingStop("TST:SituationNumber:first", "Name from situation A"));
         SituationUpdate second = mapper.map(situationNamingStop("TST:SituationNumber:second", "Name from situation B"));
@@ -258,7 +259,7 @@ public class SituationMapperTest {
         NSRService nsrService = Mockito.mock(NSRService.class);
         Mockito.when(nsrService.getStop("TST:Quay:1")).thenReturn(new StopPoint("TST:Quay:1"));
         Mockito.when(nsrService.getStop("TST:StopPlace:9")).thenReturn(new StopPoint("TST:StopPlace:9"));
-        SituationMapper mapper = new SituationMapper(new LineService(false), nsrService);
+        SituationMapper mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService);
 
         SituationUpdate situation =
                 mapper.map(situationNamingStop("TST:SituationNumber:unknown", "Name from situation"));

@@ -12,6 +12,7 @@ import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher
 import org.entur.vehicles.graphql.publishers.SituationUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.planned.PlannedDataService;
 import org.entur.vehicles.service.NSRService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,7 +61,7 @@ public class SituationRepositoryTest {
                 nsrService);
         repository = new SituationRepository(
                 metricsService,
-                new SituationMapper(new LineService(false), nsrService),
+                new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService),
                 new AutoPurgingSituationMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 publisher,
                 republisher

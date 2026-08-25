@@ -17,6 +17,7 @@ import org.entur.vehicles.repository.AutoPurgingVehicleMap;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.planned.PlannedDataService;
 import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +48,7 @@ public class VehicleGraphQLTests {
         PrometheusMetricsService metricsService = new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
         repository = new VehicleRepository(
                 metricsService,
-                new LineService(false),
+                new LineService(PlannedDataService.disabled()),
                 serviceJourneyService,
                 new AutoPurgingVehicleMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                         180,

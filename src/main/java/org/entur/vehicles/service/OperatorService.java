@@ -1,81 +1,30 @@
 package org.entur.vehicles.service;
 
-import jakarta.annotation.PostConstruct;
 import org.entur.vehicles.data.model.Operator;
-import org.entur.vehicles.metrics.PrometheusMetricsService;
-import org.entur.vehicles.service.graphql.Data;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.entur.vehicles.service.planned.PlannedDataService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClientException;
 
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
-import static java.util.Collections.emptyList;
-
+/**
+ * {@link #getOperator} is static because its three callers - VehicleRepository,
+ * TimetableRepository, SituationMapper - call it that way and have done so since the
+ * operator cache was a static map. The static reference is set when Spring constructs the
+ * bean; before that (and in tests that never construct one) every lookup misses, exactly as
+ * the empty static cache did.
+ */
 @Service
 public class OperatorService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(OperatorService.class);
+    private static volatile PlannedDataService plannedData;
 
     @Autowired
-    private JourneyPlannerGraphQLClient graphQLClient;
-
-    @Autowired
-    private PrometheusMetricsService metricsService;
-
-    private final boolean operatorLookupEnabled;
-
-    private static final ConcurrentHashMap<String, Operator> operatorCache = new ConcurrentHashMap<>();
-
-    private final ScheduledExecutorService executor;
-
-    public OperatorService(@Value("${vehicle.operator.lookup.enabled:false}") boolean operatorLookupEnabled) {
-        this.operatorLookupEnabled = operatorLookupEnabled;
-        executor = Executors.newSingleThreadScheduledExecutor();
+    public OperatorService(PlannedDataService plannedData) {
+        OperatorService.plannedData = plannedData;
     }
 
-    @PostConstruct
-    private void warmUpCache() {
-        if (operatorLookupEnabled) {
-            //Trigger synchronous update during startup
-            updateOperators();
-            //Schedule periodic updates
-            executor.scheduleAtFixedRate(this::updateOperators, 60, 60, TimeUnit.MINUTES);
-        }
-    }
-
-    private void updateOperators() {
-        try {
-            final List<Operator> allOperators = getAllOperators();
-            for (Operator operator : allOperators) {
-                operatorCache.put(operator.getOperatorRef(), operator);
-            }
-            LOG.info("OperatorCache populated with {} operators", operatorCache.size());
-        }
-        catch (WebClientException e) {
-            LOG.error("Error while getting all operators", e);
-        }
-    }
-
+    /** The operator from planned data, or null if unknown. */
     public static Operator getOperator(String operatorRef) {
-        return operatorCache.get(operatorRef);
-    }
-
-    private List<Operator> getAllOperators() {
-        String query = "{\"query\":\"{operators {operatorRef:id name:name}}\",\"variables\":null}";
-
-        Data data = graphQLClient.executeQuery(query);
-        metricsService.markJourneyPlannerRequest("operators");
-        if (data != null) {
-            return data.operators;
-        }
-        return emptyList();
+        PlannedDataService service = plannedData;
+        return service == null ? null : service.findOperator(operatorRef);
     }
 }

@@ -57,6 +57,11 @@ public class PlannedDataService {
         return new PlannedDataService(false, null, null, null);
     }
 
+    /** Runs a load with startup semantics (throws on failure). For tests outside this package. */
+    public void reloadForTest() {
+        initialLoad();
+    }
+
     @PostConstruct
     void initialLoad() {
         if (!enabled) {

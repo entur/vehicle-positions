@@ -35,7 +35,6 @@ import org.springframework.stereotype.Component;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 import static org.entur.vehicles.repository.helpers.Util.containsValues;
 import static org.entur.vehicles.repository.helpers.Util.convert;
@@ -259,11 +258,7 @@ public class SituationMapper {
         if (lineRef == null) {
             return null;
         }
-        try {
-            return lineService.getLine(lineRef);
-        } catch (ExecutionException e) {
-            return new Line(lineRef);
-        }
+        return lineService.getLine(lineRef);
     }
 
     private org.entur.vehicles.data.model.Operator resolveOperator(String operatorRef) {
