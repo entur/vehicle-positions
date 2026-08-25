@@ -252,6 +252,33 @@ The miss counters are the signal that producers reference ids the export lacks.
 - Every replica (up to 20) downloads 262 MB nightly from public GCS. Acceptable; no
   jitter for now.
 
+### Measured (2026-08-25, full Norway export, local run)
+
+- Load time: 20.8 s (download 0.3 s + parse/build 20.5 s), for the 262 MB zipped /
+  ~6 GB unzipped `rb_norway-aggregated-netex.zip` export, `-Xmx5G -XX:+UseG1GC`,
+  local run (`Planned data loaded in 20815 ms`, `Download of ... took 288 ms`,
+  `Started Application in 23.586 seconds`). This is well inside the sanity band
+  (60-120 s expected); much faster than the GOA-fixture extrapolation suggested.
+- Retained heap after load and GC: 302 MB (523 MB before `jcmd GC.run`, 302 MB
+  after) - within the expected 250-400 MB band.
+- Prod heap peak (7 days, before this change): not measured — check Grafana.
+  `jvm_memory_used_bytes{area="heap"}` on `ent-vpos-prd` returned zero series via
+  Kompass `read_metrics` (two attempts); the Grafana dashboard for `ent-vpos-prd`
+  was not checked directly. The memory headroom check in the paragraph above
+  (retained size x2 + prod peak < 5 GB) is therefore unconfirmed - confirm in
+  Grafana before merging.
+- NSR warm-up time: not measured — check Grafana/prod logs. `vehicle.nsr.lookup.enabled=true`
+  in `helm/vehicle-positions-2/templates/configmap.yaml`, so NSR warm-up does run
+  and block readiness in prod, but no `NSRService cache warm-up took` log line was
+  found on `ent-vpos-prd` in the last 24h (likely no pod restart in that window).
+  The probe arithmetic below therefore omits this component and is a lower bound.
+- Startup probe `failureThreshold` set to: left at 60 (unchanged). Local
+  arithmetic: (download 0.3 s + parse/build 20.5 s) x 2 / `periodSeconds: 5` =
+  41.6 / 5 ≈ 9, well under 60. This excludes the unmeasured NSR warm-up
+  component that does run in prod; re-run this arithmetic with a real NSR
+  warm-up number (from a prod log line after the next pod restart) before
+  concluding 60 is definitely sufficient.
+
 ## Testing
 
 - **Extractor unit tests** with small hand-written NeTEx fragments under
