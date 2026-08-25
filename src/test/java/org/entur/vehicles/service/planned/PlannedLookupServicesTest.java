@@ -109,4 +109,27 @@ public class PlannedLookupServicesTest {
         assertThat(dsj.getOperatingDay()).isNull();
         assertThat(dsj.getServiceJourney().getId()).isEqualTo("X:DatedServiceJourney:1");
     }
+
+    @Test
+    public void findDatedServiceJourneyReturnsTheResolvedJourney() throws Exception {
+        ServiceJourneyService service = new ServiceJourneyService(loaded());
+
+        DatedServiceJourney dsj = service.findDatedServiceJourney("GOA:DatedServiceJourney:B3008-AA_STV-S_A720AB14_24-01-20");
+
+        assertThat(dsj).isNotNull();
+        assertThat(dsj.getOperatingDay()).isEqualTo("2024-01-20");
+        assertThat(dsj.getServiceJourney().getId()).isEqualTo("GOA:ServiceJourney:B3008-AA_30082-R");
+        assertThat(dsj.getServiceJourney().getDate()).isEqualTo("2024-01-20");
+    }
+
+    @Test
+    public void findDatedServiceJourneyReturnsNullOnAMiss() throws Exception {
+        ServiceJourneyService service = new ServiceJourneyService(loaded());
+
+        assertThat(service.findDatedServiceJourney("GOA:DatedServiceJourney:does-not-exist"))
+                .withFailMessage("a miss must be null, not a bare ref wrapping a fake service journey")
+                .isNull();
+        assertThat(new ServiceJourneyService(PlannedDataService.disabled()).findDatedServiceJourney("X:DatedServiceJourney:1"))
+                .isNull();
+    }
 }

@@ -35,9 +35,22 @@ public class ServiceJourneyService {
      * dated to it - the same shape the JourneyPlanner lookup used to build.
      */
     public DatedServiceJourney getDatedServiceJourney(String datedServiceJourneyId) {
+        DatedServiceJourney resolved = findDatedServiceJourney(datedServiceJourneyId);
+        if (resolved == null) {
+            return new DatedServiceJourney(datedServiceJourneyId, new ServiceJourney(datedServiceJourneyId));
+        }
+        return resolved;
+    }
+
+    /**
+     * Like {@link #getDatedServiceJourney}, but null when the planned data does not know the
+     * id - for callers that must show "unresolved" rather than a bare ref wrapping a fake
+     * service journey named after the DSJ.
+     */
+    public DatedServiceJourney findDatedServiceJourney(String datedServiceJourneyId) {
         DatedJourneyRef ref = plannedData.findDatedServiceJourney(datedServiceJourneyId);
         if (ref == null) {
-            return new DatedServiceJourney(datedServiceJourneyId, new ServiceJourney(datedServiceJourneyId));
+            return null;
         }
         ServiceJourney serviceJourney = new ServiceJourney(ref.serviceJourneyId(), ref.operatingDate());
         PointsOnLink pointsOnLink = plannedData.findPointsOnLink(ref.serviceJourneyId());

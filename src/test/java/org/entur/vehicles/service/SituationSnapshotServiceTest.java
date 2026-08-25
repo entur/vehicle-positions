@@ -11,6 +11,7 @@ import org.entur.vehicles.repository.AutoPurgingTimetableMap;
 import org.entur.vehicles.repository.SituationMapper;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.SituationTriggeredRepublisher;
+import org.entur.vehicles.service.ServiceJourneyService;
 import org.entur.vehicles.service.planned.PlannedDataService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +58,8 @@ public class SituationSnapshotServiceTest {
                 nsrService);
         repository = new SituationRepository(
                 metricsService,
-                new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService),
+                new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService,
+                        new ServiceJourneyService(PlannedDataService.disabled())),
                 new AutoPurgingSituationMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 new SituationUpdateRxPublisher(),
                 republisher

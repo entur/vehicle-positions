@@ -14,8 +14,11 @@ import org.entur.vehicles.data.SeverityEnumeration;
 import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
+import org.entur.vehicles.data.model.DatedServiceJourney;
+import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.ServiceJourneyService;
 import org.entur.vehicles.service.planned.PlannedDataService;
 import org.entur.vehicles.service.NSRService;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +43,76 @@ public class SituationMapperTest {
         Mockito.when(nsrService.getStop(Mockito.anyString()))
                 .thenAnswer(invocation ->
                         new org.entur.vehicles.data.model.StopPoint(invocation.getArgument(0)));
-        mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService);
+        mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService,
+                new ServiceJourneyService(PlannedDataService.disabled()));
+    }
+
+    private static PtSituationElementRecord recordAffectingDatedServiceJourney(String datedServiceJourneyId) {
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setVehicleJourneyRefs(List.of());
+        journey.setDatedVehicleJourneyRefs(List.of(datedServiceJourneyId));
+        journey.setRoutes(List.of());
+        AffectsRecord affects = new AffectsRecord();
+        affects.setNetworks(List.of());
+        affects.setStopPoints(List.of());
+        affects.setStopPlaces(List.of());
+        affects.setVehicleJourneys(List.of(journey));
+        PtSituationElementRecord record = new PtSituationElementRecord();
+        record.setSituationNumber("TST:SituationNumber:1");
+        record.setParticipantRef("TST");
+        record.setCreationTime(ZonedDateTime.now().minusHours(3).toString());
+        record.setReportType("general");
+        record.setValidityPeriods(List.of());
+        record.setKeywords(List.of());
+        record.setSummaries(List.of());
+        record.setDescriptions(List.of());
+        record.setDetails(List.of());
+        record.setAdvices(List.of());
+        record.setInfoLinks(List.of());
+        record.setAffects(affects);
+        return record;
+    }
+
+    /**
+     * A DatedServiceJourney the planned data knows resolves to its ServiceJourney + operating
+     * date - the mapping VehicleRepository and TimetableRepository already apply. The
+     * producer-tagged ServiceJourney list and its id index are deliberately left alone.
+     */
+    @Test
+    public void testResolvedDatedServiceJourneyCarriesItsServiceJourney() {
+        ServiceJourneyService serviceJourneyService = Mockito.mock(ServiceJourneyService.class);
+        Mockito.when(serviceJourneyService.findDatedServiceJourney("TST:DatedServiceJourney:1"))
+                .thenReturn(datedServiceJourney("TST:DatedServiceJourney:1", "TST:ServiceJourney:1", "2026-08-25"));
+        NSRService nsrService = Mockito.mock(NSRService.class);
+        SituationMapper mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService, serviceJourneyService);
+
+        SituationUpdate situation = mapper.map(recordAffectingDatedServiceJourney("TST:DatedServiceJourney:1"));
+
+        List<DatedServiceJourney> dated = situation.getAffects().getDatedServiceJourneys();
+        assertEquals(1, dated.size());
+        assertEquals("TST:DatedServiceJourney:1", dated.get(0).getId());
+        assertNotNull(dated.get(0).getServiceJourney());
+        assertEquals("TST:ServiceJourney:1", dated.get(0).getServiceJourney().getId());
+        assertEquals("2026-08-25", dated.get(0).getServiceJourney().getDate());
+        assertTrue(situation.getAffects().getServiceJourneyIds().isEmpty(),
+                "resolving must not expand the producer-tagged service journeys");
+        assertTrue(situation.getAffects().getServiceJourneys().isEmpty());
+    }
+
+    @Test
+    public void testUnresolvedDatedServiceJourneyKeepsServiceJourneyNull() {
+        SituationUpdate situation = mapper.map(recordAffectingDatedServiceJourney("TST:DatedServiceJourney:unknown"));
+
+        List<DatedServiceJourney> dated = situation.getAffects().getDatedServiceJourneys();
+        assertEquals(1, dated.size());
+        assertEquals("TST:DatedServiceJourney:unknown", dated.get(0).getId());
+        assertNull(dated.get(0).getServiceJourney());
+    }
+
+    private static DatedServiceJourney datedServiceJourney(String id, String serviceJourneyId, String date) {
+        DatedServiceJourney dsj = new DatedServiceJourney(id, new ServiceJourney(serviceJourneyId, date));
+        dsj.setOperatingDay(date);
+        return dsj;
     }
 
     private PtSituationElementRecord minimalRecord() {
@@ -235,7 +307,8 @@ public class SituationMapperTest {
         NSRService nsrService = Mockito.mock(NSRService.class);
         Mockito.when(nsrService.getStop("TST:Quay:1")).thenReturn(cachedQuay);
         Mockito.when(nsrService.getStop("TST:StopPlace:9")).thenReturn(cachedStopPlace);
-        SituationMapper mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService);
+        SituationMapper mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService,
+                new ServiceJourneyService(PlannedDataService.disabled()));
 
         SituationUpdate first = mapper.map(situationNamingStop("TST:SituationNumber:first", "Name from situation A"));
         SituationUpdate second = mapper.map(situationNamingStop("TST:SituationNumber:second", "Name from situation B"));
@@ -259,7 +332,8 @@ public class SituationMapperTest {
         NSRService nsrService = Mockito.mock(NSRService.class);
         Mockito.when(nsrService.getStop("TST:Quay:1")).thenReturn(new StopPoint("TST:Quay:1"));
         Mockito.when(nsrService.getStop("TST:StopPlace:9")).thenReturn(new StopPoint("TST:StopPlace:9"));
-        SituationMapper mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService);
+        SituationMapper mapper = new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService,
+                new ServiceJourneyService(PlannedDataService.disabled()));
 
         SituationUpdate situation =
                 mapper.map(situationNamingStop("TST:SituationNumber:unknown", "Name from situation"));
