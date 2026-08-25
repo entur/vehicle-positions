@@ -79,7 +79,40 @@ public final class PlannedDataset {
         return stats;
     }
 
-    // pointsOnLink(patternId) is added in Task 2.
+    /** Marker for "computed, and there is nothing" - ConcurrentHashMap cannot store null. */
+    private static final PointsOnLink NO_GEOMETRY = new PointsOnLink();
+
+    /**
+     * The encoded route geometry of a journey pattern, stitched from its service links on
+     * first request and cached for the life of this snapshot. Null when the pattern is
+     * unknown or none of its links carry geometry.
+     */
+    public PointsOnLink pointsOnLink(String journeyPatternId) {
+        if (journeyPatternId == null || !patternLinks.containsKey(journeyPatternId)) {
+            return null;
+        }
+        PointsOnLink result = patternPolylines.computeIfAbsent(journeyPatternId, this::buildPointsOnLink);
+        return result == NO_GEOMETRY ? null : result;
+    }
+
+    private PointsOnLink buildPointsOnLink(String journeyPatternId) {
+        String[] linkIds = patternLinks.get(journeyPatternId);
+        List<int[]> geometries = new ArrayList<>(linkIds.length);
+        for (String linkId : linkIds) {
+            int[] geometry = linkGeometry.get(linkId);
+            if (geometry != null && geometry.length > 0) {
+                geometries.add(geometry);
+            }
+        }
+        int[] stitched = Polyline.stitch(geometries);
+        if (stitched.length == 0) {
+            return NO_GEOMETRY;
+        }
+        PointsOnLink pointsOnLink = new PointsOnLink();
+        pointsOnLink.setLength(stitched.length / 2);
+        pointsOnLink.setPoints(Polyline.encode(stitched));
+        return pointsOnLink;
+    }
 
     /**
      * Counts from one load. The unresolved counters are the summary of dangling refs found
