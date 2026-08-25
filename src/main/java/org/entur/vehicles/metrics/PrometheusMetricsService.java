@@ -21,6 +21,7 @@ import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import jakarta.annotation.PreDestroy;
 import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.service.planned.PlannedDataset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -59,11 +60,23 @@ public class PrometheusMetricsService {
     private static final String JOURNEY_PLANNER_RESPONSE_COUNTER_NAME = METRICS_PREFIX + "journeyplanner.response";
     private static final String RETURNED_VEHICLE_UPDATE_COUNTER_NAME = METRICS_PREFIX + "client.response";
     private static final String CODESPACE_TAG_NAME = "codespaceId";
+
+    private static final String PLANNED_DATA_LOAD_DURATION_NAME = METRICS_PREFIX + "planned.data.load.duration";
+    private static final String PLANNED_DATA_LAST_SUCCESS_NAME = METRICS_PREFIX + "planned.data.last.success.epoch.seconds";
+    private static final String PLANNED_DATA_ENTITIES_NAME = METRICS_PREFIX + "planned.data.entities";
+    private static final String PLANNED_DATA_UNRESOLVED_NAME = METRICS_PREFIX + "planned.data.unresolved.refs";
+    private static final String PLANNED_DATA_LOAD_FAILURE_COUNTER_NAME = METRICS_PREFIX + "planned.data.load.failure";
+    private static final String PLANNED_DATA_LOOKUP_MISS_COUNTER_NAME = METRICS_PREFIX + "planned.data.lookup.miss";
+
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
     private final AtomicInteger vehicleCounter = new AtomicInteger(0);
     private final AtomicInteger lastLoggedVehicleCount = new AtomicInteger(0);
     private final AtomicLong lastLoggedVehicleCountTimeMillis = new AtomicLong(System.currentTimeMillis());
+
+    private final AtomicLong plannedDataLoadDurationMillis = new AtomicLong(0);
+    private final AtomicLong plannedDataLastSuccessEpochSeconds = new AtomicLong(0);
+    private final java.util.Map<String, AtomicLong> plannedDataGauges = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final AtomicInteger timetableCounter = new AtomicInteger(0);
     private final AtomicInteger lastLoggedTimetableCount = new AtomicInteger(0);
@@ -151,6 +164,42 @@ public class PrometheusMetricsService {
     /** A journey skipped mid-scan because it was concurrently being mutated by ET ingest. */
     public void markSituationRepublishSkipped() {
         prometheusMeterRegistry.counter(SITUATION_REPUBLISH_SKIPPED_COUNTER_NAME).increment();
+    }
+
+    public void markPlannedDataLoaded(long durationMillis, PlannedDataset.Stats stats) {
+        plannedDataLoadDurationMillis.set(durationMillis);
+        prometheusMeterRegistry.gauge(PLANNED_DATA_LOAD_DURATION_NAME, plannedDataLoadDurationMillis);
+        plannedDataLastSuccessEpochSeconds.set(System.currentTimeMillis() / 1000);
+        prometheusMeterRegistry.gauge(PLANNED_DATA_LAST_SUCCESS_NAME, plannedDataLastSuccessEpochSeconds);
+
+        gauge(PLANNED_DATA_ENTITIES_NAME, "type", "operator", stats.operators());
+        gauge(PLANNED_DATA_ENTITIES_NAME, "type", "line", stats.lines());
+        gauge(PLANNED_DATA_ENTITIES_NAME, "type", "serviceJourney", stats.serviceJourneys());
+        gauge(PLANNED_DATA_ENTITIES_NAME, "type", "datedServiceJourney", stats.datedServiceJourneys());
+        gauge(PLANNED_DATA_ENTITIES_NAME, "type", "journeyPattern", stats.journeyPatterns());
+        gauge(PLANNED_DATA_ENTITIES_NAME, "type", "serviceLink", stats.serviceLinks());
+        gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "duplicateId", stats.duplicateIds());
+        gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "pattern", stats.unresolvedPatternRefs());
+        gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "link", stats.unresolvedLinkRefs());
+        gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "serviceJourney", stats.unresolvedServiceJourneyRefs());
+        gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "operatingDay", stats.unresolvedOperatingDayRefs());
+    }
+
+    private void gauge(String name, String tagKey, String tagValue, long value) {
+        AtomicLong holder = plannedDataGauges.computeIfAbsent(name + "|" + tagKey + "|" + tagValue, k -> {
+            AtomicLong a = new AtomicLong();
+            prometheusMeterRegistry.gauge(name, List.of(new ImmutableTag(tagKey, tagValue)), a);
+            return a;
+        });
+        holder.set(value);
+    }
+
+    public void markPlannedDataLoadFailure() {
+        prometheusMeterRegistry.counter(PLANNED_DATA_LOAD_FAILURE_COUNTER_NAME).increment();
+    }
+
+    public void markPlannedDataLookupMiss(String type) {
+        prometheusMeterRegistry.counter(PLANNED_DATA_LOOKUP_MISS_COUNTER_NAME, List.of(new ImmutableTag("type", type))).increment();
     }
 
     private long calculateRate(int currentCount, AtomicInteger lastLoggedCount, AtomicLong lastLoggedCountTimeMillis) {
