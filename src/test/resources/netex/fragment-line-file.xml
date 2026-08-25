@@ -24,6 +24,13 @@
               <FlexibleLineType>flexibleAreasOnly</FlexibleLineType>
             </FlexibleLine>
           </lines>
+          <routes>
+            <Route version="0" id="TST:Route:1">
+              <Name>Decoy</Name>
+              <LineRef ref="TST:Line:decoy" version="0"></LineRef>
+              <DirectionType>outbound</DirectionType>
+            </Route>
+          </routes>
           <journeyPatterns>
             <JourneyPattern version="0" id="TST:JourneyPattern:1">
               <Name>Outbound</Name>
@@ -67,6 +74,16 @@
                 <TimetabledPassingTime version="0" id="TST:TimetabledPassingTime:1">
                   <StopPointInJourneyPatternRef ref="TST:StopPointInJourneyPattern:1" version="0"></StopPointInJourneyPatternRef>
                   <DepartureTime>08:00:00</DepartureTime>
+                </TimetabledPassingTime>
+              </passingTimes>
+            </ServiceJourney>
+            <ServiceJourney version="1" id="TST:ServiceJourney:2">
+              <JourneyPatternRef ref="TST:JourneyPattern:1" version="0"></JourneyPatternRef>
+              <FlexibleLineRef ref="TST:FlexibleLine:8202" version="0"></FlexibleLineRef>
+              <passingTimes>
+                <TimetabledPassingTime version="0" id="TST:TimetabledPassingTime:2">
+                  <StopPointInJourneyPatternRef ref="TST:StopPointInJourneyPattern:1" version="0"></StopPointInJourneyPatternRef>
+                  <DepartureTime>09:00:00</DepartureTime>
                 </TimetabledPassingTime>
               </passingTimes>
             </ServiceJourney>

@@ -118,15 +118,22 @@ public final class NetexPlannedDataExtractor {
 
     private void readServiceJourney(XMLStreamReader r, PlannedDataset.Builder builder) throws XMLStreamException {
         String id = id(r);
-        String[] pattern = new String[1];
+        String[] refs = new String[2]; // journeyPatternId, lineId
         scan(r, (reader, localName, depth) -> {
-            if (depth == 1 && localName.equals("JourneyPatternRef")) {
-                pattern[0] = ref(reader);
+            if (depth != 1) {
+                return false;
+            }
+            switch (localName) {
+                case "JourneyPatternRef" -> refs[0] = ref(reader);
+                // Only the journey's own line ref: Route elements carry a LineRef too, but
+                // they are never nested inside a ServiceJourney, and depth 1 excludes them anyway.
+                case "LineRef", "FlexibleLineRef" -> refs[1] = ref(reader);
+                default -> { /* ignore */ }
             }
             return false;
         });
         if (id != null) {
-            builder.addServiceJourney(id, pattern[0]);
+            builder.addServiceJourney(id, refs[0], refs[1]);
         }
     }
 

@@ -1,15 +1,21 @@
 package org.entur.vehicles.service.planned;
 
+import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.PointsOnLink;
+import org.entur.vehicles.data.model.ServiceJourney;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -31,6 +37,10 @@ public final class PlannedDataset {
     private final Map<String, DatedJourneyRef> datedServiceJourneys;
     private final Map<String, String[]> patternLinks;
     private final Map<String, int[]> linkGeometry;
+    private final Map<String, String> serviceJourneyLine;
+    /** Line id -> service journey ids on it, sorted. Only lines the export declares. */
+    private final Map<String, String[]> lineServiceJourneys;
+    private final List<Codespace> codespaces;
     private final ConcurrentHashMap<String, PointsOnLink> patternPolylines = new ConcurrentHashMap<>();
     private final Stats stats;
 
@@ -40,6 +50,9 @@ public final class PlannedDataset {
                            Map<String, DatedJourneyRef> datedServiceJourneys,
                            Map<String, String[]> patternLinks,
                            Map<String, int[]> linkGeometry,
+                           Map<String, String> serviceJourneyLine,
+                           Map<String, String[]> lineServiceJourneys,
+                           List<Codespace> codespaces,
                            Stats stats) {
         this.operators = operators;
         this.lines = lines;
@@ -47,6 +60,9 @@ public final class PlannedDataset {
         this.datedServiceJourneys = datedServiceJourneys;
         this.patternLinks = patternLinks;
         this.linkGeometry = linkGeometry;
+        this.serviceJourneyLine = serviceJourneyLine;
+        this.lineServiceJourneys = lineServiceJourneys;
+        this.codespaces = codespaces;
         this.stats = stats;
     }
 
@@ -77,6 +93,87 @@ public final class PlannedDataset {
 
     public Stats stats() {
         return stats;
+    }
+
+    /** The line id a service journey runs on, or null if unknown. */
+    public String lineOf(String serviceJourneyId) {
+        return serviceJourneyId == null ? null : serviceJourneyLine.get(serviceJourneyId);
+    }
+
+    // ---- Catalogue: what the export declares, independent of live vehicles. Filters keep
+    // ---- the regex semantics of the old vehicle-backed resolvers (ObjectRef.matches);
+    // ---- results are sorted by ref.
+
+    /** All lines, or those whose codespace matches the given codespace pattern. */
+    public List<Line> lines(String codespaceId) {
+        List<Line> result = new ArrayList<>();
+        for (Line line : lines.values()) {
+            if (codespaceId == null || codespaceOf(line.getLineRef()).matches(codespaceId)) {
+                result.add(line);
+            }
+        }
+        result.sort(Comparator.comparing(Line::getLineRef));
+        return result;
+    }
+
+    /** All operators, or those whose codespace matches the given codespace pattern. */
+    public List<Operator> operators(String codespaceId) {
+        List<Operator> result = new ArrayList<>();
+        for (Operator operator : operators.values()) {
+            if (codespaceId == null || codespaceOf(operator.getOperatorRef()).matches(codespaceId)) {
+                result.add(operator);
+            }
+        }
+        result.sort(Comparator.comparing(Operator::getOperatorRef));
+        return result;
+    }
+
+    /** Every codespace that declares a line or an operator, sorted. */
+    public List<Codespace> codespaces() {
+        return codespaces;
+    }
+
+    /**
+     * Ids of the service journeys on lines matching {@code lineRef} and/or whose codespace
+     * matches {@code codespaceId}; both null yields every journey on a declared line.
+     * Journeys whose line the export does not declare are not part of the catalogue.
+     */
+    public List<String> serviceJourneyIds(String lineRef, String codespaceId) {
+        List<String> result = new ArrayList<>();
+        for (Map.Entry<String, String[]> e : lineServiceJourneys.entrySet()) {
+            String lineId = e.getKey();
+            if ((lineRef == null || lineId.matches(lineRef))
+                    && (codespaceId == null || codespaceOf(lineId).matches(codespaceId))) {
+                result.addAll(Arrays.asList(e.getValue()));
+            }
+        }
+        result.sort(Comparator.naturalOrder());
+        return result;
+    }
+
+    /**
+     * A light ServiceJourney (no geometry - resolve pointsOnLink lazily) for a service journey
+     * id, or for a dated service journey id (then dated to its operating day). Null if the
+     * export knows neither.
+     */
+    public ServiceJourney serviceJourney(String id) {
+        if (id == null) {
+            return null;
+        }
+        if (serviceJourneyPattern.containsKey(id)) {
+            return new ServiceJourney(id);
+        }
+        DatedJourneyRef dated = datedServiceJourneys.get(id);
+        if (dated != null && dated.serviceJourneyId() != null) {
+            return new ServiceJourney(dated.serviceJourneyId(), dated.operatingDate());
+        }
+        return null;
+    }
+
+    /** The codespace prefix of a NeTEx id ("RUT:Line:1" -> "RUT"); the whole id if it has no colon. */
+    static String codespaceOf(String id) {
+        int colon = id.indexOf(':');
+        return colon < 0 ? id : id.substring(0, colon);
     }
 
     /** Marker for "computed, and there is nothing" - ConcurrentHashMap cannot store null. */
@@ -131,7 +228,8 @@ public final class PlannedDataset {
                         int unresolvedPatternRefs,
                         int unresolvedLinkRefs,
                         int unresolvedServiceJourneyRefs,
-                        int unresolvedOperatingDayRefs) {
+                        int unresolvedOperatingDayRefs,
+                        int unresolvedLineRefs) {
     }
 
     /**
@@ -149,6 +247,7 @@ public final class PlannedDataset {
         private final Map<String, String[]> patternLinks = new HashMap<>();
         private final Map<String, int[]> linkGeometry = new HashMap<>();
         private final Map<String, String> operatingDays = new HashMap<>();
+        private final Map<String, String> serviceJourneyLine = new HashMap<>();
         private int duplicateIds = 0;
 
         public Builder addOperator(String id, String name) {
@@ -177,9 +276,19 @@ public final class PlannedDataset {
         }
 
         public Builder addServiceJourney(String id, String journeyPatternId) {
+            return addServiceJourney(id, journeyPatternId, null);
+        }
+
+        /** @param lineId the journey's LineRef/FlexibleLineRef; null when the element has none */
+        public Builder addServiceJourney(String id, String journeyPatternId, String lineId) {
             // Map.copyOf in build() rejects null values; "" is never a real pattern id, so it
             // still counts as unresolved there.
             countDuplicate(serviceJourneyPattern.put(id, journeyPatternId == null ? "" : journeyPatternId));
+            if (lineId != null) {
+                serviceJourneyLine.put(id, lineId);
+            } else {
+                serviceJourneyLine.remove(id);
+            }
             return this;
         }
 
@@ -228,6 +337,39 @@ public final class PlannedDataset {
                 return canonicalised;
             });
 
+            Map<String, String> canonLine = new HashMap<>(lines.size());
+            for (String id : lines.keySet()) {
+                canonLine.put(id, id);
+            }
+            int unresolvedLineRefs = 0;
+            Map<String, List<String>> journeysByLine = new HashMap<>();
+            for (Map.Entry<String, String> e : serviceJourneyLine.entrySet()) {
+                String lineId = canonLine.get(e.getValue());
+                if (lineId == null) {
+                    unresolvedLineRefs++;
+                    continue;
+                }
+                e.setValue(lineId);
+                journeysByLine.computeIfAbsent(lineId, k -> new ArrayList<>()).add(e.getKey());
+            }
+            Map<String, String[]> lineServiceJourneys = new HashMap<>(journeysByLine.size());
+            for (Map.Entry<String, List<String>> e : journeysByLine.entrySet()) {
+                String[] ids = e.getValue().toArray(new String[0]);
+                Arrays.sort(ids);
+                lineServiceJourneys.put(e.getKey(), ids);
+            }
+            TreeSet<String> codespaceIds = new TreeSet<>();
+            for (String id : lines.keySet()) {
+                codespaceIds.add(codespaceOf(id));
+            }
+            for (String id : operators.keySet()) {
+                codespaceIds.add(codespaceOf(id));
+            }
+            List<Codespace> codespaces = new ArrayList<>(codespaceIds.size());
+            for (String id : codespaceIds) {
+                codespaces.add(Codespace.getCodespace(id));
+            }
+
             int unresolvedPatternRefs = 0;
             int unresolvedLinkRefs = 0;
             int unresolvedServiceJourneyRefs = 0;
@@ -267,10 +409,11 @@ public final class PlannedDataset {
             Stats stats = new Stats(
                     operators.size(), lines.size(), serviceJourneyPattern.size(), datedServiceJourneys.size(),
                     patternLinks.size(), linkGeometry.size(), duplicateIds,
-                    unresolvedPatternRefs, unresolvedLinkRefs, unresolvedServiceJourneyRefs, unresolvedOperatingDayRefs);
+                    unresolvedPatternRefs, unresolvedLinkRefs, unresolvedServiceJourneyRefs, unresolvedOperatingDayRefs,
+                    unresolvedLineRefs);
 
             if (duplicateIds + unresolvedPatternRefs + unresolvedLinkRefs
-                    + unresolvedServiceJourneyRefs + unresolvedOperatingDayRefs > 0) {
+                    + unresolvedServiceJourneyRefs + unresolvedOperatingDayRefs + unresolvedLineRefs > 0) {
                 LOG.info("Planned data build summary: {}", stats);
             }
 
@@ -281,6 +424,9 @@ public final class PlannedDataset {
                     Map.copyOf(datedServiceJourneys),
                     Map.copyOf(patternLinks),
                     Map.copyOf(linkGeometry),
+                    Map.copyOf(serviceJourneyLine),
+                    Map.copyOf(lineServiceJourneys),
+                    List.copyOf(codespaces),
                     stats);
         }
     }

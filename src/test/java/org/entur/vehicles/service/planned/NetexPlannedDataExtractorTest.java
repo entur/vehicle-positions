@@ -83,4 +83,18 @@ public class NetexPlannedDataExtractorTest {
 
         assertThat(builder.build().line("TST:Line:before")).isNotNull();
     }
+
+    @Test
+    public void serviceJourneyLineRefIsTakenFromTheJourneyNotFromRoutes() throws Exception {
+        PlannedDataset dataset = extract("fragment-line-file.xml");
+
+        assertThat(dataset.lineOf("TST:ServiceJourney:1")).isEqualTo("TST:Line:204");
+        assertThat(dataset.lineOf("TST:ServiceJourney:2"))
+                .withFailMessage("FlexibleLineRef counts as the journey's line")
+                .isEqualTo("TST:FlexibleLine:8202");
+        assertThat(dataset.serviceJourneyIds("TST:Line:204", null)).containsExactly("TST:ServiceJourney:1");
+        assertThat(dataset.stats().unresolvedLineRefs())
+                .withFailMessage("the Route's LineRef (TST:Line:decoy) must not be attributed to any journey")
+                .isZero();
+    }
 }

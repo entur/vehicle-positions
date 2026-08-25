@@ -101,4 +101,21 @@ public class PlannedDataLoaderTest {
         out.write(content.getBytes(StandardCharsets.UTF_8));
         out.closeEntry();
     }
+
+    @Test
+    public void goaCatalogueCoversEveryJourneyOnItsThreeLines() throws Exception {
+        PlannedDataset dataset = new PlannedDataLoader().load(goaZip());
+
+        assertThat(dataset.codespaces()).extracting(c -> c.getCodespaceId()).containsExactly("GOA");
+        assertThat(dataset.lines("GOA")).hasSize(3);
+        assertThat(dataset.serviceJourneyIds(null, "GOA")).hasSize(650);
+        int perLine = 0;
+        for (var line : dataset.lines(null)) {
+            perLine += dataset.serviceJourneyIds(line.getLineRef(), null).size();
+        }
+        assertThat(perLine).isEqualTo(650);
+        assertThat(dataset.stats().unresolvedLineRefs()).isZero();
+        assertThat(dataset.serviceJourney("GOA:DatedServiceJourney:B3008-AA_STV-S_A720AB14_24-01-20").getDate())
+                .isEqualTo("2024-01-20");
+    }
 }

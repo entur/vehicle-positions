@@ -181,6 +181,7 @@ public class PrometheusMetricsService {
         gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "link", stats.unresolvedLinkRefs());
         gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "serviceJourney", stats.unresolvedServiceJourneyRefs());
         gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "operatingDay", stats.unresolvedOperatingDayRefs());
+        gauge(PLANNED_DATA_UNRESOLVED_NAME, "kind", "line", stats.unresolvedLineRefs());
     }
 
     private void gauge(String name, String tagKey, String tagValue, long value) {
