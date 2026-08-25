@@ -14,4 +14,9 @@ jobs:
   code-scan:
     name: Code Scan
     uses: entur/gha-security/.github/workflows/code-scan.yml@v2
+    with:
+      # superpom 7 enforces JDK >= 25; without this, CodeQL's autobuild uses the runner's JDK.
+      use_setup_java: true
+      java_version: "25"
+      use_maven_cache: true
     secrets: inherit
