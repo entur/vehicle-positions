@@ -13,7 +13,7 @@ on:
 jobs:
   code-scan:
     name: Code Scan
-    uses: entur/gha-security/.github/workflows/code-scan.yml@v2
+    uses: entur/gha-security/.github/workflows/code-scan.yml@v2.15.0
     with:
       # superpom 7 enforces JDK >= 25; without this, CodeQL's autobuild uses the runner's JDK.
       use_setup_java: true
