@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:25-jre-jammy
 
 RUN addgroup appuser && adduser --disabled-password appuser --ingroup appuser
 USER appuser
