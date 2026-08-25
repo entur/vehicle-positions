@@ -645,7 +645,7 @@ final class Polyline {
         }
         while (v >= 0x20) {
             sb.append((char) ((0x20 | (v & 0x1f)) + 63));
-            v >>= 1;
+            v >>= 5;
         }
         sb.append((char) (v + 63));
     }
