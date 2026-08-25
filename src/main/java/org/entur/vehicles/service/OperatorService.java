@@ -27,4 +27,12 @@ public class OperatorService {
         PlannedDataService service = plannedData;
         return service == null ? null : service.findOperator(operatorRef);
     }
+
+    /**
+     * Test hook: clears the static reference so a test that constructed an OperatorService
+     * does not affect later tests.
+     */
+    public static void resetForTest() {
+        plannedData = null;
+    }
 }

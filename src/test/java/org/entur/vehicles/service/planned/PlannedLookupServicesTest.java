@@ -1,10 +1,13 @@
-package org.entur.vehicles.service;
+package org.entur.vehicles.service.planned;
 
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
-import org.entur.vehicles.service.planned.PlannedDataService;
+import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.OperatorService;
+import org.entur.vehicles.service.ServiceJourneyService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,12 +19,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class PlannedLookupServicesTest {
 
+    @AfterEach
+    public void resetOperatorServiceStaticReference() {
+        OperatorService.resetForTest();
+    }
+
     private static PlannedDataService loaded() throws Exception {
         String url = PlannedLookupServicesTest.class.getResource("/netex/rb_goa-aggregated-netex.zip").toURI().toString();
-        PlannedDataService service = new PlannedDataService(true, url,
-                new org.entur.vehicles.service.planned.PlannedDataLoader(), null);
-        // initialLoad is package-private in the planned package; go through the public reload path
-        service.reloadForTest();
+        PlannedDataService service = new PlannedDataService(true, url, new PlannedDataLoader(), null, 0);
+        service.initialLoad();
         return service;
     }
 

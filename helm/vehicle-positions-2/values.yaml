@@ -27,6 +27,8 @@ configMap:
     url: https://storage.googleapis.com/marduk-production/outbound/netex/rb_norway-aggregated-netex.zip
     # Europe/Oslo. Marduk's export lands around 07:30 UTC; confirm before moving this earlier.
     reloadCron: "0 0 8 * * *"
+    # A fresh load with fewer service journeys than this is rejected outright, even on the first load.
+    minServiceJourneys: 50000
   # Client-name header sent when fetching the SX situation snapshot at startup.
   sxSnapshotEtClientName: ror.vehicle-positions.graphql
   etEnabled: false

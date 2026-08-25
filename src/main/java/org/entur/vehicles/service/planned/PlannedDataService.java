@@ -39,27 +39,25 @@ public class PlannedDataService {
     private final String url;
     private final PlannedDataLoader loader;
     private final PrometheusMetricsService metrics;
+    private final int minServiceJourneys;
     private final AtomicReference<PlannedDataset> current = new AtomicReference<>(PlannedDataset.EMPTY);
 
     @Autowired
     public PlannedDataService(@Value("${vehicle.planned.data.enabled:false}") boolean enabled,
                               @Value("${vehicle.planned.data.url:https://storage.googleapis.com/marduk-production/outbound/netex/rb_norway-aggregated-netex.zip}") String url,
                               PlannedDataLoader loader,
-                              PrometheusMetricsService metrics) {
+                              PrometheusMetricsService metrics,
+                              @Value("${vehicle.planned.data.min.service.journeys:50000}") int minServiceJourneys) {
         this.enabled = enabled;
         this.url = url;
         this.loader = loader;
         this.metrics = metrics;
+        this.minServiceJourneys = minServiceJourneys;
     }
 
     /** A service that never loads and serves {@link PlannedDataset#EMPTY} - for tests. */
     public static PlannedDataService disabled() {
-        return new PlannedDataService(false, null, null, null);
-    }
-
-    /** Runs a load with startup semantics (throws on failure). For tests outside this package. */
-    public void reloadForTest() {
-        initialLoad();
+        return new PlannedDataService(false, null, null, null, 0);
     }
 
     @PostConstruct
@@ -101,6 +99,11 @@ public class PlannedDataService {
         try {
             download(url, zip);
             PlannedDataset fresh = loader.load(zip);
+            if (fresh.serviceJourneyCount() < minServiceJourneys) {
+                throw new PlannedDataLoadException("Fresh dataset has " + fresh.serviceJourneyCount()
+                        + " service journeys, below the configured minimum of " + minServiceJourneys
+                        + " - rejecting");
+            }
             PlannedDataset previous = current.get();
             if (isSuspiciouslySmall(fresh, previous)) {
                 throw new PlannedDataLoadException("Fresh dataset has " + fresh.serviceJourneyCount()

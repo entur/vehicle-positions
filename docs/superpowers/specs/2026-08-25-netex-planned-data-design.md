@@ -199,6 +199,7 @@ place).
 | `vehicle.planned.data.enabled` | `false` | `true` in helm for every environment. When false, `current()` is `PlannedDataset.EMPTY` and every lookup returns bare refs - today's local-dev behaviour. |
 | `vehicle.planned.data.url` | `https://storage.googleapis.com/marduk-production/outbound/netex/rb_norway-aggregated-netex.zip` | Verified reachable 2026-08-25. A `file:` URL works for local runs against a downloaded copy. |
 | `vehicle.planned.data.reload.cron` | `0 0 8 * * *` (Europe/Oslo) | The export observed on 2026-08-25 was written at 07:33 UTC, so a reload earlier than ~08:30 Oslo time would pick up the previous day's file. **Confirm Marduk's actual completion time before setting this in helm.** |
+| `vehicle.planned.data.min.service.journeys` | `50000` | A fresh dataset with fewer service journeys than this is rejected outright, before the relative shrink check and even on the very first load - guards a truncated-but-non-empty export against every restarting pod, since the relative `< 50%` guard has nothing to compare against on a first load. `0` in tests. |
 
 ## Geometry
 
@@ -224,6 +225,7 @@ a JourneyPlanner miss yields today.
 | A single zip entry fails to parse | Log ERROR with the entry name, skip it, continue. |
 | Zero line files parsed | Treat the load as failed (startup: throw; nightly: keep current). |
 | Nightly dataset has < 50% of the current dataset's service journeys | Reject the swap, log ERROR, count. Guards against a truncated export. |
+| Fresh dataset has fewer than `vehicle.planned.data.min.service.journeys` (default 50,000) service journeys | Reject, regardless of load count - applies to the first load too, where the relative guard above has nothing to compare against. |
 | SJ -> unknown pattern, pattern -> unknown link, DSJ -> unknown SJ or OperatingDay | Resolve to "no geometry" / "no date". Count each kind; log one summary line per load. Never throw. |
 | Same id declared in more than one file | Last one wins. Count, log in the summary. |
 | Lookup for an id not in the dataset | Bare-ref fallback object, exactly as a failed JourneyPlanner lookup today. Counted per type. |
