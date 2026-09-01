@@ -27,6 +27,7 @@ import org.entur.vehicles.data.model.ValidityPeriod;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.OperatorService;
+import org.entur.vehicles.service.ServiceJourneyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +36,6 @@ import org.springframework.stereotype.Component;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 import static org.entur.vehicles.repository.helpers.Util.containsValues;
 import static org.entur.vehicles.repository.helpers.Util.convert;
@@ -51,11 +51,14 @@ public class SituationMapper {
 
     private final LineService lineService;
     private final NSRService nsrService;
+    private final ServiceJourneyService serviceJourneyService;
 
     public SituationMapper(@Autowired LineService lineService,
-                           @Autowired NSRService nsrService) {
+                           @Autowired NSRService nsrService,
+                           @Autowired ServiceJourneyService serviceJourneyService) {
         this.lineService = lineService;
         this.nsrService = nsrService;
+        this.serviceJourneyService = serviceJourneyService;
     }
 
     /** Returns null when no codespace can be resolved - the caller should skip the record. */
@@ -247,7 +250,7 @@ public class SituationMapper {
                 }
                 if (containsValues(journey.getDatedVehicleJourneyRefs())) {
                     journey.getDatedVehicleJourneyRefs().forEach(ref ->
-                            affects.addDatedServiceJourney(new DatedServiceJourney(ref.toString())));
+                            affects.addDatedServiceJourney(resolveDatedServiceJourney(ref.toString())));
                 }
             }
         }
@@ -255,15 +258,22 @@ public class SituationMapper {
         return affects;
     }
 
+    /**
+     * A DatedServiceJourney the planned data knows carries its ServiceJourney + operating
+     * date, as on the vehicle and timetable paths. An unknown id stays a bare ref with a
+     * null serviceJourney - the id index on {@link Affects} is what the producer tagged
+     * either way, so this never widens what a situation matches.
+     */
+    private DatedServiceJourney resolveDatedServiceJourney(String datedServiceJourneyId) {
+        DatedServiceJourney resolved = serviceJourneyService.findDatedServiceJourney(datedServiceJourneyId);
+        return resolved != null ? resolved : new DatedServiceJourney(datedServiceJourneyId);
+    }
+
     private Line resolveLine(String lineRef) {
         if (lineRef == null) {
             return null;
         }
-        try {
-            return lineService.getLine(lineRef);
-        } catch (ExecutionException e) {
-            return new Line(lineRef);
-        }
+        return lineService.getLine(lineRef);
     }
 
     private org.entur.vehicles.data.model.Operator resolveOperator(String operatorRef) {

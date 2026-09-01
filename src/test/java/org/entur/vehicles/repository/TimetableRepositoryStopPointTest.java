@@ -12,6 +12,7 @@ import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.planned.PlannedDataService;
 import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +63,7 @@ public class TimetableRepositoryStopPointTest {
 
         repository = new TimetableRepository(
                 metricsService,
-                new LineService(false),
+                new LineService(PlannedDataService.disabled()),
                 serviceJourneyService,
                 nsrService,
                 new AutoPurgingTimetableMap(Duration.parse("PT5S"), Duration.parse("PT5M")),

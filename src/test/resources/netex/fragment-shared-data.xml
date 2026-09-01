@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PublicationDelivery xmlns="http://www.netex.org.uk/netex" xmlns:gis="http://www.opengis.net/gml/3.2" version="1.15:NO-NeTEx-networktimetable:1.5">
+  <dataObjects>
+    <CompositeFrame version="1" id="TST:CompositeFrame:1">
+      <frames>
+        <ResourceFrame version="1" id="TST:ResourceFrame:1">
+          <organisations>
+            <Operator version="1" id="TST:Operator:1">
+              <CompanyNumber>917132577</CompanyNumber>
+              <Name>Test Operator AS</Name>
+              <ContactDetails>
+                <Url>https://example.org</Url>
+              </ContactDetails>
+              <OrganisationType>operator</OrganisationType>
+            </Operator>
+          </organisations>
+        </ResourceFrame>
+        <ServiceCalendarFrame version="1" id="TST:ServiceCalendarFrame:1">
+          <operatingDays>
+            <OperatingDay version="1" id="TST:OperatingDay:2024-01-20">
+              <CalendarDate>2024-01-20</CalendarDate>
+            </OperatingDay>
+          </operatingDays>
+        </ServiceCalendarFrame>
+        <ServiceFrame version="1" id="TST:ServiceFrame:1">
+          <serviceLinks>
+            <ServiceLink version="0" id="TST:ServiceLink:A-B">
+              <Distance>508.8</Distance>
+              <projections>
+                <LinkSequenceProjection version="1" id="TST:LinkSequenceProjection:1">
+                  <gis:LineString srsName="4326" srsDimension="2" gis:id="LS_1">
+                    <gis:posList count="2" srsDimension="2">59.72215 10.512689 59.722111 10.512651</gis:posList>
+                  </gis:LineString>
+                </LinkSequenceProjection>
+              </projections>
+              <FromPointRef ref="TST:ScheduledStopPoint:A" version="1"></FromPointRef>
+              <ToPointRef ref="TST:ScheduledStopPoint:B" version="1"></ToPointRef>
+            </ServiceLink>
+            <ServiceLink version="0" id="TST:ServiceLink:B-C">
+              <Distance>100</Distance>
+              <FromPointRef ref="TST:ScheduledStopPoint:B" version="1"></FromPointRef>
+              <ToPointRef ref="TST:ScheduledStopPoint:C" version="1"></ToPointRef>
+            </ServiceLink>
+          </serviceLinks>
+        </ServiceFrame>
+      </frames>
+    </CompositeFrame>
+  </dataObjects>
+</PublicationDelivery>

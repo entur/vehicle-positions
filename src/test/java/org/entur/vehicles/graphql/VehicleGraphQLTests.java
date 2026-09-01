@@ -17,6 +17,10 @@ import org.entur.vehicles.repository.AutoPurgingVehicleMap;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.planned.PlannedDataService;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import org.entur.vehicles.service.planned.PlannedDataset;
 import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,15 +51,17 @@ public class VehicleGraphQLTests {
         PrometheusMetricsService metricsService = new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
         repository = new VehicleRepository(
                 metricsService,
-                new LineService(false),
+                new LineService(PlannedDataService.disabled()),
                 serviceJourneyService,
                 new AutoPurgingVehicleMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                         180,
                 publisher
         );
         publisher = new VehicleUpdateRxPublisher();
+        PlannedDataService plannedDataService = Mockito.mock(PlannedDataService.class);
+        Mockito.when(plannedDataService.current()).thenReturn(plannedDataset());
         queryService = new Query(repository, null, null, new NSRService(false, null), metricsService,
-                new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0"));
+                new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0"), plannedDataService);
 
         VehicleActivityRecord vehicleActivityRecord = new VehicleActivityRecord();
         vehicleActivityRecord.setRecordedAtTime(ZonedDateTime.now().toString());
@@ -114,48 +120,58 @@ public class VehicleGraphQLTests {
 
     }
 
+    /**
+     * The catalogue queries answer from planned data, not from live vehicles: the dataset
+     * below declares the two lines the vehicles run on plus one nobody is driving.
+     */
+    private static PlannedDataset plannedDataset() {
+        return new PlannedDataset.Builder()
+                .addOperator("TST:Operator:1", "Test")
+                .addLine("TST:Line:123", "One two three", "123")
+                .addLine("DSJ:Line:321", "Three two one", "321")
+                .addLine("TST:Line:idle", "Nobody drives this", "0")
+                .addJourneyPattern("JP", List.of())
+                .addServiceJourney("TST:ServiceJourney:1234567890", "JP", "TST:Line:123")
+                .addServiceJourney("DSJ:ServiceJourney:1234567890", "JP", "DSJ:Line:321")
+                .addServiceJourney("TST:ServiceJourney:idle", "JP", "TST:Line:idle")
+                .addOperatingDay("DSJ:OperatingDay:1", "2020-12-15")
+                .addDatedServiceJourney("DSJ:DatedServiceJourney:1234567890", "DSJ:ServiceJourney:1234567890", "DSJ:OperatingDay:1")
+                .build();
+    }
+
     @Test
-    public void testQueries() {
-
-        // Codespaces
+    public void catalogueQueriesAnswerFromPlannedData() {
         final List<Codespace> codespaces = queryService.codespaces();
-        assertFalse(codespaces.isEmpty());
-        assertTrue(codespaces.stream().anyMatch(cs -> cs.getCodespaceId().equals("TST")));
-        assertTrue(codespaces.stream().anyMatch(cs -> cs.getCodespaceId().equals("DSJ")));
+        assertEquals(List.of("DSJ", "TST"), codespaces.stream().map(Codespace::getCodespaceId).toList());
 
-        // Lines
         List<Line> lines = queryService.lines(null);
-        assertFalse(lines.isEmpty());
-        assertTrue(lines.stream().anyMatch(l -> l.getLineRef().equals("TST:Line:123")));
-        assertTrue(lines.stream().anyMatch(l -> l.getLineRef().equals("DSJ:Line:321")));
+        assertEquals(List.of("DSJ:Line:321", "TST:Line:123", "TST:Line:idle"),
+                lines.stream().map(Line::getLineRef).toList());
+        assertTrue(queryService.lines("BAH").isEmpty());
+        assertEquals("TST:Line:123", queryService.lines("TST").get(0).getLineRef());
+        assertEquals("DSJ:Line:321", queryService.lines("DSJ").get(0).getLineRef());
 
-        lines = queryService.lines("BAH");
-        assertTrue(lines.isEmpty());
+        assertEquals("TST:Operator:1", queryService.operators(null).get(0).getOperatorRef());
+        assertTrue(queryService.operators("DSJ").isEmpty());
 
-        lines = queryService.lines("TST");
-        assertFalse(lines.isEmpty());
-        assertEquals("TST:Line:123", lines.get(0).getLineRef());
+        List<ServiceJourney> serviceJourneys = queryService.serviceJourneys("TST:Line:123", null);
+        assertEquals(List.of("TST:ServiceJourney:1234567890"),
+                serviceJourneys.stream().map(ServiceJourney::getId).toList());
+        assertTrue(queryService.serviceJourneys("BAH:Line:321", null).isEmpty());
+        assertEquals(2, queryService.serviceJourneys(null, "TST").size());
 
-        lines = queryService.lines("DSJ");
-        assertFalse(lines.isEmpty());
-        assertEquals("DSJ:Line:321", lines.get(0).getLineRef());
+        ServiceJourney byDatedId = queryService.serviceJourney("DSJ:DatedServiceJourney:1234567890");
+        ServiceJourney byId = queryService.serviceJourney("DSJ:ServiceJourney:1234567890");
+        assertEquals(byId, byDatedId);
+        assertEquals("2020-12-15", byDatedId.getDate());
+        assertNull(queryService.serviceJourney("TST:ServiceJourney:unknown"));
+    }
 
-        // ServiceJourneys
-        List<ServiceJourney> serviceJourneys = queryService.serviceJourneys(null, null);
-        assertFalse(serviceJourneys.isEmpty());
-        assertTrue(serviceJourneys.stream().anyMatch(sj -> sj.getServiceJourneyId().equals("TST:ServiceJourney:1234567890")));
-        assertTrue(serviceJourneys.stream().anyMatch(sj -> sj.getServiceJourneyId().equals("DSJ:ServiceJourney:1234567890")));
-
-        serviceJourneys = queryService.serviceJourneys("BAH:Line:321", null);
-        assertTrue(serviceJourneys.isEmpty());
-
-        serviceJourneys = queryService.serviceJourneys("TST:Line:123", null);
-        assertFalse(serviceJourneys.isEmpty());
-        assertEquals("TST:ServiceJourney:1234567890", serviceJourneys.get(0).getServiceJourneyId());
-
-        ServiceJourney serviceJourney1 = queryService.serviceJourney("DSJ:DatedServiceJourney:1234567890");
-        ServiceJourney dsj_serviceJourney1 = queryService.serviceJourney("DSJ:ServiceJourney:1234567890");
-        assertEquals(serviceJourney1, dsj_serviceJourney1);
+    @Test
+    public void serviceJourneysRequiresAFilter() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> queryService.serviceJourneys(null, null));
+        assertTrue(e.getMessage().contains("lineRef"), e.getMessage());
     }
 
     private VehicleActivityRecord createVehicleActivity(String codespace, String vehicleRef, String lineRef,

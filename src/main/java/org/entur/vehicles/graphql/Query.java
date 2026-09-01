@@ -20,6 +20,7 @@ import org.entur.vehicles.repository.TimetableRepository;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.NSRService;
+import org.entur.vehicles.service.planned.PlannedDataService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Controller;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -36,6 +38,7 @@ class Query {
     private static final Logger LOG = LoggerFactory.getLogger(Query.class);
 
     private final VehicleRepository vehicleRepository;
+    private final PlannedDataService plannedDataService;
     private final TimetableRepository timetableRepository;
     private final SituationRepository situationRepository;
     private final NSRService nsrService;
@@ -48,8 +51,10 @@ class Query {
                  SituationRepository situationRepository,
                  NSRService nsrService,
                  PrometheusMetricsService metricsService,
-                 InvalidLocationRegistry invalidLocationRegistry) {
+                 InvalidLocationRegistry invalidLocationRegistry,
+                 PlannedDataService plannedDataService) {
         this.vehicleRepository = vehicleRepository;
+        this.plannedDataService = plannedDataService;
         this.timetableRepository = timetableRepository;
         this.situationRepository = situationRepository;
         this.nsrService = nsrService;
@@ -206,7 +211,7 @@ class Query {
     @QueryMapping
     List<Line> lines(@Argument String codespaceId) {
         final long start = System.currentTimeMillis();
-        final List<Line> lines = vehicleRepository.getLines(codespaceId);
+        final List<Line> lines = plannedDataService.current().lines(codespaceId);
         LOG.info("Returning {} lines in {} ms", lines.size(), System.currentTimeMillis() - start);
         metricsService.markLinesQuery();
         return lines;
@@ -216,7 +221,7 @@ class Query {
     List<Codespace> codespaces() {
         final long start = System.currentTimeMillis();
 
-        final List<Codespace> codespaces = vehicleRepository.getCodespaces();
+        final List<Codespace> codespaces = plannedDataService.current().codespaces();
         LOG.info("Returning {} codespaces in {} ms", codespaces.size(), System.currentTimeMillis() - start);
 
         metricsService.markCodespacesQuery();
@@ -227,7 +232,7 @@ class Query {
     List<Operator> operators(@Argument String codespaceId) {
         final long start = System.currentTimeMillis();
 
-        final List<Operator> operators = vehicleRepository.getOperators(codespaceId);
+        final List<Operator> operators = plannedDataService.current().operators(codespaceId);
         LOG.info("Returning {} operators in {} ms", operators.size(), System.currentTimeMillis() - start);
 
         metricsService.markOperatorsQuery();
@@ -236,9 +241,16 @@ class Query {
 
     @QueryMapping
     List<ServiceJourney> serviceJourneys(@Argument String lineRef, @Argument String codespaceId) {
+        if (lineRef == null && codespaceId == null) {
+            // The full catalogue is hundreds of thousands of journeys; a client must narrow it.
+            throw new IllegalArgumentException("serviceJourneys requires lineRef or codespaceId");
+        }
         final long start = System.currentTimeMillis();
 
-        final List<ServiceJourney> serviceJourneys = vehicleRepository.getServiceJourneys(lineRef, codespaceId);
+        final List<ServiceJourney> serviceJourneys = new ArrayList<>();
+        for (String id : plannedDataService.current().serviceJourneyIds(lineRef, codespaceId)) {
+            serviceJourneys.add(new ServiceJourney(id));
+        }
         LOG.info("Returning {} serviceJourneys in {} ms", serviceJourneys.size(), System.currentTimeMillis() - start);
 
         metricsService.markServiceJourneysQuery();
@@ -249,7 +261,7 @@ class Query {
     ServiceJourney serviceJourney(@Argument String id) {
         final long start = System.currentTimeMillis();
 
-        final ServiceJourney serviceJourney = vehicleRepository.getServiceJourney(id);
+        final ServiceJourney serviceJourney = plannedDataService.current().serviceJourney(id);
         LOG.info("Returning serviceJourney {} in {} ms", serviceJourney, System.currentTimeMillis() - start);
 
         metricsService.markServiceJourneyQuery();

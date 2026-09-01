@@ -14,7 +14,6 @@ import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Location;
 import org.entur.vehicles.data.model.MonitoredCall;
-import org.entur.vehicles.data.model.ObjectRef;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ProgressBetweenStops;
 import org.entur.vehicles.data.model.ServiceJourney;
@@ -33,12 +32,8 @@ import org.springframework.stereotype.Repository;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static org.entur.vehicles.repository.helpers.Util.containsValues;
 import static org.entur.vehicles.repository.helpers.Util.convert;
@@ -144,38 +139,22 @@ public class VehicleRepository {
       }
 
       if (lineRef != null) {
-        try {
-          v.setLine(lineService.getLine(lineRef));
-        } catch (ExecutionException e) {
-          v.setLine(new Line(lineRef));
-        }
+        v.setLine(lineService.getLine(lineRef));
       } else {
         v.setLine(Line.DEFAULT);
       }
 
       if (serviceJourneyId != null) {
-        try {
-          ServiceJourney serviceJourney = serviceJourneyService.getServiceJourney(serviceJourneyId);
-          if (serviceJourney != null) {
-            serviceJourney.setDate(date);
-            v.setServiceJourney(serviceJourney);
-          }
-        } catch (ExecutionException e) {
-          v.setServiceJourney(new ServiceJourney(serviceJourneyId, date));
-        }
+        ServiceJourney serviceJourney = serviceJourneyService.getServiceJourney(serviceJourneyId);
+        serviceJourney.setDate(date);
+        v.setServiceJourney(serviceJourney);
       }
       if (datedServiceJourneyId != null) {
-        try {
-          DatedServiceJourney datedServiceJourney = serviceJourneyService.getDatedServiceJourney(datedServiceJourneyId);
-          if (datedServiceJourney != null) {
-            if (v.getServiceJourney() != null) {
-              datedServiceJourney.setServiceJourney(v.getServiceJourney());
-            }
-            v.setDatedServiceJourney(datedServiceJourney);
-          }
-        } catch (ExecutionException e) {
-          v.setDatedServiceJourney(new DatedServiceJourney(datedServiceJourneyId, new ServiceJourney(datedServiceJourneyId)));
+        DatedServiceJourney datedServiceJourney = serviceJourneyService.getDatedServiceJourney(datedServiceJourneyId);
+        if (v.getServiceJourney() != null) {
+          datedServiceJourney.setServiceJourney(v.getServiceJourney());
         }
+        v.setDatedServiceJourney(datedServiceJourney);
       }
 
       if (journey.getLocationRecordedAtTime() != null) {
@@ -303,65 +282,5 @@ public class VehicleRepository {
     }
 
     return vehicles.values();
-  }
-
-  public List<Line> getLines(String codespace) {
-    return vehicles.values()
-            .stream()
-            .filter(vehicleUpdate -> codespace == null || vehicleUpdate.getCodespace().getCodespaceId().equals(codespace))
-            .map(vehicleUpdate -> vehicleUpdate.getLine())
-            .distinct()
-            .sorted(Comparator.comparing(Line::getLineRef))
-            .collect(Collectors.toList());
-
-  }
-
-  public List<Codespace> getCodespaces() {
-    return vehicles.values()
-        .stream()
-        .map(vehicleUpdate -> vehicleUpdate.getCodespace())
-        .distinct()
-        .sorted(Comparator.comparing(Codespace::getCodespaceId))
-        .collect(Collectors.toList());
-  }
-
-  public List<Operator> getOperators(String codespace) {
-    return vehicles.values()
-        .stream()
-        .filter(vehicleUpdate -> codespace == null || isMatch(vehicleUpdate.getCodespace(), codespace))
-        .map(vehicleUpdate -> vehicleUpdate.getOperator())
-        .filter(operator -> operator != null && !operator.getOperatorRef().isEmpty())
-        .distinct()
-        .sorted(Comparator.comparing(Operator::getOperatorRef))
-        .collect(Collectors.toList());
-  }
-
-  public List<ServiceJourney> getServiceJourneys(String lineRef, String codespaceId) {
-    return vehicles.values()
-        .stream()
-        .filter(vehicleUpdate ->
-                (lineRef == null || isMatch(vehicleUpdate.getLine(), lineRef) ) &&
-                        (codespaceId == null || isMatch(vehicleUpdate.getCodespace(), codespaceId))
-        )
-        .map(vehicleUpdate -> vehicleUpdate.getServiceJourney())
-        .distinct()
-        .sorted(Comparator.comparing(ServiceJourney::getServiceJourneyId))
-        .collect(Collectors.toList());
-  }
-
-  private boolean isMatch(ObjectRef obj, String ref){
-    if (obj == null) return false;
-    return obj.getRef().matches(ref);
-  }
-
-  public ServiceJourney getServiceJourney(String id) {
-    Optional<ServiceJourney> serviceJourney = vehicles.values()
-            .stream()
-            .filter(vehicleUpdate ->
-                    isMatch(vehicleUpdate.getServiceJourney(), id) ||
-                    isMatch(vehicleUpdate.getDatedServiceJourney(), id))
-            .map(vehicleUpdate -> vehicleUpdate.getServiceJourney())
-            .findAny();
-      return serviceJourney.orElse(null);
   }
 }

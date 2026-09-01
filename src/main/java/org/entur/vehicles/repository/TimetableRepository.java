@@ -32,7 +32,6 @@ import java.time.ZonedDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 import static org.entur.vehicles.repository.helpers.Util.containsValues;
 import static org.entur.vehicles.repository.helpers.Util.convert;
@@ -116,38 +115,22 @@ public class TimetableRepository {
       v.setVehicleId(vehicleRef);
 
       if (lineRef != null) {
-        try {
-          v.setLine(lineService.getLine(lineRef));
-        } catch (ExecutionException e) {
-          v.setLine(new Line(lineRef));
-        }
+        v.setLine(lineService.getLine(lineRef));
       } else {
         v.setLine(Line.DEFAULT);
       }
 
       if (serviceJourneyId != null) {
-        try {
-          ServiceJourney serviceJourney = serviceJourneyService.getServiceJourney(serviceJourneyId);
-          if (serviceJourney != null) {
-            serviceJourney.setDate(date);
-            v.setServiceJourney(serviceJourney);
-          }
-        } catch (ExecutionException e) {
-          v.setServiceJourney(new ServiceJourney(serviceJourneyId, date));
-        }
+        ServiceJourney serviceJourney = serviceJourneyService.getServiceJourney(serviceJourneyId);
+        serviceJourney.setDate(date);
+        v.setServiceJourney(serviceJourney);
       }
       if (datedServiceJourneyId != null) {
-        try {
-          DatedServiceJourney datedServiceJourney = serviceJourneyService.getDatedServiceJourney(datedServiceJourneyId);
-          if (datedServiceJourney != null) {
-            if (v.getServiceJourney() != null) {
-              datedServiceJourney.setServiceJourney(v.getServiceJourney());
-            }
-            v.setDatedServiceJourney(datedServiceJourney);
-          }
-        } catch (ExecutionException e) {
-          v.setDatedServiceJourney(new DatedServiceJourney(datedServiceJourneyId, new ServiceJourney(datedServiceJourneyId)));
+        DatedServiceJourney datedServiceJourney = serviceJourneyService.getDatedServiceJourney(datedServiceJourneyId);
+        if (v.getServiceJourney() != null) {
+          datedServiceJourney.setServiceJourney(v.getServiceJourney());
         }
+        v.setDatedServiceJourney(datedServiceJourney);
       }
 
        if (journeyRecord.getRecordedAtTime() != null) {

@@ -18,9 +18,6 @@ public class ServiceJourney extends ObjectRef {
         super(id);
         this.date = date;
     }
-    public ServiceJourney(String id, String date, PointsOnLink pointsOnLink) {
-        super(id);
-    }
 
     public String getServiceJourneyId() {
         return super.getRef();

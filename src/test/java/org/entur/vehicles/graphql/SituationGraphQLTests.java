@@ -24,6 +24,8 @@ import org.entur.vehicles.repository.SituationMapper;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.SituationTriggeredRepublisher;
 import org.entur.vehicles.service.LineService;
+import org.entur.vehicles.service.ServiceJourneyService;
+import org.entur.vehicles.service.planned.PlannedDataService;
 import org.entur.vehicles.service.NSRService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,7 +77,8 @@ public class SituationGraphQLTests {
                 nsrService);
         repository = new SituationRepository(
                 metricsService,
-                new SituationMapper(new LineService(false), nsrService),
+                new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService,
+                        new ServiceJourneyService(PlannedDataService.disabled())),
                 new AutoPurgingSituationMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 publisher,
                 republisher
@@ -87,7 +90,7 @@ public class SituationGraphQLTests {
                 closedSituation()
         ));
 
-        queryService = new Query(null, null, repository, new NSRService(false, null), metricsService, null);
+        queryService = new Query(null, null, repository, new NSRService(false, null), metricsService, null, PlannedDataService.disabled());
     }
 
     private PtSituationElementRecord baseRecord(String situationNumber) {
@@ -267,7 +270,7 @@ public class SituationGraphQLTests {
         Mockito.when(ancestorAwareNsrService.expandWithAncestors("NSR:Quay:749"))
                 .thenReturn(Set.of("NSR:Quay:749", "NSR:StopPlace:451"));
 
-        Query ancestorQueryService = new Query(null, null, repository, ancestorAwareNsrService, metricsService, null);
+        Query ancestorQueryService = new Query(null, null, repository, ancestorAwareNsrService, metricsService, null, PlannedDataService.disabled());
 
         Collection<SituationUpdate> situations = ancestorQueryService.getSituations(
                 null, null, null, null, "NSR:Quay:749", null, null, null, null, null, null, null, null, null);

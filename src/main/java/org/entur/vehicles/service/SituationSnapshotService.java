@@ -57,7 +57,7 @@ public class SituationSnapshotService {
     public SituationSnapshotService(
             @Autowired SituationRepository situationRepository,
             @Value("${vehicle.sx.snapshot.url}") String url,
-            @Value("${vehicle.journeyplanner.EtClientName}") String etClientName,
+            @Value("${vehicle.sx.snapshot.etClientName}") String etClientName,
             @Value("${vehicle.sx.snapshot.timeout:PT60S}") Duration timeout,
             @Value("${entur.vehicle-positions.sx.enabled:false}") boolean enabled) {
         this.situationRepository = situationRepository;

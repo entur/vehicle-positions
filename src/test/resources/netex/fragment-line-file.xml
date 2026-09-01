@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PublicationDelivery xmlns="http://www.netex.org.uk/netex" version="1.15:NO-NeTEx-networktimetable:1.5">
+  <dataObjects>
+    <CompositeFrame version="1" id="TST:CompositeFrame:2">
+      <frames>
+        <ServiceFrame version="1" id="TST:ServiceFrame:2">
+          <lines>
+            <Line version="0" id="TST:Line:204">
+              <Name>Rykkinn - Kolsås - Sandvika</Name>
+              <TransportMode>bus</TransportMode>
+              <TransportSubmode>
+                <BusSubmode>localBus</BusSubmode>
+              </TransportSubmode>
+              <PublicCode>204</PublicCode>
+              <OperatorRef ref="TST:Operator:1"></OperatorRef>
+              <Presentation>
+                <Colour>76A300</Colour>
+              </Presentation>
+            </Line>
+            <FlexibleLine version="0" id="TST:FlexibleLine:8202">
+              <Name>Bestillingsrute</Name>
+              <TransportMode>bus</TransportMode>
+              <PublicCode>8202</PublicCode>
+              <FlexibleLineType>flexibleAreasOnly</FlexibleLineType>
+            </FlexibleLine>
+          </lines>
+          <routes>
+            <Route version="0" id="TST:Route:1">
+              <Name>Decoy</Name>
+              <LineRef ref="TST:Line:decoy" version="0"></LineRef>
+              <DirectionType>outbound</DirectionType>
+            </Route>
+          </routes>
+          <journeyPatterns>
+            <JourneyPattern version="0" id="TST:JourneyPattern:1">
+              <Name>Outbound</Name>
+              <RouteRef ref="TST:Route:1" version="0"></RouteRef>
+              <pointsInSequence>
+                <StopPointInJourneyPattern version="0" id="TST:StopPointInJourneyPattern:1" order="1">
+                  <ScheduledStopPointRef ref="TST:ScheduledStopPoint:A" version="0"></ScheduledStopPointRef>
+                  <ForAlighting>false</ForAlighting>
+                </StopPointInJourneyPattern>
+              </pointsInSequence>
+              <linksInSequence>
+                <ServiceLinkInJourneyPattern version="0" id="TST:ServiceLinkInJourneyPattern:1" order="1">
+                  <ServiceLinkRef ref="TST:ServiceLink:A-B" version="0"></ServiceLinkRef>
+                </ServiceLinkInJourneyPattern>
+                <ServiceLinkInJourneyPattern version="0" id="TST:ServiceLinkInJourneyPattern:2" order="2">
+                  <ServiceLinkRef ref="TST:ServiceLink:B-C" version="0"></ServiceLinkRef>
+                </ServiceLinkInJourneyPattern>
+              </linksInSequence>
+            </JourneyPattern>
+          </journeyPatterns>
+        </ServiceFrame>
+        <TimetableFrame version="1" id="TST:TimetableFrame:1">
+          <vehicleJourneys>
+            <ServiceJourney version="1" id="TST:ServiceJourney:1">
+              <Name>Ignored</Name>
+              <keyList>
+                <KeyValue>
+                  <Key>Busfile</Key>
+                  <Value>x</Value>
+                </KeyValue>
+              </keyList>
+              <PrivateCode>1001</PrivateCode>
+              <TransportMode>bus</TransportMode>
+              <dayTypes>
+                <DayTypeRef ref="TST:DayType:1"></DayTypeRef>
+              </dayTypes>
+              <JourneyPatternRef ref="TST:JourneyPattern:1" version="0"></JourneyPatternRef>
+              <OperatorRef ref="TST:Operator:1"></OperatorRef>
+              <LineRef ref="TST:Line:204" version="0"></LineRef>
+              <passingTimes>
+                <TimetabledPassingTime version="0" id="TST:TimetabledPassingTime:1">
+                  <StopPointInJourneyPatternRef ref="TST:StopPointInJourneyPattern:1" version="0"></StopPointInJourneyPatternRef>
+                  <DepartureTime>08:00:00</DepartureTime>
+                </TimetabledPassingTime>
+              </passingTimes>
+            </ServiceJourney>
+            <ServiceJourney version="1" id="TST:ServiceJourney:2">
+              <JourneyPatternRef ref="TST:JourneyPattern:1" version="0"></JourneyPatternRef>
+              <FlexibleLineRef ref="TST:FlexibleLine:8202" version="0"></FlexibleLineRef>
+              <passingTimes>
+                <TimetabledPassingTime version="0" id="TST:TimetabledPassingTime:2">
+                  <StopPointInJourneyPatternRef ref="TST:StopPointInJourneyPattern:1" version="0"></StopPointInJourneyPatternRef>
+                  <DepartureTime>09:00:00</DepartureTime>
+                </TimetabledPassingTime>
+              </passingTimes>
+            </ServiceJourney>
+            <DatedServiceJourney version="1" id="TST:DatedServiceJourney:1">
+              <ServiceAlteration>cancellation</ServiceAlteration>
+              <ServiceJourneyRef ref="TST:ServiceJourney:1" version="1"></ServiceJourneyRef>
+              <DatedServiceJourneyRef ref="TST:DatedServiceJourney:replaced" version="1"></DatedServiceJourneyRef>
+              <OperatingDayRef ref="TST:OperatingDay:2024-01-20"></OperatingDayRef>
+            </DatedServiceJourney>
+          </vehicleJourneys>
+        </TimetableFrame>
+      </frames>
+    </CompositeFrame>
+  </dataObjects>
+</PublicationDelivery>
