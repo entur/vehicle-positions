@@ -72,24 +72,24 @@ spec:
                   - /bin/sh
                   - -c
                   - sleep 30
+          # httpGet, not exec+curl: the eclipse-temurin JRE images stopped shipping curl,
+          # which made every probe fail with "curl: not found" and killed healthy pods.
           livenessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - curl --fail http://0.0.0.0:{{ .Values.service.http.internalPort }}/actuator/health
+            httpGet:
+              path: /actuator/health
+              port: http
             failureThreshold: 3
             periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 5
+          # Startup loads the full NeTEx export (~2 min); 60 x 5 s = 5 min budget.
           startupProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - curl --fail http://0.0.0.0:{{ .Values.service.http.internalPort }}/actuator/health
+            httpGet:
+              path: /actuator/health
+              port: http
             failureThreshold: 60
             periodSeconds: 5
+            timeoutSeconds: 5
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
