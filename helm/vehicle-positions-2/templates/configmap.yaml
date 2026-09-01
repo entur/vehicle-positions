@@ -46,6 +46,13 @@ data:
       
       spring.graphql.graphiql.enabled={{ .Values.configMap.graphiqlEnabled }}
       spring.graphql.websocket.path=/subscriptions
+      # Spring GraphQL 2.0 (Boot 4.1) enforces a CORS/Origin check on the WebSocket
+      # handshake; without this, browser subscriptions from GraphiQL / the API gateway
+      # are rejected with 403. Public, credential-free API (auth via Et-Client-Name), so
+      # all origins are allowed. Deployed pods read ONLY this ConfigMap (JDK_JAVA_OPTIONS
+      # sets -Dspring.config.location to it), so the property must live here, not just in
+      # the jar's application.properties.
+      spring.graphql.cors.allowed-origins=*
       
       entur.vehicle-positions.client.name.header.name=Et-Client-Name
 
