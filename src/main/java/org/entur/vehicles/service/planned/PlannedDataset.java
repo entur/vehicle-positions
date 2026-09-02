@@ -288,7 +288,7 @@ public final class PlannedDataset {
      * Collects raw refs from any number of files in any order and resolves them once in
      * {@link #build()}. Not thread-safe; one builder per load, driven by one thread.
      */
-    public static final class Builder {
+    public static final class Builder implements PlannedDataSink {
 
         private record RawDatedServiceJourney(String serviceJourneyId, String operatingDayId) {}
 
@@ -302,6 +302,7 @@ public final class PlannedDataset {
         private final Map<String, String> serviceJourneyLine = new HashMap<>();
         private int duplicateIds = 0;
 
+        @Override
         public Builder addOperator(String id, String name) {
             Operator operator = new Operator(id);
             operator.setName(name);
@@ -309,6 +310,7 @@ public final class PlannedDataset {
             return this;
         }
 
+        @Override
         public Builder addLine(String id, String name, String publicCode) {
             Line line = new Line(id, name);
             line.setPublicCode(publicCode);
@@ -317,11 +319,13 @@ public final class PlannedDataset {
         }
 
         /** @param geometry interleaved lat/lon microdegrees; null when the link has no gis:posList */
+        @Override
         public Builder addServiceLink(String id, int[] geometry) {
             countDuplicate(linkGeometry.put(id, geometry == null ? new int[0] : geometry));
             return this;
         }
 
+        @Override
         public Builder addJourneyPattern(String id, List<String> serviceLinkIds) {
             countDuplicate(patternLinks.put(id, serviceLinkIds.toArray(new String[0])));
             return this;
@@ -332,6 +336,7 @@ public final class PlannedDataset {
         }
 
         /** @param lineId the journey's LineRef/FlexibleLineRef; null when the element has none */
+        @Override
         public Builder addServiceJourney(String id, String journeyPatternId, String lineId) {
             // Map.copyOf in build() rejects null values; "" is never a real pattern id, so it
             // still counts as unresolved there.
@@ -344,11 +349,13 @@ public final class PlannedDataset {
             return this;
         }
 
+        @Override
         public Builder addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId) {
             countDuplicate(rawDatedServiceJourneys.put(id, new RawDatedServiceJourney(serviceJourneyId, operatingDayId)));
             return this;
         }
 
+        @Override
         public Builder addOperatingDay(String id, String calendarDate) {
             countDuplicate(operatingDays.put(id, calendarDate));
             return this;

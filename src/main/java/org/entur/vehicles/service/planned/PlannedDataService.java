@@ -98,7 +98,9 @@ public class PlannedDataService {
         }
         try {
             download(url, zip);
-            PlannedDataset fresh = loader.load(zip);
+            PlannedDataset.Builder builder = new PlannedDataset.Builder();
+            loader.load(zip, builder);
+            PlannedDataset fresh = builder.build();
             if (fresh.serviceJourneyCount() < minServiceJourneys) {
                 throw new PlannedDataLoadException("Fresh dataset has " + fresh.serviceJourneyCount()
                         + " service journeys, below the configured minimum of " + minServiceJourneys

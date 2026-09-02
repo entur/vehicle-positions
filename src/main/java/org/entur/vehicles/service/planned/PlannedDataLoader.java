@@ -13,7 +13,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * Turns an aggregated NeTEx zip into a {@link PlannedDataset}. Each XML entry is streamed
+ * Streams an aggregated NeTEx zip into a {@link PlannedDataSink}. Each XML entry is streamed
  * independently: a malformed entry is logged and skipped, and whatever it yielded before
  * failing is kept. The load as a whole fails only if the zip is unreadable or contains no
  * line files at all - a shared-data-only zip is a broken export, not a small one.
@@ -25,8 +25,8 @@ public class PlannedDataLoader {
 
     private final NetexPlannedDataExtractor extractor = new NetexPlannedDataExtractor();
 
-    public PlannedDataset load(Path zip) throws PlannedDataLoadException {
-        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+    /** Streams every XML entry of the zip into the sink. The caller owns the sink and builds from it. */
+    public void load(Path zip, PlannedDataSink sink) throws PlannedDataLoadException {
         int lineFiles = 0;
         int failedEntries = 0;
 
@@ -38,7 +38,7 @@ public class PlannedDataLoader {
                     continue;
                 }
                 try (InputStream in = new BufferedInputStream(zipFile.getInputStream(entry), 1 << 16)) {
-                    extractor.extract(in, builder);
+                    extractor.extract(in, sink);
                     if (isLineFile(entry.getName())) {
                         lineFiles++;
                     }
@@ -57,7 +57,6 @@ public class PlannedDataLoader {
         if (failedEntries > 0) {
             LOG.warn("{} NeTEx entries were skipped due to parse errors", failedEntries);
         }
-        return builder.build();
     }
 
     /**
