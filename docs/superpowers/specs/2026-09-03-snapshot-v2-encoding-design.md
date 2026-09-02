@@ -1,7 +1,7 @@
 # Planned-data snapshot v2: a compact encoding
 
 Date: 2026-09-03
-Status: Design
+Status: Implemented (2026-09-03) — measured results pending dev rollout
 Extends: `2026-09-02-planned-data-snapshot-design.md`
 
 ## Goal
