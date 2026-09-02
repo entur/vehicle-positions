@@ -3,9 +3,9 @@ package org.entur.vehicles.service.planned;
 import java.util.List;
 
 /**
- * Where {@link NetexPlannedDataExtractor} puts what it finds. The builder is the sink that
- * matters; the snapshot writer is a second one, and a tee feeds both during a full parse.
- * Ids are never null (the extractor skips elements without one); every other argument may be.
+ * Where {@link NetexPlannedDataExtractor} puts what it finds during a full parse, and what a
+ * snapshot replay feeds into on a hit. Ids are never null (the extractor skips elements
+ * without one); every other argument may be.
  */
 public interface PlannedDataSink {
 
@@ -23,4 +23,11 @@ public interface PlannedDataSink {
     PlannedDataSink addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId);
 
     PlannedDataSink addOperatingDay(String id, String calendarDate);
+
+    /**
+     * Seeds the duplicate-id count a snapshot's header carries, so a replay can hand it to any
+     * sink without an {@code instanceof} check. A no-op for a sink that has no use for it.
+     */
+    default void seedDuplicateIds(int duplicateIds) {
+    }
 }

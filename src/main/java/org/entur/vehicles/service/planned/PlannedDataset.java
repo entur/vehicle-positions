@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -290,7 +291,7 @@ public final class PlannedDataset {
      */
     public static final class Builder implements PlannedDataSink {
 
-        private record RawDatedServiceJourney(String serviceJourneyId, String operatingDayId) {}
+        record RawDatedServiceJourney(String serviceJourneyId, String operatingDayId) {}
 
         private final Map<String, Operator> operators = new HashMap<>();
         private final Map<String, Line> lines = new HashMap<>();
@@ -365,6 +366,58 @@ public final class PlannedDataset {
             if (previous != null) {
                 duplicateIds++;
             }
+        }
+
+        /**
+         * Sets the duplicate-id count reported in {@link Stats} without recounting.
+         * A snapshot replay hands the builder maps that have already collapsed duplicates,
+         * so {@link Stats#duplicateIds()} must be seeded from the original parse instead of
+         * being (re)derived from {@code countDuplicate}.
+         */
+        @Override
+        public void seedDuplicateIds(int duplicateIds) {
+            this.duplicateIds = duplicateIds;
+        }
+
+        // ---- Package-private, unmodifiable views of the builder's collected state, for the
+        // ---- snapshot writer. Views, not copies: these maps can hold millions of entries and
+        // ---- a defensive copy would double the peak heap during a snapshot write.
+
+        Map<String, Operator> operators() {
+            return Collections.unmodifiableMap(operators);
+        }
+
+        Map<String, Line> lines() {
+            return Collections.unmodifiableMap(lines);
+        }
+
+        Map<String, String> operatingDays() {
+            return Collections.unmodifiableMap(operatingDays);
+        }
+
+        Map<String, int[]> linkGeometry() {
+            return Collections.unmodifiableMap(linkGeometry);
+        }
+
+        Map<String, String[]> patternLinks() {
+            return Collections.unmodifiableMap(patternLinks);
+        }
+
+        Map<String, String> serviceJourneyPattern() {
+            return Collections.unmodifiableMap(serviceJourneyPattern);
+        }
+
+        Map<String, String> serviceJourneyLine() {
+            return Collections.unmodifiableMap(serviceJourneyLine);
+        }
+
+        Map<String, RawDatedServiceJourney> rawDatedServiceJourneys() {
+            return Collections.unmodifiableMap(rawDatedServiceJourneys);
+        }
+
+        /** The duplicate-id count collected so far, mirroring {@link Stats#duplicateIds()} without requiring a full {@link #build()}. */
+        int duplicateIds() {
+            return duplicateIds;
         }
 
         public PlannedDataset build() {
