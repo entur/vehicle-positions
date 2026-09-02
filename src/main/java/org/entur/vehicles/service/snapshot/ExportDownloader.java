@@ -13,12 +13,21 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Fetches an export and tells the caller which version it got. The ETag from the GET that
  * produced the bytes is what snapshot keys are built from, so a HEAD-then-GET race with a
  * replaced export can never mislabel a snapshot. {@code file:} URLs are copied and carry
  * no ETag, which keeps tests and local runs on the same code path.
+ * <p>
+ * Two timeouts, because {@code HttpRequest.timeout} only bounds the time to the response
+ * headers: {@code timeout} (60 s by default) covers connect and headers, and
+ * {@code bodyDeadline} (10 minutes by default) bounds the whole transfer, so a stalled
+ * body cannot hang startup forever.
  */
 public final class ExportDownloader {
 
@@ -26,13 +35,19 @@ public final class ExportDownloader {
 
     private final HttpClient client;
     private final Duration timeout;
+    private final Duration bodyDeadline;
 
     public ExportDownloader() {
         this(Duration.ofSeconds(60));
     }
 
     public ExportDownloader(Duration timeout) {
+        this(timeout, Duration.ofMinutes(10));
+    }
+
+    public ExportDownloader(Duration timeout, Duration bodyDeadline) {
         this.timeout = timeout;
+        this.bodyDeadline = bodyDeadline;
         this.client = HttpClient.newBuilder()
                 .connectTimeout(timeout)
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -67,7 +82,11 @@ public final class ExportDownloader {
         }
     }
 
-    /** Downloads the export to {@code target} and returns the ETag of what was downloaded, if the server sent one. */
+    /**
+     * Downloads the export to {@code target} and returns the ETag of what was downloaded, if the
+     * server sent one. Fails with an {@link IOException} if the transfer is not finished within
+     * the body deadline.
+     */
     public Optional<String> download(String url, Path target) throws IOException {
         if (!isHttp(url)) {
             try {
@@ -79,7 +98,20 @@ public final class ExportDownloader {
         }
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().timeout(timeout).build();
-            HttpResponse<Path> response = client.send(request, HttpResponse.BodyHandlers.ofFile(target));
+            CompletableFuture<HttpResponse<Path>> future =
+                    client.sendAsync(request, HttpResponse.BodyHandlers.ofFile(target));
+            HttpResponse<Path> response;
+            try {
+                response = future.get(bodyDeadline.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                future.cancel(true);
+                throw new IOException("Download of " + url + " exceeded " + bodyDeadline);
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof IOException cause) {
+                    throw cause;
+                }
+                throw new IOException("GET " + url + " failed", e.getCause());
+            }
             if (response.statusCode() / 100 != 2) {
                 throw new IOException("GET " + url + " returned " + response.statusCode());
             }
