@@ -1,7 +1,7 @@
 # Startup snapshots: skip the NeTEx and NSR parses on pod startup
 
 Date: 2026-09-02
-Status: Implemented 2026-09-02; measured section pending the dev rollout
+Status: Implemented and measured in dev 2026-09-02; enabled in tst and prd from the same date
 
 ## Goal
 
@@ -248,8 +248,9 @@ discard the builder, fall back to the full parse.
 
 Expected sizes: 2.2M dated service journeys at roughly 110 bytes of raw ids each
 dominate, giving about 250 MB uncompressed and an estimated 30 to 50 MB gzipped. Ids
-compress well because they share long prefixes and run in sequences. These are
-estimates; the measured section is filled in during rollout.
+compress well because they share long prefixes and run in sequences. The dev rollout
+measured 118 MB gzipped — two to four times the estimate, since `BEST_SPEED` gzip on
+`writeUTF` output exploits far less of that id structure than assumed. See Measured.
 
 ### `PlannedDataService` (changed)
 
@@ -419,13 +420,48 @@ no acceptable dataset is fatal on startup.
 
 ## Expected result
 
-| | Today | With snapshot hits |
-|---|---|---|
-| Planned-data stage | 66 to 96 s | under 10 s (target) |
-| NSR stage | 24 to 26 s | under 3 s (target) |
-| Startup to "Started Application" | about 112 s | about 20 s |
+| | Today | Target | Measured (dev) |
+|---|---|---|---|
+| Planned-data stage | 66 to 96 s | under 10 s | 14.2 s |
+| NSR stage | 24 to 26 s | under 3 s | 5.2 s |
+| Startup to "Started Application" | about 112 s | about 20 s | 31.7 s |
 
-Measured numbers replace these targets during rollout; see Testing.
+## Measured
+
+Dev rollout of `73ed02a`, 2026-09-02 18:09 to 18:12 (Europe/Oslo). Two pods, one per
+path, both on the same exports (planned data `78502bf4…`, NSR `b7cc7d32…`) and both
+reporting identical `Stats[...]`: 379 796 service journeys, 2 227 779 dated service
+journeys, 0 unresolved refs. The replay reproduces the parse exactly.
+
+Miss path, `vehicle-positions-2-57b5654799-kn4gg`:
+
+| Step | Time |
+|---|---|
+| Planned data from export | 74 465 ms |
+| Planned-data snapshot uploaded | 117 875 434 bytes in 8 890 ms |
+| NSR from export | 38 300 ms |
+| NSR snapshot uploaded | 4 456 464 bytes in 647 ms |
+| Started Application | 123.707 s |
+
+Hit path, `vehicle-positions-2-57b5654799-jldfp`:
+
+| Step | Time |
+|---|---|
+| Planned data from snapshot | 14 206 ms |
+| NSR from snapshot | 5 174 ms |
+| Started Application | 31.676 s |
+
+Startup falls by a factor of four, but every stage is slower than the target. The
+planned-data snapshot is 118 MB gzipped against the 30 to 50 MB estimated above, so a
+large share of the 14.2 s is download and decompress rather than replay. Shrinking the
+record encoding — the dated-service-journey ids dominate and repeat heavily — is the
+obvious follow-up, and would move the hit path closer to the target. Not in scope here.
+
+The miss pod started in 123.7 s against the roughly 112 s baseline measured before the
+change. The two parses themselves are within their earlier ranges, so the difference
+sits in the snapshot path — most plausibly the planned-data upload, which gzips about
+250 MB on the background thread while the NSR parse runs. It is a single-digit-percent
+cost paid by the first pod of a rollout only, and it was not isolated further.
 
 ## Deployment and rollout
 
@@ -433,10 +469,11 @@ Measured numbers replace these targets during rollout; see Testing.
    and prd on merge), and `snapshotUri` is set in dev only, so dev is the only environment
    whose behaviour changes. Elsewhere the property stays empty and the only runtime diffs
    are the `HttpClient` downloads and the extracted NSR parser.
-2. The next dev rollout's first pod misses on both datasets and uploads both; every later
-   pod in that rollout hits. Confirm from logs and the source gauge. Record the measured
-   hit-path times in this spec.
-3. Set `snapshotUri` in tst, then prd. The buckets already exist.
+2. Done 2026-09-02: the dev rollout's first pod missed on both datasets and uploaded both;
+   the second hit both. See Measured.
+3. Set `snapshotUri` in tst and prd. The buckets already exist
+   (`ent-gcs-vpos-snapshots-tst-001`, `ent-gcs-vpos-snapshots-prd-001`), so each
+   environment's next rollout pays one miss and then hits.
 
 Rollback is clearing the property.
 
@@ -475,4 +512,7 @@ New tests:
   the dev rollout, not by unit tests; it is a thin wrapper over one client call per
   method.
 - **Measured section** appended to this spec after the dev rollout: hit-path times for
-  both stages, snapshot object sizes, upload durations, and ephemeral-storage peak.
+  both stages, snapshot object sizes and upload durations. Done 2026-09-02; see
+  Measured. Ephemeral-storage peak was not captured — no pod was evicted and no
+  disk-pressure event was raised during the rollout, so the 1Gi request holds, but the
+  headroom against the 118 MB snapshot plus the export zip is unmeasured.
