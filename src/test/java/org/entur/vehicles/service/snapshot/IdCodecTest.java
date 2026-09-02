@@ -42,6 +42,27 @@ public class IdCodecTest {
         }
     }
 
+    /**
+     * Interns and writes a single id (table + one entry) and returns the kind byte that
+     * was written for it, by decoding the table and the varint prefix index first.
+     */
+    private int kindOf(String id) throws Exception {
+        IdCodec.Writer writer = new IdCodec.Writer();
+        writer.intern(id);
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bytes)) {
+            writer.writeTable(out);
+            writer.writeId(out, id);
+        }
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()));
+        long tableCount = SnapshotIo.readVarInt(in);
+        for (int i = 0; i < tableCount; i++) {
+            SnapshotIo.readString(in);
+        }
+        SnapshotIo.readVarInt(in); // prefix index for this id
+        return in.readUnsignedByte();
+    }
+
     @Test
     void roundTripsDatedServiceJourneyDjjHexId() throws Exception {
         String id = "RUT:DatedServiceJourney:djj-0933f40da2fc97b867577a5489601564";
@@ -146,5 +167,60 @@ public class IdCodecTest {
             assertThatThrownBy(() -> writer.writeId(out, "NSR:Quay:20388"))
                     .isInstanceOf(IllegalStateException.class);
         }
+    }
+
+    @Test
+    void djjIdWithUpperCaseHexFallsBackToKindZero() throws Exception {
+        String id = "RUT:DatedServiceJourney:djj-0933F40DA2FC97B867577A5489601564";
+        assertThat(kindOf(id)).as("kind byte for upper-case djj- hex").isEqualTo(0);
+        Reader reader = roundTripSetup(List.of(id));
+        assertThat(reader.next()).isEqualTo(id);
+    }
+
+    @Test
+    void bareUpperCaseHex32FallsBackToKindZero() throws Exception {
+        String id = "NSR:ServiceLink:0933F40DA2FC97B867577A5489601564";
+        assertThat(kindOf(id)).as("kind byte for upper-case bare hex32").isEqualTo(0);
+        Reader reader = roundTripSetup(List.of(id));
+        assertThat(reader.next()).isEqualTo(id);
+    }
+
+    @Test
+    void upperCaseUuidFallsBackToKindZero() throws Exception {
+        String id = "TTS:ServiceLink:75896EEB-9A40-4411-AAA9-B66353C8C2FD";
+        assertThat(kindOf(id)).as("kind byte for upper-case UUID").isEqualTo(0);
+        Reader reader = roundTripSetup(List.of(id));
+        assertThat(reader.next()).isEqualTo(id);
+    }
+
+    @Test
+    void eighteenDigitLocalPartTakesKindFour() throws Exception {
+        String id = "NSR:Quay:123456789012345678";
+        assertThat(kindOf(id)).as("kind byte for an 18-digit local part").isEqualTo(4);
+        Reader reader = roundTripSetup(List.of(id));
+        assertThat(reader.next()).isEqualTo(id);
+    }
+
+    @Test
+    void nineteenDigitLocalPartFallsBackToKindZero() throws Exception {
+        String id = "NSR:Quay:1234567890123456789";
+        assertThat(kindOf(id)).as("kind byte for a 19-digit local part").isEqualTo(0);
+        Reader reader = roundTripSetup(List.of(id));
+        assertThat(reader.next()).isEqualTo(id);
+    }
+
+    @Test
+    void bareLowerCaseHex32WithNoDjjPrefixTakesKindTwo() throws Exception {
+        String id = "NSR:ServiceLink:0933f40da2fc97b867577a5489601564";
+        assertThat(kindOf(id)).as("kind byte for a bare lower-case hex32 local part").isEqualTo(2);
+        Reader reader = roundTripSetup(List.of(id));
+        assertThat(reader.next()).isEqualTo(id);
+    }
+
+    @Test
+    void roundTripsIdWithMoreThanTwoColons() throws Exception {
+        String id = "A:B:C:local";
+        Reader reader = roundTripSetup(List.of(id));
+        assertThat(reader.next()).isEqualTo(id);
     }
 }
