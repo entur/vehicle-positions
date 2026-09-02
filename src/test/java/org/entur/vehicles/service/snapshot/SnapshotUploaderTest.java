@@ -101,6 +101,7 @@ public class SnapshotUploaderTest {
 
         assertThat(outcome).isEqualTo(SnapshotUploader.Outcome.FAILED);
         assertThat(raw).doesNotExist();
+        assertThat(raw.resolveSibling("raw.bin.gz")).doesNotExist();
         assertThat(Files.list(dir)).withFailMessage("no gzip temp file is left behind").isEmpty();
     }
 }

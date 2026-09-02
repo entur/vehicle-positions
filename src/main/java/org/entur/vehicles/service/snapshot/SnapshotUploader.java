@@ -17,9 +17,9 @@ import java.util.zip.GZIPOutputStream;
 
 /**
  * Compresses and stores a raw snapshot file off the caller's thread. The caller hands over
- * ownership of the raw file: it is deleted here whatever happens. Nothing here ever
- * propagates to the caller - a failed upload is a log line and a counter, and the next pod
- * that misses will simply try again.
+ * ownership of the raw file: it is deleted here whatever happens, along with the gzip sibling
+ * file created alongside it. Nothing here ever propagates to the caller - a failed upload is a
+ * log line and a counter, and the next pod that misses will simply try again.
  */
 public final class SnapshotUploader {
 
@@ -52,7 +52,7 @@ public final class SnapshotUploader {
         Path gz = null;
         Outcome outcome;
         try {
-            gz = Files.createTempFile("snapshot-upload", ".gz");
+            gz = rawFile.resolveSibling(rawFile.getFileName() + ".gz");
             gzip(rawFile, gz);
             long size = Files.size(gz);
             if (replaceExisting) {
