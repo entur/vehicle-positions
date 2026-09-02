@@ -1,5 +1,7 @@
 package org.entur.vehicles.service.planned;
 
+import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.PointsOnLink;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -7,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -15,6 +18,78 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class PlannedDataSnapshotTest {
+
+    private static Path goaZip() throws URISyntaxException {
+        return Path.of(PlannedDataSnapshotTest.class.getResource("/netex/rb_goa-aggregated-netex.zip").toURI());
+    }
+
+    /**
+     * The real-NeTEx round trip: parse the GOA export, snapshot the builder, replay the
+     * snapshot into a fresh builder, and compare every entity the parse produced - not a
+     * handful of spot checks - against what the replay answers. {@code Stats} equality alone
+     * cannot catch a writer/reader disagreement that preserves counts (geometry attached to
+     * the wrong id, a name on the wrong record); iterating every id the parse produced can.
+     */
+    @Test
+    public void aReplayedSnapshotBuildsTheSameDatasetAsTheParse(@TempDir Path dir) throws Exception {
+        Path raw = dir.resolve("planned.bin");
+        PlannedDataset.Builder parsedBuilder = new PlannedDataset.Builder();
+        int skipped = new PlannedDataLoader().load(goaZip(), parsedBuilder);
+        assertThat(skipped).isZero();
+        PlannedDataSnapshot.write(parsedBuilder, raw, "etag-1");
+        PlannedDataset fromParse = parsedBuilder.build();
+
+        PlannedDataset.Builder replayedBuilder = new PlannedDataset.Builder();
+        try (InputStream in = Files.newInputStream(raw)) {
+            PlannedDataSnapshot.replay(in, replayedBuilder);
+        }
+        PlannedDataset fromSnapshot = replayedBuilder.build();
+
+        assertThat(fromSnapshot.stats()).isEqualTo(fromParse.stats());
+
+        for (String id : parsedBuilder.operators().keySet()) {
+            assertThat(fromSnapshot.operator(id).getName())
+                    .as("operator %s name", id)
+                    .isEqualTo(fromParse.operator(id).getName());
+        }
+
+        for (String id : parsedBuilder.lines().keySet()) {
+            Line parsedLine = fromParse.line(id);
+            Line snapshotLine = fromSnapshot.line(id);
+            assertThat(snapshotLine.getLineName()).as("line %s name", id).isEqualTo(parsedLine.getLineName());
+            assertThat(snapshotLine.getPublicCode()).as("line %s publicCode", id).isEqualTo(parsedLine.getPublicCode());
+        }
+
+        for (String id : parsedBuilder.serviceJourneyPattern().keySet()) {
+            assertThat(fromSnapshot.journeyPatternOf(id)).as("journeyPatternOf %s", id).isEqualTo(fromParse.journeyPatternOf(id));
+            assertThat(fromSnapshot.lineOf(id)).as("lineOf %s", id).isEqualTo(fromParse.lineOf(id));
+        }
+
+        for (String id : parsedBuilder.rawDatedServiceJourneys().keySet()) {
+            assertThat(fromSnapshot.datedServiceJourney(id)).as("datedServiceJourney %s", id).isEqualTo(fromParse.datedServiceJourney(id));
+        }
+
+        // pointsOnLink is where an off-by-one in the delta-encoded geometry, or geometry
+        // attached to the wrong link, would hide - so every journey pattern the parse
+        // produced is checked, not a sample.
+        for (String id : parsedBuilder.patternLinks().keySet()) {
+            PointsOnLink parsedPoints = fromParse.pointsOnLink(id);
+            PointsOnLink snapshotPoints = fromSnapshot.pointsOnLink(id);
+            if (parsedPoints == null) {
+                assertThat(snapshotPoints).as("pointsOnLink %s", id).isNull();
+                continue;
+            }
+            assertThat(snapshotPoints).as("pointsOnLink %s", id).isNotNull();
+            assertThat(snapshotPoints.getPoints()).as("pointsOnLink %s points", id).isEqualTo(parsedPoints.getPoints());
+            assertThat(snapshotPoints.getLength()).as("pointsOnLink %s length", id).isEqualTo(parsedPoints.getLength());
+        }
+
+        // ObjectRef caches its hashCode lazily in a field; ignore it so an incidental hashCode()
+        // call on one side does not make two equal lines/operators compare unequal.
+        assertThat(fromSnapshot.lines(null)).usingRecursiveComparison().ignoringFields("hashCode").isEqualTo(fromParse.lines(null));
+        assertThat(fromSnapshot.operators(null)).usingRecursiveComparison().ignoringFields("hashCode").isEqualTo(fromParse.operators(null));
+        assertThat(fromSnapshot.codespaces()).isEqualTo(fromParse.codespaces()); // Codespace instances are interned
+    }
 
     // ---- v2 writer ----
 
@@ -213,6 +288,34 @@ public class PlannedDataSnapshotTest {
         var originalPoints = fromOriginal.pointsOnLink("RUT:JourneyPattern:1");
         assertThat(snapshotPoints.getPoints()).isEqualTo(originalPoints.getPoints());
         assertThat(snapshotPoints.getLength()).isEqualTo(originalPoints.getLength());
+    }
+
+    @Test
+    public void anOperatingDayDateWithATimezoneOffsetRoundTripsUnchanged(@TempDir Path dir) throws Exception {
+        // xsd:date permits a timezone suffix, which LocalDate.parse rejects; the operating-day
+        // date is written and read as a plain string (see writeOperatingDayDate's removal in
+        // the v2 encoding design doc), so a date the ISO parser would reject must still survive
+        // the round trip byte-for-byte instead of becoming a silently null operating date.
+        PlannedDataset.Builder original = new PlannedDataset.Builder();
+        original.addOperatingDay("RUT:OperatingDay:1", "2026-09-03+02:00");
+        original.addServiceJourney("RUT:ServiceJourney:1", null, null);
+        original.addDatedServiceJourney("RUT:DatedServiceJourney:1", "RUT:ServiceJourney:1", "RUT:OperatingDay:1");
+
+        Path file = dir.resolve("planned-v2.bin");
+        PlannedDataSnapshot.write(original, file, "e");
+
+        PlannedDataset.Builder replayed = new PlannedDataset.Builder();
+        try (InputStream in = Files.newInputStream(file)) {
+            PlannedDataSnapshot.replay(in, replayed);
+        }
+
+        PlannedDataset fromSnapshot = replayed.build();
+        PlannedDataset fromOriginal = original.build();
+
+        assertThat(fromSnapshot.datedServiceJourney("RUT:DatedServiceJourney:1"))
+                .isEqualTo(fromOriginal.datedServiceJourney("RUT:DatedServiceJourney:1"))
+                .isEqualTo(new DatedJourneyRef("RUT:ServiceJourney:1", "2026-09-03+02:00"));
+        assertThat(fromSnapshot.stats().unresolvedOperatingDayRefs()).isZero();
     }
 
     @Test

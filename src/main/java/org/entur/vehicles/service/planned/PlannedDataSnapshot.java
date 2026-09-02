@@ -14,8 +14,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -99,7 +97,7 @@ public final class PlannedDataSnapshot {
             for (Map.Entry<String, String> e : operatingDays.entrySet()) {
                 operatingDayIndex.put(e.getKey(), operatingDayIndex.size());
                 ids.writeId(out, e.getKey());
-                writeOperatingDayDate(out, e.getValue());
+                SnapshotIo.writeString(out, e.getValue());
                 totalRecords++;
             }
 
@@ -241,30 +239,6 @@ public final class PlannedDataSnapshot {
     }
 
     /**
-     * Writes an operating day's calendar date as varint 0 for null (or an unparseable date -
-     * kept rather than failing the whole snapshot over one bad record), else the zigzag
-     * encoding of its epoch day, offset by one so a real date can never collide with the null
-     * sentinel.
-     */
-    private static void writeOperatingDayDate(DataOutputStream out, String calendarDate) throws IOException {
-        LocalDate date = null;
-        if (calendarDate != null) {
-            try {
-                date = LocalDate.parse(calendarDate);
-            } catch (DateTimeParseException e) {
-                date = null;
-            }
-        }
-        if (date == null) {
-            SnapshotIo.writeVarInt(out, 0);
-            return;
-        }
-        long epochDay = date.toEpochDay();
-        long zigzag = (epochDay << 1) ^ (epochDay >> 63);
-        SnapshotIo.writeVarInt(out, zigzag + 1);
-    }
-
-    /**
      * Reads a snapshot (see {@link #write}) and feeds its records into {@code sink} in section
      * order, so refs resolve against sections already read. Throws {@link
      * SnapshotFormatException} on bad magic, wrong version, a truncated file or a record-count
@@ -317,7 +291,7 @@ public final class PlannedDataSnapshot {
             for (int i = 0; i < operatingDayCount; i++) {
                 String id = ids.readId(in);
                 operatingDayIds[i] = id;
-                sink.addOperatingDay(id, readOperatingDayDate(in));
+                sink.addOperatingDay(id, SnapshotIo.readString(in));
                 totalRecords++;
             }
 
@@ -410,21 +384,6 @@ public final class PlannedDataSnapshot {
             geometry[i] = (int) (delta + previous);
         }
         return geometry;
-    }
-
-    /**
-     * Reads an operating day's calendar date written by the v2 writer's
-     * {@code writeOperatingDayDate}: varint 0 is null, else the value minus one is the zigzag
-     * encoding of the date's epoch day.
-     */
-    private static String readOperatingDayDate(DataInputStream in) throws IOException {
-        long v = SnapshotIo.readVarInt(in);
-        if (v == 0) {
-            return null;
-        }
-        long zigzag = v - 1;
-        long epochDay = (zigzag >>> 1) ^ -(zigzag & 1);
-        return LocalDate.ofEpochDay(epochDay).toString();
     }
 
 }

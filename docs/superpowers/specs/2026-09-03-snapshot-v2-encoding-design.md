@@ -26,6 +26,11 @@ uncompressed, 118 MB gzipped):
 | v1, today | 470 MB | 118 MB |
 | **v2 encoding** | **105 MB** | **70 MB** |
 
+The v1 row is measured from the dev snapshot itself. The v2 row is a prototype re-encoding of
+that same dev snapshot, not the output of the shipped Java writer — this document's status
+line says measured results are pending, and that refers to the shipped writer's actual output
+size, which awaits the dev rollout.
+
 Where the bytes are today: dated service journeys 68.9% (136.7 MB of own ids, 184.7 MB of
 references), service links 17.6% (76.4 MB of it geometry), service journeys 7.5%, journey
 patterns 5.9% (26.5 MB of it link references).
@@ -62,7 +67,7 @@ prefixes  varint count, then each: varint length + UTF-8 bytes ("RUT:DatedServic
 sections  in dependency order, each: varint count, then records
             1 operators             id, str name
             2 lines                 id, str name, str publicCode
-            3 operatingDays         id, varint date (0 null, else zigzag(epochDay) + 1)
+            3 operatingDays         id, str date
             4 serviceLinks          id, varint intCount, then zigzag varint per int,
                                     each delta against the value two positions back
             5 journeyPatterns       id, varint linkCount, then a ref per link
@@ -81,6 +86,13 @@ trailer   byte 0xFF, varint total record count
 Geometry deltas run per axis (value minus the value two positions back) because the array
 is interleaved lat/lon; the two-back rule handles an odd-length array without a special
 case.
+
+An operating day's date is written as the extractor's raw element text, unmodified — no
+epoch-day packing, no `LocalDate` parsing. xsd:date permits a timezone suffix
+(`2026-09-03+02:00`), which `LocalDate.parse` rejects; packing the date would mean silently
+writing the null sentinel for any date `LocalDate` cannot parse, losing that dated service
+journey's operating date on every read. There are only 3 089 operating days in the whole
+export, so the plain string costs about 31 KB in a 70 MB file.
 
 `duplicateIds` rides in the header because the builder's maps have already collapsed
 duplicates by the time we serialise, and `Stats.duplicateIds` must match what the parse
