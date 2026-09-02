@@ -56,7 +56,7 @@ public class IdCodecTest {
         }
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()));
         long tableCount = SnapshotIo.readVarInt(in);
-        for (int i = 0; i < tableCount; i++) {
+        for (long i = 0; i < tableCount; i++) {
             SnapshotIo.readString(in);
         }
         SnapshotIo.readVarInt(in); // prefix index for this id
