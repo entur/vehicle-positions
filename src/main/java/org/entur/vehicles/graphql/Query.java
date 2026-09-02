@@ -12,6 +12,7 @@ import org.entur.vehicles.data.model.BoundingBox;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
@@ -271,5 +272,28 @@ class Query {
 
         metricsService.markServiceJourneyQuery();
         return serviceJourney;
+    }
+
+    @QueryMapping
+    List<DatedServiceJourney> datedServiceJourneys(@Argument List<String> ids) {
+        final long start = System.currentTimeMillis();
+
+        final List<DatedServiceJourney> datedServiceJourneys = plannedDataService.current().datedServiceJourneys(ids);
+        LOG.info("Returning {} datedServiceJourneys in {} ms", datedServiceJourneys.size(), System.currentTimeMillis() - start);
+
+        metricsService.markDatedServiceJourneysQuery();
+        return datedServiceJourneys;
+    }
+
+    @QueryMapping
+    DatedServiceJourney datedServiceJourney(@Argument String id) {
+        final long start = System.currentTimeMillis();
+
+        final List<DatedServiceJourney> resolved = plannedDataService.current().datedServiceJourneys(List.of(id));
+        final DatedServiceJourney datedServiceJourney = resolved.isEmpty() ? null : resolved.get(0);
+        LOG.info("Returning datedServiceJourney {} in {} ms", datedServiceJourney, System.currentTimeMillis() - start);
+
+        metricsService.markDatedServiceJourneyQuery();
+        return datedServiceJourney;
     }
 }

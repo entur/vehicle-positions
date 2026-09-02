@@ -1,6 +1,7 @@
 package org.entur.vehicles.service.planned;
 
 import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.PointsOnLink;
@@ -196,6 +197,27 @@ public final class PlannedDataset {
                 }
             }
             result.add(serviceJourney);
+        }
+        return result;
+    }
+
+    /**
+     * The DatedServiceJourneys for the given dated service journey ids, each with its operating
+     * day and a light ServiceJourney dated to it (geometry resolves lazily). Request order is
+     * kept, duplicates collapse, ids the export does not know (including plain service journey
+     * ids) are skipped.
+     */
+    public List<DatedServiceJourney> datedServiceJourneys(Collection<String> ids) {
+        List<DatedServiceJourney> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String id : ids) {
+            DatedJourneyRef ref = datedServiceJourney(id);
+            if (ref == null || ref.serviceJourneyId() == null || !seen.add(id)) {
+                continue;
+            }
+            DatedServiceJourney dated = new DatedServiceJourney(id, new ServiceJourney(ref.serviceJourneyId(), ref.operatingDate()));
+            dated.setOperatingDay(ref.operatingDate());
+            result.add(dated);
         }
         return result;
     }

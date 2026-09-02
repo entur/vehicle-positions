@@ -176,6 +176,18 @@ public class VehicleGraphQLTests {
                 queryService.serviceJourneys(List.of("DSJ:ServiceJourney:1234567890", "TST:ServiceJourney:1234567890"), null, "TST")
                         .stream().map(ServiceJourney::getId).toList());
         assertTrue(queryService.serviceJourneys(List.of(), null, null).isEmpty());
+
+        DatedServiceJourney dated = queryService.datedServiceJourney("DSJ:DatedServiceJourney:1234567890");
+        assertEquals("DSJ:DatedServiceJourney:1234567890", dated.getId());
+        assertEquals("2020-12-15", dated.getOperatingDay());
+        assertEquals("DSJ:ServiceJourney:1234567890", dated.getServiceJourney().getId());
+        assertNull(queryService.datedServiceJourney("DSJ:DatedServiceJourney:unknown"));
+        assertNull(queryService.datedServiceJourney("DSJ:ServiceJourney:1234567890"));
+
+        assertEquals(List.of("DSJ:DatedServiceJourney:1234567890"),
+                queryService.datedServiceJourneys(List.of("DSJ:DatedServiceJourney:unknown", "DSJ:DatedServiceJourney:1234567890"))
+                        .stream().map(DatedServiceJourney::getId).toList());
+        assertTrue(queryService.datedServiceJourneys(List.of()).isEmpty());
     }
 
     @Test

@@ -1,6 +1,7 @@
 package org.entur.vehicles.service.planned;
 
 import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
@@ -106,6 +107,36 @@ public class PlannedDatasetCatalogueTest {
                 .hasSize(1);
         assertThat(dataset.serviceJourneys(List.of("X:ServiceJourney:orphan"), "RUT:Line:.*", null)).isEmpty();
         assertThat(dataset.serviceJourneys(List.of(), null, null)).isEmpty();
+    }
+
+    @Test
+    public void datedServiceJourneysByIdsKeepRequestOrderAndDropUnknowns() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addJourneyPattern("JP", List.of())
+                .addServiceJourney("RUT:ServiceJourney:1", "JP", "RUT:Line:1")
+                .addOperatingDay("RUT:OperatingDay:2026-08-25", "2026-08-25")
+                .addOperatingDay("RUT:OperatingDay:2026-08-26", "2026-08-26")
+                .addDatedServiceJourney("RUT:DatedServiceJourney:1", "RUT:ServiceJourney:1", "RUT:OperatingDay:2026-08-25")
+                .addDatedServiceJourney("RUT:DatedServiceJourney:2", "RUT:ServiceJourney:1", "RUT:OperatingDay:2026-08-26")
+                .addDatedServiceJourney("RUT:DatedServiceJourney:noday", "RUT:ServiceJourney:1", "RUT:OperatingDay:missing")
+                .build();
+
+        List<DatedServiceJourney> result = dataset.datedServiceJourneys(List.of(
+                "RUT:DatedServiceJourney:2", "RUT:DatedServiceJourney:nope", "RUT:ServiceJourney:1",
+                "RUT:DatedServiceJourney:1", "RUT:DatedServiceJourney:2"));
+        assertThat(result)
+                .withFailMessage("request order is kept, unknown ids and plain service journey ids are dropped, duplicates collapse")
+                .extracting(DatedServiceJourney::getId)
+                .containsExactly("RUT:DatedServiceJourney:2", "RUT:DatedServiceJourney:1");
+        assertThat(result.get(0).getOperatingDay()).isEqualTo("2026-08-26");
+        assertThat(result.get(0).getServiceJourney().getId()).isEqualTo("RUT:ServiceJourney:1");
+        assertThat(result.get(0).getServiceJourney().getDate()).isEqualTo("2026-08-26");
+
+        DatedServiceJourney noDay = dataset.datedServiceJourneys(List.of("RUT:DatedServiceJourney:noday")).get(0);
+        assertThat(noDay.getOperatingDay()).isNull();
+        assertThat(noDay.getServiceJourney().getId()).isEqualTo("RUT:ServiceJourney:1");
+
+        assertThat(dataset.datedServiceJourneys(List.of())).isEmpty();
     }
 
     @Test
