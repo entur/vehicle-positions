@@ -341,14 +341,21 @@ Helm: `configMap.snapshotUri`, set per environment in `env/values-*.yaml`, empty
 `values.yaml`. Bucket names follow whatever the platform's bucket provisioning
 produces; the property carries the full URI so the code has no opinion on naming.
 
-Bucket setup per environment:
+Bucket setup per environment, in `terraform/snapshots.tf`:
 
-- Standard storage, single region matching the cluster, uniform bucket-level access.
+- Standard storage, single region matching the cluster, uniform bucket-level access. All
+  three come from `terraform-google-cloud-storage//modules/bucket`, which also picks the
+  location: `EUROPE-WEST1` in dev and tst, `EU` in prd.
+- Named `ent-gcs-vpos-snapshots-<env>-001` by the module from `name_override`.
 - Lifecycle rule: delete objects older than 7 days. One new object per export per format
-  version per dataset, so steady state is a handful of objects.
-- IAM: `roles/storage.objectUser` on the bucket for the `application` Kubernetes service
-  account's Google service account. That role covers get and create; it also covers
-  delete, which nothing uses.
+  version per dataset, so steady state is a handful of objects. Object versioning and
+  offsite backup are off — every object is rebuildable from its export.
+- IAM: `roles/storage.objectAdmin` on the bucket for the `application` Kubernetes service
+  account's Google service account (`module.init.service_accounts.default`). That role
+  covers get and create; it also covers delete, which nothing uses. The narrower
+  `roles/storage.objectUser` would fit better but is not on the platform's
+  assignable-roles allowlist (`entur/ai`, `guides/platform/iam-roles.md`), so the policy
+  guard rejects it at plan time.
 
 ## Error handling
 
@@ -422,13 +429,14 @@ Measured numbers replace these targets during rollout; see Testing.
 
 ## Deployment and rollout
 
-1. Merge with the property empty everywhere. No behaviour change; the only diffs at
-   runtime are the `HttpClient` downloads and the extracted NSR parser.
-2. Provision the dev bucket and IAM, set `snapshotUri` in dev. The next rollout's first
-   pod misses on both datasets and uploads both; every later pod in that rollout hits.
-   Confirm from logs and the source gauge. Record the measured hit-path times in this
-   spec.
-3. Repeat for tst and prd.
+1. Merge. Terraform creates all three buckets (`terraform.yml` applies dev on the PR, tst
+   and prd on merge), and `snapshotUri` is set in dev only, so dev is the only environment
+   whose behaviour changes. Elsewhere the property stays empty and the only runtime diffs
+   are the `HttpClient` downloads and the extracted NSR parser.
+2. The next dev rollout's first pod misses on both datasets and uploads both; every later
+   pod in that rollout hits. Confirm from logs and the source gauge. Record the measured
+   hit-path times in this spec.
+3. Set `snapshotUri` in tst, then prd. The buckets already exist.
 
 Rollback is clearing the property.
 
