@@ -9,8 +9,6 @@ import org.entur.vehicles.data.model.ServiceJourney;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -18,7 +16,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -285,8 +282,7 @@ public final class PlannedDataset {
                         int unresolvedLinkRefs,
                         int unresolvedServiceJourneyRefs,
                         int unresolvedOperatingDayRefs,
-                        int unresolvedLineRefs,
-                        int datedServiceJourneysDropped) {
+                        int unresolvedLineRefs) {
     }
 
     /**
@@ -306,7 +302,6 @@ public final class PlannedDataset {
         private final Map<String, String> operatingDays = new HashMap<>();
         private final Map<String, String> serviceJourneyLine = new HashMap<>();
         private int duplicateIds = 0;
-        private int datedServiceJourneysDropped = 0;
 
         @Override
         public Builder addOperator(String id, String name) {
@@ -371,43 +366,6 @@ public final class PlannedDataset {
             if (previous != null) {
                 duplicateIds++;
             }
-        }
-
-        /**
-         * Drops dated service journeys whose resolved operating date is after
-         * {@code asOf.plusDays(futureDays)}. A no-op returning 0 when {@code futureDays} is
-         * null. A journey whose operating day is unknown, or whose date does not parse, is
-         * kept - it cannot be dated with confidence, and dropping it would silently change
-         * lookups when the export has a data error. Returns the number of entries removed;
-         * the same count is folded into {@link Stats#datedServiceJourneysDropped()} by
-         * {@link #build()}.
-         */
-        public int applyFutureWindow(LocalDate asOf, Integer futureDays) {
-            if (futureDays == null) {
-                return 0;
-            }
-            LocalDate cutoff = asOf.plusDays(futureDays);
-            int dropped = 0;
-            Iterator<RawDatedServiceJourney> it = rawDatedServiceJourneys.values().iterator();
-            while (it.hasNext()) {
-                String operatingDayId = it.next().operatingDayId();
-                String dateString = operatingDayId == null ? null : operatingDays.get(operatingDayId);
-                if (dateString == null) {
-                    continue;
-                }
-                LocalDate date;
-                try {
-                    date = LocalDate.parse(dateString);
-                } catch (DateTimeParseException e) {
-                    continue;
-                }
-                if (date.isAfter(cutoff)) {
-                    it.remove();
-                    dropped++;
-                }
-            }
-            datedServiceJourneysDropped += dropped;
-            return dropped;
         }
 
         /**
@@ -563,7 +521,7 @@ public final class PlannedDataset {
                     operators.size(), lines.size(), serviceJourneyPattern.size(), datedServiceJourneys.size(),
                     patternLinks.size(), linkGeometry.size(), duplicateIds,
                     unresolvedPatternRefs, unresolvedLinkRefs, unresolvedServiceJourneyRefs, unresolvedOperatingDayRefs,
-                    unresolvedLineRefs, datedServiceJourneysDropped);
+                    unresolvedLineRefs);
 
             if (duplicateIds + unresolvedPatternRefs + unresolvedLinkRefs
                     + unresolvedServiceJourneyRefs + unresolvedOperatingDayRefs + unresolvedLineRefs > 0) {

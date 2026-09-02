@@ -7,13 +7,9 @@ import java.util.Optional;
  * (by its ETag) it was built from. The prefix is the store's concern, so it is applied when
  * the object name is asked for, not when the key is made.
  */
-public record SnapshotKey(String dataset, int formatVersion, String etag, String variant) {
+public record SnapshotKey(String dataset, int formatVersion, String etag) {
 
     public static Optional<SnapshotKey> of(String dataset, int formatVersion, String rawEtag) {
-        return of(dataset, formatVersion, rawEtag, "");
-    }
-
-    public static Optional<SnapshotKey> of(String dataset, int formatVersion, String rawEtag, String rawVariant) {
         if (rawEtag == null) {
             return Optional.empty();
         }
@@ -21,8 +17,7 @@ public record SnapshotKey(String dataset, int formatVersion, String etag, String
         if (etag.isEmpty()) {
             return Optional.empty();
         }
-        String variant = rawVariant == null || rawVariant.isEmpty() ? "" : normaliseEtag(rawVariant);
-        return Optional.of(new SnapshotKey(dataset, formatVersion, etag, variant));
+        return Optional.of(new SnapshotKey(dataset, formatVersion, etag));
     }
 
     /** Strips a weak-validator prefix and surrounding quotes, trims, and makes the rest safe in an object name. */
@@ -38,11 +33,7 @@ public record SnapshotKey(String dataset, int formatVersion, String etag, String
     }
 
     public String objectName(String prefix) {
-        String name = etag;
-        if (variant != null && !variant.isEmpty()) {
-            name = etag + "_" + variant;
-        }
-        String path = dataset + "/v" + formatVersion + "/" + name + ".bin.gz";
+        String path = dataset + "/v" + formatVersion + "/" + etag + ".bin.gz";
         if (prefix == null || prefix.isEmpty()) {
             return path;
         }

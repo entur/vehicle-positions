@@ -16,7 +16,6 @@ import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -193,7 +192,7 @@ public class PlannedDataSnapshotTest {
         builder.addDatedServiceJourney("RUT:DatedServiceJourney:withDanglingDay", "RUT:ServiceJourney:withDanglingPattern", "RUT:OperatingDay:missing");
 
         Path file = dir.resolve("planned-v2.bin");
-        PlannedDataSnapshot.write(builder, file, "etag-1", null, null);
+        PlannedDataSnapshot.write(builder, file, "etag-1");
 
         byte[] bytes = Files.readAllBytes(file);
         assertThat(bytes).startsWith('V', 'P', 'P', '2');
@@ -208,25 +207,24 @@ public class PlannedDataSnapshotTest {
         resolvable.addJourneyPattern("RUT:JourneyPattern:1", List.of());
         resolvable.addServiceJourney("RUT:ServiceJourney:1", "RUT:JourneyPattern:1", null);
         Path resolvableFile = dir.resolve("resolvable.bin");
-        PlannedDataSnapshot.write(resolvable, resolvableFile, "e", null, null);
+        PlannedDataSnapshot.write(resolvable, resolvableFile, "e");
 
         PlannedDataset.Builder dangling = new PlannedDataset.Builder();
         dangling.addServiceJourney("RUT:ServiceJourney:1", "RUT:JourneyPattern:missing", null);
         Path danglingFile = dir.resolve("dangling.bin");
-        PlannedDataSnapshot.write(dangling, danglingFile, "e", null, null);
+        PlannedDataSnapshot.write(dangling, danglingFile, "e");
 
         assertThat(Files.size(danglingFile)).isGreaterThan(Files.size(resolvableFile));
     }
 
     @Test
-    public void v2HeaderCarriesWindowAndDuplicateCount(@TempDir Path dir) throws Exception {
+    public void v2HeaderCarriesDuplicateCount(@TempDir Path dir) throws Exception {
         PlannedDataset.Builder builder = new PlannedDataset.Builder();
         builder.addOperator("O:1", "One");
         builder.addOperator("O:1", "One again"); // duplicate id
 
-        LocalDate asOf = LocalDate.of(2026, 9, 2);
         Path file = dir.resolve("planned-v2.bin");
-        PlannedDataSnapshot.write(builder, file, "e", 7, asOf);
+        PlannedDataSnapshot.write(builder, file, "e");
 
         try (DataInputStream in = new DataInputStream(Files.newInputStream(file))) {
             byte[] magic = new byte[4];
@@ -234,17 +232,15 @@ public class PlannedDataSnapshotTest {
             in.readInt(); // version
             in.readUTF(); // etag
             in.readLong(); // createdAt
-            assertThat(in.readInt()).isEqualTo(7); // futureDays
-            assertThat(in.readLong()).isEqualTo(asOf.toEpochDay()); // asOfEpochDay
             assertThat(in.readInt()).isEqualTo(1); // duplicateIds
         }
     }
 
     @Test
-    public void v2HeaderMarksUnlimitedWindowAsMinusOne(@TempDir Path dir) throws Exception {
+    public void v2HeaderCarriesZeroDuplicatesForACleanBuilder(@TempDir Path dir) throws Exception {
         PlannedDataset.Builder builder = new PlannedDataset.Builder();
         Path file = dir.resolve("planned-v2.bin");
-        PlannedDataSnapshot.write(builder, file, "e", null, null);
+        PlannedDataSnapshot.write(builder, file, "e");
 
         try (DataInputStream in = new DataInputStream(Files.newInputStream(file))) {
             byte[] magic = new byte[4];
@@ -252,8 +248,6 @@ public class PlannedDataSnapshotTest {
             in.readInt(); // version
             in.readUTF(); // etag
             in.readLong(); // createdAt
-            assertThat(in.readInt()).isEqualTo(-1); // futureDays
-            assertThat(in.readLong()).isEqualTo(-1L); // asOfEpochDay
             assertThat(in.readInt()).isEqualTo(0); // duplicateIds
         }
     }
@@ -265,7 +259,7 @@ public class PlannedDataSnapshotTest {
         builder.addServiceLink("L:1", new int[]{10, 20, 5});
 
         Path file = dir.resolve("planned-v2.bin");
-        PlannedDataSnapshot.write(builder, file, "e", null, null);
+        PlannedDataSnapshot.write(builder, file, "e");
         byte[] bytes = Files.readAllBytes(file);
 
         // Header up to and including createdAt is variable-length (writeUTF) or time-based;
@@ -273,10 +267,6 @@ public class PlannedDataSnapshotTest {
         int offset = 4 + 4 + (2 + 1) + 8;
 
         byte[] expectedTail = {
-                // futureDays = -1 (unlimited)
-                (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
-                // asOfEpochDay = -1 (unlimited)
-                (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
                 // duplicateIds = 0
                 0x00, 0x00, 0x00, 0x00,
                 // prefix table: count=2, "O:", "L:"

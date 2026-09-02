@@ -215,27 +215,17 @@ public final class PlannedDataSnapshot {
 
     /**
      * Writes the v2 snapshot from the builder's completed state (see the format doc:
-     * {@code docs/superpowers/specs/2026-09-03-snapshot-v2-window-and-encoding-design.md},
-     * "Snapshot format v2"). Unlike {@link Writer}, which tees raw records as the extractor
-     * emits them, this reads the builder's maps directly, so it must run only after the
-     * parse (or a replay) has finished populating them - and after
-     * {@link PlannedDataset.Builder#applyFutureWindow} has already trimmed the dated service
-     * journeys the caller wants dropped, since this method serialises whatever the builder
-     * currently holds.
-     *
-     * @param futureDays the configured window horizon, or null when it is unlimited - stored
-     *                    in the header as -1 in that case
-     * @param asOf        the date the window was computed against, or null when there is no
-     *                    window - stored in the header as epoch day -1 in that case
+     * {@code docs/superpowers/specs/2026-09-03-snapshot-v2-encoding-design.md}, "Snapshot
+     * format v2"). Unlike {@link Writer}, which tees raw records as the extractor emits them,
+     * this reads the builder's maps directly, so it must run only after the parse (or a
+     * replay) has finished populating them.
      */
-    public static void write(PlannedDataset.Builder builder, Path file, String etag, Integer futureDays, LocalDate asOf) throws IOException {
+    public static void write(PlannedDataset.Builder builder, Path file, String etag) throws IOException {
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file), 1 << 16))) {
             out.write(MAGIC_V2);
             out.writeInt(FORMAT_VERSION);
             out.writeUTF(etag);
             out.writeLong(System.currentTimeMillis());
-            out.writeInt(futureDays == null ? -1 : futureDays);
-            out.writeLong(asOf == null ? -1L : asOf.toEpochDay());
             out.writeInt(builder.duplicateIds());
 
             Map<String, Operator> operators = builder.operators();
@@ -322,9 +312,7 @@ public final class PlannedDataSnapshot {
                 totalRecords++;
             }
 
-            // 7. datedServiceJourneys - refs into serviceJourneys and operatingDays. Whatever
-            // the builder currently holds is what gets serialised; applying the window is the
-            // caller's job (via Builder#applyFutureWindow), done before this method is called.
+            // 7. datedServiceJourneys - refs into serviceJourneys and operatingDays.
             SnapshotIo.writeVarInt(out, rawDatedServiceJourneys.size());
             for (Map.Entry<String, PlannedDataset.Builder.RawDatedServiceJourney> e : rawDatedServiceJourneys.entrySet()) {
                 ids.writeId(out, e.getKey());
