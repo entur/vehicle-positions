@@ -156,12 +156,15 @@ public class PlannedDataService {
 
                 if (uploadKey.isPresent() && skipped == 0) {
                     // The bucket is a cache, never a dependency: failing to prepare or write the
-                    // snapshot file costs the snapshot, never the load.
+                    // snapshot file costs the snapshot, never the load. IOException covers a
+                    // disk problem; RuntimeException covers a bug in the writer itself (e.g.
+                    // IdCodec.Writer.writeId's IllegalStateException on an un-interned prefix) -
+                    // either way the parsed dataset must still install.
                     try {
                         raw = createSnapshotFile("planned-snapshot", ".bin");
-                        PlannedDataSnapshot.write(builder, raw, uploadKey.get().etag());
+                        snapshotWriter.write(builder, raw, uploadKey.get().etag());
                         key = uploadKey.get();
-                    } catch (IOException e) {
+                    } catch (IOException | RuntimeException e) {
                         LOG.warn("Could not write the planned-data snapshot - loading without one", e);
                         deleteQuietly(raw);
                         raw = null;
@@ -225,6 +228,17 @@ public class PlannedDataService {
 
     void snapshotTempDir(Path dir) {
         this.snapshotTempDir = dir;
+    }
+
+    /** The write step, as a seam so a test can replace it - e.g. to make it throw an unchecked exception the way a bug in the real writer would, without needing a genuinely un-interned id. */
+    interface SnapshotWriter {
+        void write(PlannedDataset.Builder builder, Path file, String etag) throws IOException;
+    }
+
+    private SnapshotWriter snapshotWriter = PlannedDataSnapshot::write;
+
+    void snapshotWriter(SnapshotWriter writer) {
+        this.snapshotWriter = writer;
     }
 
     private Path createSnapshotFile(String prefix, String suffix) throws IOException {

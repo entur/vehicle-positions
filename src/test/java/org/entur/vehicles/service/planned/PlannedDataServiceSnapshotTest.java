@@ -150,6 +150,28 @@ public class PlannedDataServiceSnapshotTest {
         assertThat(server.getCount()).isEqualTo(1);
     }
 
+    /**
+     * The bucket is a cache, never a dependency: a bug in the writer itself - not just an
+     * I/O failure - must cost only the snapshot, never the load. This is what would happen if
+     * {@code IdCodec.Writer.writeId} ever threw its {@code IllegalStateException} for an
+     * un-interned prefix; the catch around the write step must not be narrowed to
+     * {@code IOException} alone.
+     */
+    @Test
+    public void anUncheckedWriterFailureStillLoadsTheDataset() {
+        PlannedDataService service = service(cache);
+        service.snapshotWriter((builder, file, etag) -> {
+            throw new IllegalStateException("writer bug");
+        });
+
+        service.initialLoad();
+
+        assertThat(service.current().serviceJourneyCount()).isEqualTo(650);
+        assertThat(cache.lastUpload().join()).isNull();
+        assertThat(expectedObject()).doesNotExist();
+        assertThat(server.getCount()).isEqualTo(1);
+    }
+
     /** A dataset missing whatever the skipped entries held must not become this export's snapshot. */
     @Test
     public void aPartialParseIsNotSnapshotted() throws Exception {
