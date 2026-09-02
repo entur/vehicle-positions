@@ -7,6 +7,8 @@ import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.OperatorService;
 import org.entur.vehicles.service.ServiceJourneyService;
+import org.entur.vehicles.service.snapshot.ExportDownloader;
+import org.entur.vehicles.service.snapshot.SnapshotCache;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +28,8 @@ public class PlannedLookupServicesTest {
 
     private static PlannedDataService loaded() throws Exception {
         String url = PlannedLookupServicesTest.class.getResource("/netex/rb_goa-aggregated-netex.zip").toURI().toString();
-        PlannedDataService service = new PlannedDataService(true, url, new PlannedDataLoader(), null, 0);
+        PlannedDataService service = new PlannedDataService(true, url, new PlannedDataLoader(), null, 0,
+                new ExportDownloader(), SnapshotCache.disabled());
         service.initialLoad();
         return service;
     }

@@ -1,0 +1,99 @@
+name: Terraform
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+
+# NB: permissions are declared per job, never at workflow level - the reusable
+# workflows cannot be granted more than the calling job has, and a workflow-level
+# block would clamp the unlisted scopes to none (startup_failure).
+jobs:
+  terraform-lint:
+    uses: entur/gha-terraform/.github/workflows/lint.yml@v2
+    permissions:
+      contents: read
+
+  # Pull requests: plan every environment, apply dev.
+  tf-plan-dev:
+    if: github.event_name != 'push'
+    needs: [terraform-lint]
+    uses: entur/gha-terraform/.github/workflows/plan.yml@v2
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    with:
+      environment: dev
+
+  tf-apply-dev:
+    if: github.event_name != 'push'
+    needs: [tf-plan-dev]
+    uses: entur/gha-terraform/.github/workflows/apply.yml@v2
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    with:
+      environment: dev
+      has_changes: ${{ needs.tf-plan-dev.outputs.has_changes }}
+
+  tf-plan-tst:
+    needs: [terraform-lint]
+    uses: entur/gha-terraform/.github/workflows/plan.yml@v2
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    with:
+      environment: tst
+
+  tf-plan-prd:
+    needs: [terraform-lint]
+    uses: entur/gha-terraform/.github/workflows/plan.yml@v2
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    with:
+      environment: prd
+
+  # Merges to main: apply tst, then prd.
+  tf-apply-tst:
+    if: github.event_name != 'pull_request'
+    needs: [tf-plan-tst]
+    uses: entur/gha-terraform/.github/workflows/apply.yml@v2
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    with:
+      environment: tst
+      has_changes: ${{ needs.tf-plan-tst.outputs.has_changes }}
+
+  tf-apply-prd:
+    # always(): tf-apply-tst is skipped when tst has no changes, and a skipped
+    # dependency would otherwise skip prd too.
+    if: |
+      always() && github.event_name != 'pull_request'
+      && needs.tf-plan-prd.result == 'success'
+      && needs.tf-apply-tst.result != 'failure'
+      && needs.tf-apply-tst.result != 'cancelled'
+    needs: [tf-plan-prd, tf-apply-tst]
+    uses: entur/gha-terraform/.github/workflows/apply.yml@v2
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    with:
+      environment: prd
+      has_changes: ${{ needs.tf-plan-prd.outputs.has_changes }}

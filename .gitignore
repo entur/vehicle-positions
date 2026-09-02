@@ -33,3 +33,10 @@ gradlew
 gradlew.bat
 
 /local_config/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+crash.log

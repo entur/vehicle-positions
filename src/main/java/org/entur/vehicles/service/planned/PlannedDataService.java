@@ -1,11 +1,13 @@
 package org.entur.vehicles.service.planned;
 
 import jakarta.annotation.PostConstruct;
-import org.apache.commons.io.FileUtils;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.PointsOnLink;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.snapshot.ExportDownloader;
+import org.entur.vehicles.service.snapshot.SnapshotCache;
+import org.entur.vehicles.service.snapshot.SnapshotKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,9 +16,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.net.URL;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -24,6 +27,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * context, and therefore readiness, until it is in place - and swaps in a fresh one from a
  * nightly reload. A failed startup load is fatal; a failed nightly reload keeps the
  * previous dataset.
+ * <p>
+ * Each load tries the snapshot named by the export's ETag before parsing; a parse tees its
+ * records into a new snapshot that is uploaded after the dataset is live. See
+ * {@code docs/superpowers/specs/2026-09-02-planned-data-snapshot-design.md}.
  * <p>
  * The {@code find*} methods are the lookup surface the enrichment services use. They return
  * null on a miss and count it, so a producer referencing ids the export lacks is visible.
@@ -33,13 +40,13 @@ public class PlannedDataService {
 
     private static final Logger LOG = LoggerFactory.getLogger(PlannedDataService.class);
 
-    private static final int DOWNLOAD_TIMEOUT_MILLIS = 60_000;
-
     private final boolean enabled;
     private final String url;
     private final PlannedDataLoader loader;
     private final PrometheusMetricsService metrics;
     private final int minServiceJourneys;
+    private final ExportDownloader downloader;
+    private final SnapshotCache snapshots;
     private final AtomicReference<PlannedDataset> current = new AtomicReference<>(PlannedDataset.EMPTY);
 
     @Autowired
@@ -47,17 +54,21 @@ public class PlannedDataService {
                               @Value("${vehicle.planned.data.url:https://storage.googleapis.com/marduk-production/outbound/netex/rb_norway-aggregated-netex.zip}") String url,
                               PlannedDataLoader loader,
                               PrometheusMetricsService metrics,
-                              @Value("${vehicle.planned.data.min.service.journeys:50000}") int minServiceJourneys) {
+                              @Value("${vehicle.planned.data.min.service.journeys:50000}") int minServiceJourneys,
+                              ExportDownloader downloader,
+                              SnapshotCache snapshots) {
         this.enabled = enabled;
         this.url = url;
         this.loader = loader;
         this.metrics = metrics;
         this.minServiceJourneys = minServiceJourneys;
+        this.downloader = downloader;
+        this.snapshots = snapshots;
     }
 
     /** A service that never loads and serves {@link PlannedDataset#EMPTY} - for tests. */
     public static PlannedDataService disabled() {
-        return new PlannedDataService(false, null, null, null, 0);
+        return new PlannedDataService(false, null, null, null, 0, null, SnapshotCache.disabled());
     }
 
     @PostConstruct
@@ -87,18 +98,97 @@ public class PlannedDataService {
 
     private void load() throws PlannedDataLoadException {
         long start = System.currentTimeMillis();
-        Path zip;
+        Path zip = null;
+        Path raw = null;
         try {
-            zip = Files.createTempFile("planned-netex", ".zip");
-        } catch (IOException e) {
-            if (metrics != null) {
-                metrics.markPlannedDataLoadFailure();
+            PlannedDataset.Builder builder = new PlannedDataset.Builder();
+            String source = null;
+            SnapshotKey key = null;
+            boolean unreadable = false;
+
+            // 1. Snapshot first: the export's ETag names the object that holds exactly its records.
+            if (snapshots.enabled()) {
+                Optional<SnapshotKey> candidate = downloader.head(url)
+                        .flatMap(etag -> SnapshotKey.of(PlannedDataSnapshot.DATASET, PlannedDataSnapshot.FORMAT_VERSION, etag));
+                if (candidate.isEmpty()) {
+                    LOG.info("No ETag for {} - loading the export without a snapshot", url);
+                }
+                Optional<InputStream> in = candidate.flatMap(snapshots::open);
+                if (in.isPresent()) {
+                    boolean replayed = false;
+                    try (InputStream stream = in.get()) {
+                        PlannedDataSnapshot.replay(stream, builder);
+                        replayed = true;
+                    } catch (IOException | RuntimeException e) {
+                        LOG.warn("Snapshot {} could not be replayed - falling back to the export", candidate.get(), e);
+                        builder = new PlannedDataset.Builder();
+                        unreadable = true;
+                        replayed = false;
+                    }
+                    // Set outside the try: a close() that throws lands in the catch, and a discarded
+                    // builder must never be paired with a source that skips the export path.
+                    if (replayed) {
+                        key = candidate.get();
+                        source = "snapshot";
+                    }
+                }
             }
-            throw new PlannedDataLoadException("Could not create temp file for planned data download", e);
-        }
-        try {
-            download(url, zip);
-            PlannedDataset fresh = loader.load(zip);
+
+            // 2. Full parse, teeing the records into a snapshot file when we know which export this is.
+            if (source == null) {
+                zip = Files.createTempFile("planned-netex", ".zip");
+                long downloadStart = System.currentTimeMillis();
+                Optional<String> etag;
+                try {
+                    etag = downloader.download(url, zip);
+                } catch (IOException e) {
+                    throw new PlannedDataLoadException("Could not download " + url, e);
+                }
+                LOG.info("Download of {} took {} ms", url, System.currentTimeMillis() - downloadStart);
+                Optional<SnapshotKey> uploadKey = snapshots.enabled()
+                        ? etag.flatMap(e -> SnapshotKey.of(PlannedDataSnapshot.DATASET, PlannedDataSnapshot.FORMAT_VERSION, e))
+                        : Optional.empty();
+                PlannedDataSnapshot.Writer writer = null;
+                if (uploadKey.isPresent()) {
+                    // The bucket is a cache, never a dependency: failing to prepare the snapshot
+                    // file costs the snapshot, never the load.
+                    try {
+                        raw = createSnapshotFile("planned-snapshot", ".bin");
+                        writer = PlannedDataSnapshot.writer(raw, uploadKey.get().etag());
+                    } catch (IOException e) {
+                        LOG.warn("Could not prepare snapshot file - loading without a snapshot", e);
+                        deleteQuietly(raw);
+                        raw = null;
+                        writer = null;
+                    }
+                }
+                if (writer != null) {
+                    TeeSink tee;
+                    int skipped;
+                    try (PlannedDataSnapshot.Writer open = writer) {
+                        tee = new TeeSink(builder, open);
+                        skipped = loader.load(zip, tee);
+                    }
+                    if (tee.writerFailed()) {
+                        deleteQuietly(raw);
+                        raw = null;
+                    } else if (skipped > 0) {
+                        // A partial parse must not become this export's snapshot for the whole fleet.
+                        LOG.warn("{} NeTEx entries were skipped - not snapshotting a partial parse", skipped);
+                        deleteQuietly(raw);
+                        raw = null;
+                        key = null;
+                    } else {
+                        key = uploadKey.get();
+                    }
+                } else {
+                    loader.load(zip, builder);
+                }
+                source = "export";
+            }
+
+            // 3. Build, check, install.
+            PlannedDataset fresh = builder.build();
             if (fresh.serviceJourneyCount() < minServiceJourneys) {
                 throw new PlannedDataLoadException("Fresh dataset has " + fresh.serviceJourneyCount()
                         + " service journeys, below the configured minimum of " + minServiceJourneys
@@ -114,19 +204,56 @@ public class PlannedDataService {
             long duration = System.currentTimeMillis() - start;
             if (metrics != null) {
                 metrics.markPlannedDataLoaded(duration, fresh.stats());
+                metrics.markSnapshotSource(PlannedDataSnapshot.DATASET, "snapshot".equals(source));
             }
-            LOG.info("Planned data loaded in {} ms: {}", duration, fresh.stats());
+            LOG.info("Planned data loaded in {} ms from {} (etag={}): {}", duration, source,
+                    key == null ? "none" : key.etag(), fresh.stats());
+
+            // 4. Only now, off the readiness path, does the raw file go to the bucket.
+            if (raw != null) {
+                snapshots.upload(key, raw, unreadable);
+                raw = null; // the uploader owns it from here
+            }
+        } catch (IOException e) {
+            if (metrics != null) {
+                metrics.markPlannedDataLoadFailure();
+            }
+            throw new PlannedDataLoadException("Planned data load failed", e);
         } catch (PlannedDataLoadException e) {
             if (metrics != null) {
                 metrics.markPlannedDataLoadFailure();
             }
             throw e;
         } finally {
-            try {
-                Files.deleteIfExists(zip);
-            } catch (IOException e) {
-                LOG.warn("Could not delete temp file {}", zip, e);
-            }
+            deleteQuietly(zip);
+            deleteQuietly(raw);
+        }
+    }
+
+    /**
+     * Test seam: the directory the raw snapshot file is created in. Null - the default - means
+     * the JVM's temp directory. Only tests set it, to make that creation fail.
+     */
+    private Path snapshotTempDir;
+
+    void snapshotTempDir(Path dir) {
+        this.snapshotTempDir = dir;
+    }
+
+    private Path createSnapshotFile(String prefix, String suffix) throws IOException {
+        return snapshotTempDir == null
+                ? Files.createTempFile(prefix, suffix)
+                : Files.createTempFile(snapshotTempDir, prefix, suffix);
+    }
+
+    private static void deleteQuietly(Path file) {
+        if (file == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            LOG.warn("Could not delete temp file {}", file, e);
         }
     }
 
@@ -140,16 +267,6 @@ public class PlannedDataService {
             return false;
         }
         return fresh.serviceJourneyCount() * 2 < previous.serviceJourneyCount();
-    }
-
-    private static void download(String url, Path target) throws PlannedDataLoadException {
-        long start = System.currentTimeMillis();
-        try {
-            FileUtils.copyURLToFile(new URL(url), target.toFile(), DOWNLOAD_TIMEOUT_MILLIS, DOWNLOAD_TIMEOUT_MILLIS);
-            LOG.info("Download of {} took {} ms", url, System.currentTimeMillis() - start);
-        } catch (IOException e) {
-            throw new PlannedDataLoadException("Could not download " + url, e);
-        }
     }
 
     public PlannedDataset current() {

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PublicationDelivery xmlns="http://www.netex.org.uk/netex" xmlns:gml="http://www.opengis.net/gml/3.2" version="1.15:NO-NeTEx-networktimetable:1.5">
+  <PublicationTimestamp>2026-09-02T00:00:00</PublicationTimestamp>
+  <ParticipantRef>NSR</ParticipantRef>
+  <dataObjects>
+    <SiteFrame id="NSR:SiteFrame:1" version="1">
+      <stopPlaces>
+        <StopPlace id="NSR:StopPlace:1" version="1">
+          <Name>Hub</Name>
+          <Centroid>
+            <Location>
+              <Longitude>10.750000</Longitude>
+              <Latitude>59.910000</Latitude>
+            </Location>
+          </Centroid>
+        </StopPlace>
+        <StopPlace id="NSR:StopPlace:2" version="1">
+          <Name>Oslo S</Name>
+          <ParentSiteRef ref="NSR:StopPlace:1" version="1"/>
+          <Centroid>
+            <Location>
+              <Longitude>10.752245</Longitude>
+              <Latitude>59.910357</Latitude>
+            </Location>
+          </Centroid>
+          <quays>
+            <Quay id="NSR:Quay:21" version="1">
+              <Name>Spor 1</Name>
+              <Centroid>
+                <Location>
+                  <Longitude>10.752300</Longitude>
+                  <Latitude>59.910400</Latitude>
+                </Location>
+              </Centroid>
+            </Quay>
+            <Quay id="NSR:Quay:22" version="1">
+              <Centroid>
+                <Location>
+                  <Longitude>10.752400</Longitude>
+                  <Latitude>59.910500</Latitude>
+                </Location>
+              </Centroid>
+            </Quay>
+          </quays>
+        </StopPlace>
+        <StopPlace id="NSR:StopPlace:3" version="1">
+          <Name>Lonely</Name>
+          <Centroid>
+            <Location>
+              <Longitude>5.320000</Longitude>
+              <Latitude>60.390000</Latitude>
+            </Location>
+          </Centroid>
+          <quays>
+            <Quay id="NSR:Quay:31" version="1">
+              <Name>A</Name>
+              <Centroid>
+                <Location>
+                  <Longitude>5.320100</Longitude>
+                  <Latitude>60.390100</Latitude>
+                </Location>
+              </Centroid>
+            </Quay>
+          </quays>
+        </StopPlace>
+      </stopPlaces>
+    </SiteFrame>
+  </dataObjects>
+</PublicationDelivery>

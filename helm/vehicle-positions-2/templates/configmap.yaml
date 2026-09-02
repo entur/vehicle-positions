@@ -70,3 +70,4 @@ data:
       vehicle.planned.data.url={{ .Values.configMap.plannedData.url }}
       vehicle.planned.data.reload.cron={{ .Values.configMap.plannedData.reloadCron }}
       vehicle.planned.data.min.service.journeys={{ .Values.configMap.plannedData.minServiceJourneys }}
+      vehicle.snapshot.uri={{ .Values.configMap.snapshotUri }}

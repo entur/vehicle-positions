@@ -9,9 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * One StAX pass over a NeTEx XML stream, keeping only the seven element types the service
- * needs. Everything else is skipped at the token level, so memory is bounded by what is
- * kept, not by the size of the file.
+ * One StAX pass over a NeTEx XML stream, feeding the seven element types the service needs
+ * into a {@link PlannedDataSink}. Everything else is skipped at the token level, so memory
+ * is bounded by what is kept, not by the size of the file.
  * <p>
  * Each handled element is read by a method that consumes exactly that element (from its
  * START_ELEMENT to its END_ELEMENT) and only looks at the children it needs, tracking depth
@@ -28,7 +28,7 @@ public final class NetexPlannedDataExtractor {
         FACTORY.setProperty(XMLInputFactory.IS_NAMESPACE_AWARE, true);
     }
 
-    public void extract(InputStream in, PlannedDataset.Builder builder) throws XMLStreamException {
+    public void extract(InputStream in, PlannedDataSink sink) throws XMLStreamException {
         XMLStreamReader r = FACTORY.createXMLStreamReader(in);
         try {
             while (r.hasNext()) {
@@ -36,13 +36,13 @@ public final class NetexPlannedDataExtractor {
                     continue;
                 }
                 switch (r.getLocalName()) {
-                    case "Operator" -> readOperator(r, builder);
-                    case "Line", "FlexibleLine" -> readLine(r, builder);
-                    case "ServiceLink" -> readServiceLink(r, builder);
-                    case "JourneyPattern", "ServiceJourneyPattern" -> readJourneyPattern(r, builder);
-                    case "ServiceJourney" -> readServiceJourney(r, builder);
-                    case "DatedServiceJourney" -> readDatedServiceJourney(r, builder);
-                    case "OperatingDay" -> readOperatingDay(r, builder);
+                    case "Operator" -> readOperator(r, sink);
+                    case "Line", "FlexibleLine" -> readLine(r, sink);
+                    case "ServiceLink" -> readServiceLink(r, sink);
+                    case "JourneyPattern", "ServiceJourneyPattern" -> readJourneyPattern(r, sink);
+                    case "ServiceJourney" -> readServiceJourney(r, sink);
+                    case "DatedServiceJourney" -> readDatedServiceJourney(r, sink);
+                    case "OperatingDay" -> readOperatingDay(r, sink);
                     default -> { /* skip */ }
                 }
             }
@@ -51,7 +51,7 @@ public final class NetexPlannedDataExtractor {
         }
     }
 
-    private void readOperator(XMLStreamReader r, PlannedDataset.Builder builder) throws XMLStreamException {
+    private void readOperator(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
         String[] name = new String[1];
         scan(r, (reader, localName, depth) -> {
@@ -62,11 +62,11 @@ public final class NetexPlannedDataExtractor {
             return false;
         });
         if (id != null) {
-            builder.addOperator(id, name[0]);
+            sink.addOperator(id, name[0]);
         }
     }
 
-    private void readLine(XMLStreamReader r, PlannedDataset.Builder builder) throws XMLStreamException {
+    private void readLine(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
         String[] fields = new String[2]; // name, publicCode
         scan(r, (reader, localName, depth) -> {
@@ -80,11 +80,11 @@ public final class NetexPlannedDataExtractor {
             }
         });
         if (id != null) {
-            builder.addLine(id, fields[0], fields[1]);
+            sink.addLine(id, fields[0], fields[1]);
         }
     }
 
-    private void readServiceLink(XMLStreamReader r, PlannedDataset.Builder builder) throws XMLStreamException {
+    private void readServiceLink(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
         int[][] geometry = new int[1][];
         scan(r, (reader, localName, depth) -> {
@@ -95,11 +95,11 @@ public final class NetexPlannedDataExtractor {
             return false;
         });
         if (id != null) {
-            builder.addServiceLink(id, geometry[0]);
+            sink.addServiceLink(id, geometry[0]);
         }
     }
 
-    private void readJourneyPattern(XMLStreamReader r, PlannedDataset.Builder builder) throws XMLStreamException {
+    private void readJourneyPattern(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
         List<String> links = new ArrayList<>();
         scan(r, (reader, localName, depth) -> {
@@ -112,11 +112,11 @@ public final class NetexPlannedDataExtractor {
             return false;
         });
         if (id != null) {
-            builder.addJourneyPattern(id, links);
+            sink.addJourneyPattern(id, links);
         }
     }
 
-    private void readServiceJourney(XMLStreamReader r, PlannedDataset.Builder builder) throws XMLStreamException {
+    private void readServiceJourney(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
         String[] refs = new String[2]; // journeyPatternId, lineId
         scan(r, (reader, localName, depth) -> {
@@ -133,11 +133,11 @@ public final class NetexPlannedDataExtractor {
             return false;
         });
         if (id != null) {
-            builder.addServiceJourney(id, refs[0], refs[1]);
+            sink.addServiceJourney(id, refs[0], refs[1]);
         }
     }
 
-    private void readDatedServiceJourney(XMLStreamReader r, PlannedDataset.Builder builder) throws XMLStreamException {
+    private void readDatedServiceJourney(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
         String[] refs = new String[2]; // serviceJourneyId, operatingDayId
         scan(r, (reader, localName, depth) -> {
@@ -152,11 +152,11 @@ public final class NetexPlannedDataExtractor {
             return false;
         });
         if (id != null) {
-            builder.addDatedServiceJourney(id, refs[0], refs[1]);
+            sink.addDatedServiceJourney(id, refs[0], refs[1]);
         }
     }
 
-    private void readOperatingDay(XMLStreamReader r, PlannedDataset.Builder builder) throws XMLStreamException {
+    private void readOperatingDay(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
         String[] date = new String[1];
         scan(r, (reader, localName, depth) -> {
@@ -167,7 +167,7 @@ public final class NetexPlannedDataExtractor {
             return false;
         });
         if (id != null) {
-            builder.addOperatingDay(id, date[0]);
+            sink.addOperatingDay(id, date[0]);
         }
     }
 

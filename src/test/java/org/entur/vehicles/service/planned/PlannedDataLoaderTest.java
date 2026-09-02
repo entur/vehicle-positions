@@ -25,9 +25,15 @@ public class PlannedDataLoaderTest {
         return Path.of(PlannedDataLoaderTest.class.getResource("/netex/rb_goa-aggregated-netex.zip").toURI());
     }
 
+    private static PlannedDataset load(Path zip) throws PlannedDataLoadException {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        new PlannedDataLoader().load(zip, builder);
+        return builder.build();
+    }
+
     @Test
     public void loadsTheGoaExport() throws Exception {
-        PlannedDataset dataset = new PlannedDataLoader().load(goaZip());
+        PlannedDataset dataset = load(goaZip());
 
         PlannedDataset.Stats stats = dataset.stats();
         assertThat(stats.operators()).isEqualTo(1);
@@ -60,8 +66,13 @@ public class PlannedDataLoaderTest {
             put(out, "README.txt", "not xml");
         }
 
-        PlannedDataset dataset = new PlannedDataLoader().load(zip);
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        int skipped = new PlannedDataLoader().load(zip, builder);
+        PlannedDataset dataset = builder.build();
 
+        assertThat(skipped)
+                .withFailMessage("the caller must be able to tell a partial parse from a complete one")
+                .isEqualTo(1);
         assertThat(dataset.line("TST:Line:204")).isNotNull();
         assertThat(dataset.line("TST:Line:before"))
                 .withFailMessage("elements parsed before the malformed point are kept")
@@ -76,7 +87,7 @@ public class PlannedDataLoaderTest {
             put(out, "_TST_shared_data.xml", resource("/netex/fragment-shared-data.xml"));
         }
 
-        assertThatThrownBy(() -> new PlannedDataLoader().load(zip))
+        assertThatThrownBy(() -> load(zip))
                 .isInstanceOf(PlannedDataLoadException.class)
                 .hasMessageContaining("line file");
     }
@@ -86,7 +97,7 @@ public class PlannedDataLoaderTest {
         Path notAZip = dir.resolve("garbage.zip");
         Files.writeString(notAZip, "this is not a zip");
 
-        assertThatThrownBy(() -> new PlannedDataLoader().load(notAZip))
+        assertThatThrownBy(() -> load(notAZip))
                 .isInstanceOf(PlannedDataLoadException.class);
     }
 
@@ -104,7 +115,7 @@ public class PlannedDataLoaderTest {
 
     @Test
     public void goaCatalogueCoversEveryJourneyOnItsThreeLines() throws Exception {
-        PlannedDataset dataset = new PlannedDataLoader().load(goaZip());
+        PlannedDataset dataset = load(goaZip());
 
         assertThat(dataset.codespaces()).extracting(c -> c.getCodespaceId()).containsExactly("GOA");
         assertThat(dataset.lines("GOA")).hasSize(3);

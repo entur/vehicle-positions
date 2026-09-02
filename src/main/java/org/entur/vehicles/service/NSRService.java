@@ -4,29 +4,27 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
-import org.apache.commons.io.FileUtils;
-import org.entur.netex.NetexParser;
-import org.entur.netex.index.api.NetexEntitiesIndex;
-import org.entur.vehicles.data.model.Location;
 import org.entur.vehicles.data.model.StopPoint;
-import org.rutebanken.netex.model.LocationStructure;
-import org.rutebanken.netex.model.Quay;
-import org.rutebanken.netex.model.Quays_RelStructure;
-import org.rutebanken.netex.model.SiteRefStructure;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.snapshot.ExportDownloader;
+import org.entur.vehicles.service.snapshot.SnapshotCache;
+import org.entur.vehicles.service.snapshot.SnapshotKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.URL;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -36,29 +34,45 @@ public class NSRService {
 
     private static final Logger LOG = LoggerFactory.getLogger(NSRService.class);
     private final String url;
-
     private final boolean enabled;
+    private final ExportDownloader downloader;
+    private final SnapshotCache snapshots;
+    private final PrometheusMetricsService metrics;
 
     @Autowired
     public NSRService(
             @Value("${vehicle.nsr.lookup.enabled:false}") boolean enabled,
-            @Value("${vehicle.nsr.lookup.url:}") String url
+            @Value("${vehicle.nsr.lookup.url:}") String url,
+            ExportDownloader downloader,
+            SnapshotCache snapshots,
+            PrometheusMetricsService metrics
     ) {
         this.enabled = enabled;
         this.url = url;
+        this.downloader = downloader;
+        this.snapshots = snapshots;
+        this.metrics = metrics;
     }
 
     /**
-     * Test seam: populates {@link #ancestorsByRef} directly from a supplied child-to-parent
-     * map, via the same {@link #flattenAncestors} used by the real NeTEx warm-up, without
-     * downloading or parsing a NeTEx file. Package-private - not part of the public surface.
-     * Delegates to the primary constructor rather than duplicating its field assignments; the
-     * {@code enabled}/{@code url} it forwards only ever govern {@link #warmUpCache} (never run
-     * here - this bypasses it) and {@link #getStop} lookup, neither of which this seam is for.
+     * Test seam: constructs with no downloader, metrics or snapshot cache, delegating to the
+     * {@link #NSRService(boolean, String, Map)} seam with an empty map. Kept public because
+     * GraphQL test fixtures outside this package build a disabled {@code NSRService} this way
+     * to satisfy {@code Query}'s constructor; not part of the runtime (Spring-wired) surface.
+     */
+    public NSRService(boolean enabled, String url) {
+        this(enabled, url, Map.of());
+    }
+
+    /**
+     * Test seam: installs a child-to-parent map directly, via the same {@link #install} the
+     * real warm-up uses, without downloading or parsing a NeTEx file. Package-private - not
+     * part of the public surface. The {@code enabled}/{@code url} it forwards only ever govern
+     * {@link #warmUpCache} (never run here) and {@link #getStop} lookup.
      */
     NSRService(boolean enabled, String url, Map<String, String> childToParent) {
-        this(enabled, url);
-        this.ancestorsByRef.putAll(flattenAncestors(childToParent));
+        this(enabled, url, null, SnapshotCache.disabled(), null);
+        install(new NsrData(Map.of(), childToParent));
     }
 
     private final LoadingCache<String, StopPoint> stopPointCache = CacheBuilder.newBuilder()
@@ -84,78 +98,126 @@ public class NSRService {
     private final Map<String, Set<String>> ancestorsByRef = new ConcurrentHashMap<>();
 
     @PostConstruct
-    private void warmUpCache() {
-        if (enabled) {
-            long start = System.currentTimeMillis(); // For performance measurement
-            NetexParser netexParser = new NetexParser();
-            try {
+    void warmUpCache() {
+        if (!enabled) {
+            return;
+        }
+        long start = System.currentTimeMillis();
+        Path zip = null;
+        Path raw = null;
+        try {
+            NsrData data = null;
+            String source = null;
+            SnapshotKey key = null;
+            boolean unreadable = false;
 
-                NetexEntitiesIndex index = netexParser.parse(readUrl(url));
-
-                // The parser already publishes quay -> stop place; this map is not retained
-                // after parsing, so its contents are copied. Stop place -> multimodal parent is
-                // added below, from the loop that already visits every stop place.
-                Map<String, String> childToParent = new HashMap<>(index.getStopPlaceIdByQuayIdIndex());
-
-                index.getStopPlaceIndex().getLatestVersions().forEach( stopPlace -> {
-                    String stopPlaceId = stopPlace.getId();
-                    SiteRefStructure parentSiteRef = stopPlace.getParentSiteRef();
-                    if (parentSiteRef != null && parentSiteRef.getRef() != null) {
-                        childToParent.put(stopPlaceId, parentSiteRef.getRef());
+            if (snapshots.enabled()) {
+                Optional<SnapshotKey> candidate = downloader.head(url)
+                        .flatMap(etag -> SnapshotKey.of(NsrSnapshot.DATASET, NsrSnapshot.FORMAT_VERSION, etag));
+                if (candidate.isEmpty()) {
+                    LOG.info("No ETag for {} - loading the NSR export without a snapshot", url);
+                }
+                Optional<InputStream> in = candidate.flatMap(snapshots::open);
+                if (in.isPresent()) {
+                    boolean replayed = false;
+                    try (InputStream stream = in.get()) {
+                        data = NsrSnapshot.read(stream);
+                        replayed = true;
+                    } catch (IOException | RuntimeException e) {
+                        LOG.warn("Snapshot {} could not be read - falling back to the NSR export", candidate.get(), e);
+                        data = null;
+                        unreadable = true;
+                        replayed = false;
                     }
-                    String stopPlaceName = stopPlace.getName().getValue();
-                    LocationStructure stopPlaceLocation = stopPlace.getCentroid().getLocation();
-                    stopPointCache.put(
-                            stopPlaceId,
-                            new StopPoint(
-                                    stopPlaceId,
-                                    stopPlaceName,
-                                    new Location(
-                                            stopPlaceLocation.getLongitude().doubleValue(),
-                                            stopPlaceLocation.getLatitude().doubleValue()
-                                    )
-                            )
-                    );
-                    Quays_RelStructure quays = stopPlace.getQuays();
-                    if (quays != null) {
-
-                        quays.getQuayRefOrQuay().forEach(jaxbQuay -> {
-
-                                if (jaxbQuay.getValue() instanceof Quay quay) {
-                                    String id = quay.getId();
-                                    String name;
-                                    if (quay.getName() == null || quay.getName().getValue() == null) {
-                                        name = stopPlaceName;
-                                    } else {
-                                        name = quay.getName().getValue();
-                                    }
-                                    LocationStructure quayLocation = quay.getCentroid().getLocation();
-                                    stopPointCache.put(
-                                            id,
-                                            new StopPoint(
-                                                    id,
-                                                    name,
-                                                    new Location(
-                                                            quayLocation.getLongitude().doubleValue(),
-                                                            quayLocation.getLatitude().doubleValue()
-                                                    )
-                                            )
-                                    );
-                                }
-                        });
+                    // Set outside the try: a close() that throws lands in the catch, and the export
+                    // path must then still run.
+                    if (replayed) {
+                        key = candidate.get();
+                        source = "snapshot";
                     }
-                });
-
-                ancestorsByRef.putAll(flattenAncestors(childToParent));
-                LOG.info("NSRService resolved ancestors for {} stop refs.", ancestorsByRef.size());
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+                }
             }
-            // For performance measurement
-            LOG.info("NSRService cache warm-up took: {} ms", (System.currentTimeMillis() - start));
+
+            if (data == null) {
+                zip = Files.createTempFile("nsr-netex", ".zip");
+                long downloadStart = System.currentTimeMillis();
+                Optional<String> etag = downloader.download(url, zip);
+                LOG.info("Download of {} took {} ms", url, System.currentTimeMillis() - downloadStart);
+                data = new NsrNetexParser().parse(zip);
+                source = "export";
+                Optional<SnapshotKey> uploadKey = snapshots.enabled()
+                        ? etag.flatMap(e -> SnapshotKey.of(NsrSnapshot.DATASET, NsrSnapshot.FORMAT_VERSION, e))
+                        : Optional.empty();
+                if (uploadKey.isPresent()) {
+                    // The bucket is a cache, never a dependency: failing to write the snapshot file
+                    // costs the snapshot, never the warm-up.
+                    try {
+                        raw = createSnapshotFile("nsr-snapshot", ".bin");
+                        NsrSnapshot.write(data, raw, uploadKey.get().etag());
+                        key = uploadKey.get();
+                    } catch (IOException e) {
+                        LOG.warn("Could not prepare snapshot file - loading without a snapshot", e);
+                        deleteQuietly(raw);
+                        raw = null;
+                        key = null;
+                    }
+                }
+            }
+
+            install(data);
+            long duration = System.currentTimeMillis() - start;
+            if (metrics != null) {
+                metrics.markNsrLoaded(duration);
+                metrics.markSnapshotSource(NsrSnapshot.DATASET, "snapshot".equals(source));
+            }
+            LOG.info("NSRService resolved ancestors for {} stop refs.", ancestorsByRef.size());
+            LOG.info("NSRService cache warm-up took: {} ms from {} (etag={})", duration, source,
+                    key == null ? "none" : key.etag());
+
+            if (raw != null) {
+                snapshots.upload(key, raw, unreadable);
+                raw = null;
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("NSR warm-up failed", e);
+        } finally {
+            deleteQuietly(zip);
+            deleteQuietly(raw);
         }
     }
 
+    /** The one place the caches are filled, on both the snapshot and the parse path. */
+    void install(NsrData data) {
+        stopPointCache.putAll(data.stopPoints());
+        ancestorsByRef.putAll(flattenAncestors(data.childToParent()));
+    }
+
+    /**
+     * Test seam: the directory the raw snapshot file is created in. Null - the default - means
+     * the JVM's temp directory. Only tests set it, to make that creation fail.
+     */
+    private Path snapshotTempDir;
+
+    void snapshotTempDir(Path dir) {
+        this.snapshotTempDir = dir;
+    }
+
+    private Path createSnapshotFile(String prefix, String suffix) throws IOException {
+        return snapshotTempDir == null
+                ? Files.createTempFile(prefix, suffix)
+                : Files.createTempFile(snapshotTempDir, prefix, suffix);
+    }
+
+    private static void deleteQuietly(Path file) {
+        if (file == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            LOG.warn("Could not delete temp file {}", file, e);
+        }
+    }
 
     public StopPoint getStop(String stopRef){
         try {
@@ -248,26 +310,5 @@ public class NSRService {
             //TODO: Implement lookup logic for quays/stops
         }
         return new StopPoint(stopRef);
-    }
-
-    private static String readUrl(String url) {
-
-
-        long start = System.currentTimeMillis();
-        try {
-            File tmpFile = File.createTempFile("netex", ".zip");
-            FileUtils.copyURLToFile(
-                    new URL(url),
-                    tmpFile, 5000,
-                    5000);
-
-            return tmpFile.getAbsolutePath();
-        } catch (IOException e) {
-            LOG.error("Could not download file", e);
-        } finally {
-            long done = System.currentTimeMillis();
-            LOG.info("Download of {} took: {} ms", url, (done - start));
-        }
-        return null;
     }
 }

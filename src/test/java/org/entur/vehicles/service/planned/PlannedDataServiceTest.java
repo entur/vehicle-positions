@@ -3,6 +3,8 @@ package org.entur.vehicles.service.planned;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.snapshot.ExportDownloader;
+import org.entur.vehicles.service.snapshot.SnapshotCache;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,7 +43,7 @@ public class PlannedDataServiceTest {
 
     @Test
     public void initialLoadFromAFileUrlPopulatesTheDataset() throws Exception {
-        PlannedDataService service = new PlannedDataService(true, goaUrl(), new PlannedDataLoader(), metrics(), 0);
+        PlannedDataService service = new PlannedDataService(true, goaUrl(), new PlannedDataLoader(), metrics(), 0, new ExportDownloader(), SnapshotCache.disabled());
 
         service.initialLoad();
 
@@ -57,7 +59,7 @@ public class PlannedDataServiceTest {
     @Test
     public void initialLoadFailureThrows(@TempDir Path dir) {
         String missing = dir.resolve("missing.zip").toUri().toString();
-        PlannedDataService service = new PlannedDataService(true, missing, new PlannedDataLoader(), metrics(), 0);
+        PlannedDataService service = new PlannedDataService(true, missing, new PlannedDataLoader(), metrics(), 0, new ExportDownloader(), SnapshotCache.disabled());
 
         assertThatThrownBy(service::initialLoad).isInstanceOf(IllegalStateException.class);
         assertThat(service.current()).isSameAs(PlannedDataset.EMPTY);
@@ -65,7 +67,7 @@ public class PlannedDataServiceTest {
 
     @Test
     public void datasetBelowAbsoluteFloorIsRejectedEvenOnFirstLoad() throws Exception {
-        PlannedDataService service = new PlannedDataService(true, goaUrl(), new PlannedDataLoader(), metrics(), 1000);
+        PlannedDataService service = new PlannedDataService(true, goaUrl(), new PlannedDataLoader(), metrics(), 1000, new ExportDownloader(), SnapshotCache.disabled());
 
         assertThatThrownBy(service::initialLoad).isInstanceOf(IllegalStateException.class);
         assertThat(service.current()).isSameAs(PlannedDataset.EMPTY);
@@ -75,7 +77,7 @@ public class PlannedDataServiceTest {
     public void scheduledReloadFailureKeepsTheCurrentDataset(@TempDir Path dir) throws Exception {
         Path zip = dir.resolve("data.zip");
         Files.copy(Path.of(PlannedDataServiceTest.class.getResource("/netex/rb_goa-aggregated-netex.zip").toURI()), zip);
-        PlannedDataService service = new PlannedDataService(true, zip.toUri().toString(), new PlannedDataLoader(), metrics(), 0);
+        PlannedDataService service = new PlannedDataService(true, zip.toUri().toString(), new PlannedDataLoader(), metrics(), 0, new ExportDownloader(), SnapshotCache.disabled());
         service.initialLoad();
         PlannedDataset loaded = service.current();
 
@@ -89,7 +91,7 @@ public class PlannedDataServiceTest {
     public void scheduledReloadSwapsInAFreshDataset(@TempDir Path dir) throws Exception {
         Path zip = dir.resolve("data.zip");
         Files.copy(Path.of(PlannedDataServiceTest.class.getResource("/netex/rb_goa-aggregated-netex.zip").toURI()), zip);
-        PlannedDataService service = new PlannedDataService(true, zip.toUri().toString(), new PlannedDataLoader(), metrics(), 0);
+        PlannedDataService service = new PlannedDataService(true, zip.toUri().toString(), new PlannedDataLoader(), metrics(), 0, new ExportDownloader(), SnapshotCache.disabled());
         service.initialLoad();
         PlannedDataset first = service.current();
 
@@ -123,7 +125,7 @@ public class PlannedDataServiceTest {
     @Test
     public void failedDownloadLeavesNoTempFile(@TempDir Path dir) {
         String missing = dir.resolve("missing.zip").toUri().toString();
-        PlannedDataService service = new PlannedDataService(true, missing, new PlannedDataLoader(), metrics(), 0);
+        PlannedDataService service = new PlannedDataService(true, missing, new PlannedDataLoader(), metrics(), 0, new ExportDownloader(), SnapshotCache.disabled());
 
         int before = countPlannedNetexTempFiles();
         assertThatThrownBy(service::initialLoad).isInstanceOf(IllegalStateException.class);
@@ -149,7 +151,7 @@ public class PlannedDataServiceTest {
     public void plannedDataGaugesAreRegisteredOnce() throws Exception {
         PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         PrometheusMetricsService metrics = new PrometheusMetricsService(registry);
-        PlannedDataService service = new PlannedDataService(true, goaUrl(), new PlannedDataLoader(), metrics, 0);
+        PlannedDataService service = new PlannedDataService(true, goaUrl(), new PlannedDataLoader(), metrics, 0, new ExportDownloader(), SnapshotCache.disabled());
 
         service.initialLoad();
         service.scheduledReload();

@@ -66,6 +66,10 @@ public class PrometheusMetricsService {
     private static final String PLANNED_DATA_LOAD_FAILURE_COUNTER_NAME = METRICS_PREFIX + "planned.data.load.failure";
     private static final String PLANNED_DATA_LOOKUP_MISS_COUNTER_NAME = METRICS_PREFIX + "planned.data.lookup.miss";
 
+    private static final String SNAPSHOT_SOURCE_NAME = METRICS_PREFIX + "snapshot.source";
+    private static final String SNAPSHOT_UPLOAD_COUNTER_NAME = METRICS_PREFIX + "snapshot.upload";
+    private static final String NSR_LOAD_DURATION_NAME = METRICS_PREFIX + "nsr.load.duration.millis";
+
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
     private final AtomicInteger vehicleCounter = new AtomicInteger(0);
@@ -75,6 +79,7 @@ public class PrometheusMetricsService {
     private final AtomicLong plannedDataLoadDurationMillis = new AtomicLong(0);
     private final AtomicLong plannedDataLastSuccessEpochSeconds = new AtomicLong(0);
     private final java.util.Map<String, AtomicLong> plannedDataGauges = new java.util.concurrent.ConcurrentHashMap<>();
+    private final AtomicLong nsrLoadDurationMillis = new AtomicLong(0);
 
     private final AtomicInteger timetableCounter = new AtomicInteger(0);
     private final AtomicInteger lastLoggedTimetableCount = new AtomicInteger(0);
@@ -100,6 +105,7 @@ public class PrometheusMetricsService {
         this.prometheusMeterRegistry = prometheusMeterRegistry;
         prometheusMeterRegistry.gauge(PLANNED_DATA_LOAD_DURATION_NAME, plannedDataLoadDurationMillis);
         prometheusMeterRegistry.gauge(PLANNED_DATA_LAST_SUCCESS_NAME, plannedDataLastSuccessEpochSeconds);
+        prometheusMeterRegistry.gauge(NSR_LOAD_DURATION_NAME, nsrLoadDurationMillis);
     }
 
     @PreDestroy
@@ -201,6 +207,35 @@ public class PrometheusMetricsService {
 
     public void markPlannedDataLookupMiss(String type) {
         prometheusMeterRegistry.counter(PLANNED_DATA_LOOKUP_MISS_COUNTER_NAME, List.of(new ImmutableTag("type", type))).increment();
+    }
+
+    /** Which path the last load of a dataset took. Both label values are always present so a dashboard can plot either. */
+    public void markSnapshotSource(String dataset, boolean fromSnapshot) {
+        gauge(SNAPSHOT_SOURCE_NAME, List.of(new ImmutableTag("dataset", dataset), new ImmutableTag("source", "snapshot")), fromSnapshot ? 1 : 0);
+        gauge(SNAPSHOT_SOURCE_NAME, List.of(new ImmutableTag("dataset", dataset), new ImmutableTag("source", "export")), fromSnapshot ? 0 : 1);
+    }
+
+    /** @param outcome uploaded, exists or failed */
+    public void markSnapshotUpload(String dataset, String outcome) {
+        prometheusMeterRegistry.counter(SNAPSHOT_UPLOAD_COUNTER_NAME,
+                List.of(new ImmutableTag("dataset", dataset), new ImmutableTag("outcome", outcome))).increment();
+    }
+
+    public void markNsrLoaded(long durationMillis) {
+        nsrLoadDurationMillis.set(durationMillis);
+    }
+
+    private void gauge(String name, List<ImmutableTag> tags, long value) {
+        StringBuilder id = new StringBuilder(name);
+        for (ImmutableTag tag : tags) {
+            id.append('|').append(tag.getKey()).append('=').append(tag.getValue());
+        }
+        AtomicLong holder = plannedDataGauges.computeIfAbsent(id.toString(), k -> {
+            AtomicLong a = new AtomicLong();
+            prometheusMeterRegistry.gauge(name, List.copyOf(tags), a);
+            return a;
+        });
+        holder.set(value);
     }
 
     private long calculateRate(int currentCount, AtomicInteger lastLoggedCount, AtomicLong lastLoggedCountTimeMillis) {
