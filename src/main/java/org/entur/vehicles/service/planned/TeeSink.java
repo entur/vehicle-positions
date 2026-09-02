@@ -3,13 +3,13 @@ package org.entur.vehicles.service.planned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.UncheckedIOException;
 import java.util.List;
 
 /**
  * Forwards every record to the builder and, as long as it keeps working, to the snapshot
- * writer. The writer is the optional part: its first failure is logged once and it is
- * dropped, so a full disk can cost the snapshot but never the dataset.
+ * writer. The writer is the optional part: its first failure - any runtime exception, not
+ * just an {@link java.io.UncheckedIOException} - is logged once and it is dropped, so a full
+ * disk or a writer bug can cost the snapshot but never the dataset.
  */
 final class TeeSink implements PlannedDataSink {
 
@@ -37,7 +37,7 @@ final class TeeSink implements PlannedDataSink {
         if (!writerFailed) {
             try {
                 write.to(writer);
-            } catch (UncheckedIOException e) {
+            } catch (RuntimeException e) {
                 writerFailed = true;
                 LOG.warn("Snapshot writer failed - the dataset is unaffected, no snapshot will be uploaded", e);
             }
