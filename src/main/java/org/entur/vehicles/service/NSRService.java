@@ -119,13 +119,21 @@ public class NSRService {
                 }
                 Optional<InputStream> in = candidate.flatMap(snapshots::open);
                 if (in.isPresent()) {
+                    boolean replayed = false;
                     try (InputStream stream = in.get()) {
                         data = NsrSnapshot.read(stream);
-                        key = candidate.get();
-                        source = "snapshot";
+                        replayed = true;
                     } catch (IOException | RuntimeException e) {
                         LOG.warn("Snapshot {} could not be read - falling back to the NSR export", candidate.get(), e);
+                        data = null;
                         unreadable = true;
+                        replayed = false;
+                    }
+                    // Set outside the try: a close() that throws lands in the catch, and the export
+                    // path must then still run.
+                    if (replayed) {
+                        key = candidate.get();
+                        source = "snapshot";
                     }
                 }
             }
@@ -141,9 +149,18 @@ public class NSRService {
                         ? etag.flatMap(e -> SnapshotKey.of(NsrSnapshot.DATASET, NsrSnapshot.FORMAT_VERSION, e))
                         : Optional.empty();
                 if (uploadKey.isPresent()) {
-                    raw = Files.createTempFile("nsr-snapshot", ".bin");
-                    NsrSnapshot.write(data, raw, uploadKey.get().etag());
-                    key = uploadKey.get();
+                    // The bucket is a cache, never a dependency: failing to write the snapshot file
+                    // costs the snapshot, never the warm-up.
+                    try {
+                        raw = createSnapshotFile("nsr-snapshot", ".bin");
+                        NsrSnapshot.write(data, raw, uploadKey.get().etag());
+                        key = uploadKey.get();
+                    } catch (IOException e) {
+                        LOG.warn("Could not prepare snapshot file - loading without a snapshot", e);
+                        deleteQuietly(raw);
+                        raw = null;
+                        key = null;
+                    }
                 }
             }
 
@@ -173,6 +190,22 @@ public class NSRService {
     void install(NsrData data) {
         stopPointCache.putAll(data.stopPoints());
         ancestorsByRef.putAll(flattenAncestors(data.childToParent()));
+    }
+
+    /**
+     * Test seam: the directory the raw snapshot file is created in. Null - the default - means
+     * the JVM's temp directory. Only tests set it, to make that creation fail.
+     */
+    private Path snapshotTempDir;
+
+    void snapshotTempDir(Path dir) {
+        this.snapshotTempDir = dir;
+    }
+
+    private Path createSnapshotFile(String prefix, String suffix) throws IOException {
+        return snapshotTempDir == null
+                ? Files.createTempFile(prefix, suffix)
+                : Files.createTempFile(snapshotTempDir, prefix, suffix);
     }
 
     private static void deleteQuietly(Path file) {

@@ -66,8 +66,13 @@ public class PlannedDataLoaderTest {
             put(out, "README.txt", "not xml");
         }
 
-        PlannedDataset dataset = load(zip);
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        int skipped = new PlannedDataLoader().load(zip, builder);
+        PlannedDataset dataset = builder.build();
 
+        assertThat(skipped)
+                .withFailMessage("the caller must be able to tell a partial parse from a complete one")
+                .isEqualTo(1);
         assertThat(dataset.line("TST:Line:204")).isNotNull();
         assertThat(dataset.line("TST:Line:before"))
                 .withFailMessage("elements parsed before the malformed point are kept")

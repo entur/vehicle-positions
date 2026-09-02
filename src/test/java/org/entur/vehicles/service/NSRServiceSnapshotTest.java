@@ -107,6 +107,19 @@ public class NSRServiceSnapshotTest {
         assertThat(storeDir).doesNotExist();
     }
 
+    /** The bucket is a cache, never a dependency: a snapshot file we cannot even create is not fatal. */
+    @Test
+    public void aSnapshotFileThatCannotBeWrittenStillLoadsTheDataset() {
+        NSRService service = service(cache);
+        service.snapshotTempDir(dir.resolve("missing"));
+
+        service.warmUpCache();
+
+        assertFixtureInstalled(service);
+        assertThat(cache.lastUpload().join()).isNull();
+        assertThat(server.getCount()).isEqualTo(1);
+    }
+
     @Test
     public void disabledLookupNeverFetches() {
         NSRService service = new NSRService(false, server.url(), new ExportDownloader(Duration.ofSeconds(5)), cache, metrics());

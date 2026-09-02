@@ -115,14 +115,21 @@ public class PlannedDataService {
                 }
                 Optional<InputStream> in = candidate.flatMap(snapshots::open);
                 if (in.isPresent()) {
+                    boolean replayed = false;
                     try (InputStream stream = in.get()) {
                         PlannedDataSnapshot.replay(stream, builder);
-                        key = candidate.get();
-                        source = "snapshot";
+                        replayed = true;
                     } catch (IOException | RuntimeException e) {
                         LOG.warn("Snapshot {} could not be replayed - falling back to the export", candidate.get(), e);
                         builder = new PlannedDataset.Builder();
                         unreadable = true;
+                        replayed = false;
+                    }
+                    // Set outside the try: a close() that throws lands in the catch, and a discarded
+                    // builder must never be paired with a source that skips the export path.
+                    if (replayed) {
+                        key = candidate.get();
+                        source = "snapshot";
                     }
                 }
             }
@@ -141,16 +148,36 @@ public class PlannedDataService {
                 Optional<SnapshotKey> uploadKey = snapshots.enabled()
                         ? etag.flatMap(e -> SnapshotKey.of(PlannedDataSnapshot.DATASET, PlannedDataSnapshot.FORMAT_VERSION, e))
                         : Optional.empty();
+                PlannedDataSnapshot.Writer writer = null;
                 if (uploadKey.isPresent()) {
-                    raw = Files.createTempFile("planned-snapshot", ".bin");
+                    // The bucket is a cache, never a dependency: failing to prepare the snapshot
+                    // file costs the snapshot, never the load.
+                    try {
+                        raw = createSnapshotFile("planned-snapshot", ".bin");
+                        writer = PlannedDataSnapshot.writer(raw, uploadKey.get().etag());
+                    } catch (IOException e) {
+                        LOG.warn("Could not prepare snapshot file - loading without a snapshot", e);
+                        deleteQuietly(raw);
+                        raw = null;
+                        writer = null;
+                    }
+                }
+                if (writer != null) {
                     TeeSink tee;
-                    try (PlannedDataSnapshot.Writer writer = PlannedDataSnapshot.writer(raw, uploadKey.get().etag())) {
-                        tee = new TeeSink(builder, writer);
-                        loader.load(zip, tee);
+                    int skipped;
+                    try (PlannedDataSnapshot.Writer open = writer) {
+                        tee = new TeeSink(builder, open);
+                        skipped = loader.load(zip, tee);
                     }
                     if (tee.writerFailed()) {
-                        Files.deleteIfExists(raw);
+                        deleteQuietly(raw);
                         raw = null;
+                    } else if (skipped > 0) {
+                        // A partial parse must not become this export's snapshot for the whole fleet.
+                        LOG.warn("{} NeTEx entries were skipped - not snapshotting a partial parse", skipped);
+                        deleteQuietly(raw);
+                        raw = null;
+                        key = null;
                     } else {
                         key = uploadKey.get();
                     }
@@ -201,6 +228,22 @@ public class PlannedDataService {
             deleteQuietly(zip);
             deleteQuietly(raw);
         }
+    }
+
+    /**
+     * Test seam: the directory the raw snapshot file is created in. Null - the default - means
+     * the JVM's temp directory. Only tests set it, to make that creation fail.
+     */
+    private Path snapshotTempDir;
+
+    void snapshotTempDir(Path dir) {
+        this.snapshotTempDir = dir;
+    }
+
+    private Path createSnapshotFile(String prefix, String suffix) throws IOException {
+        return snapshotTempDir == null
+                ? Files.createTempFile(prefix, suffix)
+                : Files.createTempFile(snapshotTempDir, prefix, suffix);
     }
 
     private static void deleteQuietly(Path file) {

@@ -25,8 +25,12 @@ public class PlannedDataLoader {
 
     private final NetexPlannedDataExtractor extractor = new NetexPlannedDataExtractor();
 
-    /** Streams every XML entry of the zip into the sink. The caller owns the sink and builds from it. */
-    public void load(Path zip, PlannedDataSink sink) throws PlannedDataLoadException {
+    /**
+     * Streams every XML entry of the zip into the sink. The caller owns the sink and builds from
+     * it. Returns the number of entries that were skipped, so a caller can tell a complete parse
+     * from a partial one - a partial parse must never be snapshotted.
+     */
+    public int load(Path zip, PlannedDataSink sink) throws PlannedDataLoadException {
         int lineFiles = 0;
         int failedEntries = 0;
 
@@ -57,6 +61,7 @@ public class PlannedDataLoader {
         if (failedEntries > 0) {
             LOG.warn("{} NeTEx entries were skipped due to parse errors", failedEntries);
         }
+        return failedEntries;
     }
 
     /**

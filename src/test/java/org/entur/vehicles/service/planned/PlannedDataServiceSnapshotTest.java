@@ -12,9 +12,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -130,5 +135,49 @@ public class PlannedDataServiceSnapshotTest {
         assertThat(service.current().serviceJourneyCount()).isEqualTo(650);
         assertThat(server.headCount()).isZero();
         assertThat(storeDir).doesNotExist();
+    }
+
+    /** The bucket is a cache, never a dependency: a snapshot file we cannot even create is not fatal. */
+    @Test
+    public void aSnapshotFileThatCannotBeWrittenStillLoadsTheDataset() {
+        PlannedDataService service = service(cache);
+        service.snapshotTempDir(dir.resolve("missing"));
+
+        service.initialLoad();
+
+        assertThat(service.current().serviceJourneyCount()).isEqualTo(650);
+        assertThat(cache.lastUpload().join()).isNull();
+        assertThat(server.getCount()).isEqualTo(1);
+    }
+
+    /** A dataset missing whatever the skipped entries held must not become this export's snapshot. */
+    @Test
+    public void aPartialParseIsNotSnapshotted() throws Exception {
+        Path partial = dir.resolve("partial.zip");
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(partial))) {
+            put(out, "_TST_shared_data.xml", resource("/netex/fragment-shared-data.xml"));
+            put(out, "TST_TST-Line-broken.xml", resource("/netex/fragment-malformed.xml"));
+            put(out, "TST_TST-Line-204.xml", resource("/netex/fragment-line-file.xml"));
+        }
+        server.setFile(partial);
+        PlannedDataService service = service(cache);
+
+        service.initialLoad();
+
+        assertThat(service.current().line("TST:Line:204")).isNotNull();
+        assertThat(cache.lastUpload().join()).isNull();
+        assertThat(storeDir).doesNotExist();
+    }
+
+    private static String resource(String name) throws IOException {
+        try (InputStream in = PlannedDataServiceSnapshotTest.class.getResourceAsStream(name)) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static void put(ZipOutputStream out, String name, String content) throws IOException {
+        out.putNextEntry(new ZipEntry(name));
+        out.write(content.getBytes(StandardCharsets.UTF_8));
+        out.closeEntry();
     }
 }
