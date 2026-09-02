@@ -12,6 +12,7 @@ import org.entur.vehicles.data.model.BoundingBox;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
@@ -240,16 +241,21 @@ class Query {
     }
 
     @QueryMapping
-    List<ServiceJourney> serviceJourneys(@Argument String lineRef, @Argument String codespaceId) {
-        if (lineRef == null && codespaceId == null) {
+    List<ServiceJourney> serviceJourneys(@Argument List<String> ids, @Argument String lineRef, @Argument String codespaceId) {
+        if (ids == null && lineRef == null && codespaceId == null) {
             // The full catalogue is hundreds of thousands of journeys; a client must narrow it.
-            throw new IllegalArgumentException("serviceJourneys requires lineRef or codespaceId");
+            throw new IllegalArgumentException("serviceJourneys requires ids, lineRef or codespaceId");
         }
         final long start = System.currentTimeMillis();
 
-        final List<ServiceJourney> serviceJourneys = new ArrayList<>();
-        for (String id : plannedDataService.current().serviceJourneyIds(lineRef, codespaceId)) {
-            serviceJourneys.add(new ServiceJourney(id));
+        final List<ServiceJourney> serviceJourneys;
+        if (ids != null) {
+            serviceJourneys = plannedDataService.current().serviceJourneys(ids, lineRef, codespaceId);
+        } else {
+            serviceJourneys = new ArrayList<>();
+            for (String id : plannedDataService.current().serviceJourneyIds(lineRef, codespaceId)) {
+                serviceJourneys.add(new ServiceJourney(id));
+            }
         }
         LOG.info("Returning {} serviceJourneys in {} ms", serviceJourneys.size(), System.currentTimeMillis() - start);
 
@@ -266,5 +272,28 @@ class Query {
 
         metricsService.markServiceJourneyQuery();
         return serviceJourney;
+    }
+
+    @QueryMapping
+    List<DatedServiceJourney> datedServiceJourneys(@Argument List<String> ids) {
+        final long start = System.currentTimeMillis();
+
+        final List<DatedServiceJourney> datedServiceJourneys = plannedDataService.current().datedServiceJourneys(ids);
+        LOG.info("Returning {} datedServiceJourneys in {} ms", datedServiceJourneys.size(), System.currentTimeMillis() - start);
+
+        metricsService.markDatedServiceJourneysQuery();
+        return datedServiceJourneys;
+    }
+
+    @QueryMapping
+    DatedServiceJourney datedServiceJourney(@Argument String id) {
+        final long start = System.currentTimeMillis();
+
+        final List<DatedServiceJourney> resolved = plannedDataService.current().datedServiceJourneys(List.of(id));
+        final DatedServiceJourney datedServiceJourney = resolved.isEmpty() ? null : resolved.get(0);
+        LOG.info("Returning datedServiceJourney {} in {} ms", datedServiceJourney, System.currentTimeMillis() - start);
+
+        metricsService.markDatedServiceJourneyQuery();
+        return datedServiceJourney;
     }
 }

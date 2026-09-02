@@ -72,7 +72,16 @@ type Query {
 
     serviceJourney(id: String!) : ServiceJourney
 
-    serviceJourneys(lineRef: String, codespaceId: String) : [ServiceJourney]
+    # Looks up service journeys in the planned data. At least one of `ids`, `lineRef` or `codespaceId` is required.
+    # `ids` accepts ServiceJourney ids as well as DatedServiceJourney ids (resolved to the journey and its operating date);
+    # results keep the order of `ids`, unknown ids are skipped. `lineRef` and `codespaceId` further narrow the result.
+    serviceJourneys(ids: [String!], lineRef: String, codespaceId: String) : [ServiceJourney]
+
+    # A dated service journey from the planned data, or null if the id is unknown.
+    datedServiceJourney(id: String!) : DatedServiceJourney
+
+    # Dated service journeys from the planned data. Results keep the order of `ids`, unknown ids are skipped.
+    datedServiceJourneys(ids: [String!]!) : [DatedServiceJourney]
 
     operators(codespaceId: String) : [Operator]
 }
@@ -282,6 +291,8 @@ type ServiceJourney {
 type DatedServiceJourney {
     # ID that defines this journey
     id: String!
+    # Calendar date (yyyy-MM-dd) of the operating day, when known from the planned data
+    operatingDay: String
     serviceJourney: ServiceJourney
 }
 

@@ -1,6 +1,7 @@
 package org.entur.vehicles.service.planned;
 
 import org.entur.vehicles.data.model.Codespace;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.PointsOnLink;
@@ -10,10 +11,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -168,6 +172,54 @@ public final class PlannedDataset {
             return new ServiceJourney(dated.serviceJourneyId(), dated.operatingDate());
         }
         return null;
+    }
+
+    /**
+     * The light ServiceJourneys for the given service journey ids or dated service journey ids
+     * (see {@link #serviceJourney(String)}), in request order, duplicates collapsed and unknown
+     * ids skipped. A non-null {@code lineRef} / {@code codespaceId} (regex) keeps only journeys on
+     * a matching line - a journey without a known line matches neither.
+     */
+    public List<ServiceJourney> serviceJourneys(Collection<String> ids, String lineRef, String codespaceId) {
+        List<ServiceJourney> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String id : ids) {
+            ServiceJourney serviceJourney = serviceJourney(id);
+            if (serviceJourney == null || !seen.add(serviceJourney.getId())) {
+                continue;
+            }
+            if (lineRef != null || codespaceId != null) {
+                String lineId = lineOf(serviceJourney.getId());
+                if (lineId == null
+                        || (lineRef != null && !lineId.matches(lineRef))
+                        || (codespaceId != null && !codespaceOf(lineId).matches(codespaceId))) {
+                    continue;
+                }
+            }
+            result.add(serviceJourney);
+        }
+        return result;
+    }
+
+    /**
+     * The DatedServiceJourneys for the given dated service journey ids, each with its operating
+     * day and a light ServiceJourney dated to it (geometry resolves lazily). Request order is
+     * kept, duplicates collapse, ids the export does not know (including plain service journey
+     * ids) are skipped.
+     */
+    public List<DatedServiceJourney> datedServiceJourneys(Collection<String> ids) {
+        List<DatedServiceJourney> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String id : ids) {
+            DatedJourneyRef ref = datedServiceJourney(id);
+            if (ref == null || ref.serviceJourneyId() == null || !seen.add(id)) {
+                continue;
+            }
+            DatedServiceJourney dated = new DatedServiceJourney(id, new ServiceJourney(ref.serviceJourneyId(), ref.operatingDate()));
+            dated.setOperatingDay(ref.operatingDate());
+            result.add(dated);
+        }
+        return result;
     }
 
     /** The codespace prefix of a NeTEx id ("RUT:Line:1" -> "RUT"); the whole id if it has no colon. */

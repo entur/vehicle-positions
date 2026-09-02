@@ -90,6 +90,8 @@ public class PrometheusMetricsService {
     private static final String LINES = "lines";
     private static final String SERVICE_JOURNEYS = "serviceJourneys";
     private static final String SERVICE_JOURNEY = "serviceJourney";
+    private static final String DATED_SERVICE_JOURNEYS = "datedServiceJourneys";
+    private static final String DATED_SERVICE_JOURNEY = "datedServiceJourney";
     private static final String OPERATORS = "operators";
     private static final String CODESPACES = "codespaces";
     private static final String SITUATIONS = "situations";
@@ -284,6 +286,12 @@ public class PrometheusMetricsService {
     }
     public void markServiceJourneysQuery() {
         markQuery(SERVICE_JOURNEYS);
+    }
+    public void markDatedServiceJourneyQuery() {
+        markQuery(DATED_SERVICE_JOURNEY);
+    }
+    public void markDatedServiceJourneysQuery() {
+        markQuery(DATED_SERVICE_JOURNEYS);
     }
 
     public void markOperatorsQuery() {

@@ -1138,6 +1138,87 @@ class ApplicationGraphQlSchemaTests {
     }
 
     @Test
+    void catalogueServiceJourneysLooksUpMultipleIds() {
+        when(plannedDataService.current()).thenReturn(new PlannedDataset.Builder()
+                .addLine("TST:Line:1", "One", "1")
+                .addJourneyPattern("TST:JourneyPattern:1", List.of())
+                .addServiceJourney("TST:ServiceJourney:1", "TST:JourneyPattern:1", "TST:Line:1")
+                .addServiceJourney("TST:ServiceJourney:2", "TST:JourneyPattern:1", "TST:Line:1")
+                .addOperatingDay("TST:OperatingDay:1", "2026-09-02")
+                .addDatedServiceJourney("TST:DatedServiceJourney:2", "TST:ServiceJourney:2", "TST:OperatingDay:1")
+                .build());
+
+        String document = """
+                query {
+                  serviceJourneys(ids: ["TST:DatedServiceJourney:2", "TST:ServiceJourney:nope", "TST:ServiceJourney:1"]) {
+                    id
+                    date
+                  }
+                }
+                """;
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-catalogue-ids", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response.getExecutionResult().getErrors()).isEmpty();
+        Map<String, Object> data = response.getExecutionResult().getData();
+        List<Map<String, Object>> journeys = (List<Map<String, Object>>) data.get("serviceJourneys");
+        assertThat(journeys).extracting(j -> j.get("id"))
+                .containsExactly("TST:ServiceJourney:2", "TST:ServiceJourney:1");
+        assertThat(journeys.get(0).get("date")).isEqualTo("2026-09-02");
+        assertThat(journeys.get(1).get("date")).isNull();
+    }
+
+    @Test
+    void catalogueDatedServiceJourneysLookUpByIdAndByIds() {
+        when(plannedDataService.current()).thenReturn(new PlannedDataset.Builder()
+                .addLine("TST:Line:1", "One", "1")
+                .addServiceLink("TST:ServiceLink:1", new int[]{59_000_000, 10_000_000, 59_001_000, 10_001_000})
+                .addJourneyPattern("TST:JourneyPattern:1", List.of("TST:ServiceLink:1"))
+                .addServiceJourney("TST:ServiceJourney:1", "TST:JourneyPattern:1", "TST:Line:1")
+                .addOperatingDay("TST:OperatingDay:1", "2026-09-02")
+                .addOperatingDay("TST:OperatingDay:2", "2026-09-03")
+                .addDatedServiceJourney("TST:DatedServiceJourney:1", "TST:ServiceJourney:1", "TST:OperatingDay:1")
+                .addDatedServiceJourney("TST:DatedServiceJourney:2", "TST:ServiceJourney:1", "TST:OperatingDay:2")
+                .build());
+
+        String document = """
+                query {
+                  one: datedServiceJourney(id: "TST:DatedServiceJourney:1") {
+                    id
+                    operatingDay
+                    serviceJourney { id date pointsOnLink { length } }
+                  }
+                  missing: datedServiceJourney(id: "TST:DatedServiceJourney:nope") { id }
+                  many: datedServiceJourneys(ids: ["TST:DatedServiceJourney:2", "TST:DatedServiceJourney:nope", "TST:DatedServiceJourney:1"]) {
+                    id
+                    operatingDay
+                  }
+                }
+                """;
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-catalogue-dated", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response.getExecutionResult().getErrors()).isEmpty();
+        Map<String, Object> data = response.getExecutionResult().getData();
+        Map<String, Object> one = (Map<String, Object>) data.get("one");
+        assertThat(one.get("id")).isEqualTo("TST:DatedServiceJourney:1");
+        assertThat(one.get("operatingDay")).isEqualTo("2026-09-02");
+        Map<String, Object> serviceJourney = (Map<String, Object>) one.get("serviceJourney");
+        assertThat(serviceJourney.get("id")).isEqualTo("TST:ServiceJourney:1");
+        assertThat(serviceJourney.get("date")).isEqualTo("2026-09-02");
+        assertThat(((Map<String, Object>) serviceJourney.get("pointsOnLink")).get("length")).isEqualTo(2.0);
+        assertThat(data.get("missing")).isNull();
+        List<Map<String, Object>> many = (List<Map<String, Object>>) data.get("many");
+        assertThat(many).extracting(j -> j.get("id"))
+                .containsExactly("TST:DatedServiceJourney:2", "TST:DatedServiceJourney:1");
+        assertThat(many.get(0).get("operatingDay")).isEqualTo("2026-09-03");
+    }
+
+    @Test
     void serviceJourneysWithoutAFilterIsABadRequest() {
         String document = """
                 query { serviceJourneys { id } }
@@ -1149,7 +1230,7 @@ class ApplicationGraphQlSchemaTests {
 
         assertThat(response.getExecutionResult().getErrors()).hasSize(1);
         var error = response.getExecutionResult().getErrors().get(0);
-        assertThat(error.getMessage()).contains("lineRef").contains("codespaceId");
+        assertThat(error.getMessage()).contains("ids").contains("lineRef").contains("codespaceId");
         // What a client sees: the classification is written into extensions on serialization
         Map<String, Object> extensions = (Map<String, Object>) error.toSpecification().get("extensions");
         assertThat(String.valueOf(extensions.get("classification"))).isEqualTo("BAD_REQUEST");
