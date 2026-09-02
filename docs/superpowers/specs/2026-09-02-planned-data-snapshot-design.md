@@ -1,7 +1,7 @@
 # Startup snapshots: skip the NeTEx and NSR parses on pod startup
 
 Date: 2026-09-02
-Status: Approved design, ready for implementation planning
+Status: Implemented 2026-09-02; measured section pending the dev rollout
 
 ## Goal
 

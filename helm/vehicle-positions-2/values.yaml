@@ -5,6 +5,8 @@ resources:
   cpuRequest: '2'
   memRequest: 6G
   xmx: 5G
+  # The NeTEx zip (280 MB) and the raw planned-data snapshot (about 250 MB) coexist briefly on disk.
+  ephemeralRequest: 1Gi
 
 rollingUpdate:
   maxSurge: 1
@@ -29,6 +31,9 @@ configMap:
     reloadCron: "0 0 8 * * *"
     # A fresh load with fewer service journeys than this is rejected outright, even on the first load.
     minServiceJourneys: 50000
+  # Per-export snapshots of the planned data and NSR datasets, so a starting pod skips the
+  # NeTEx parses. gs://bucket/prefix per environment; empty disables snapshots entirely.
+  snapshotUri: ""
   # Client-name header sent when fetching the SX situation snapshot at startup.
   sxSnapshotEtClientName: ror.vehicle-positions.graphql
   etEnabled: false
