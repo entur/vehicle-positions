@@ -156,8 +156,9 @@ void put(String key, Path file)             // unconditional; used only to repla
   `application/octet-stream`.
 - `FileSnapshotStore`: a directory. Used by the tests and available for local runs so a
   developer parses once and restarts fast afterwards. `putIfAbsent` writes to a temp
-  name and renames with `ATOMIC_MOVE`, failing if the target exists; `put` renames
-  with `REPLACE_EXISTING`.
+  name and renames without `ATOMIC_MOVE` so an existing target raises
+  `FileAlreadyExistsException` (POSIX `rename(2)` with `ATOMIC_MOVE` would overwrite
+  silently); `put` renames with `REPLACE_EXISTING`.
 
 Chosen from one property, `vehicle.snapshot.uri`: `gs://bucket/prefix` selects GCS,
 `file:///path` selects the directory, empty disables snapshots for both datasets. One
@@ -172,6 +173,10 @@ and read timeouts for both. Replaces `FileUtils.copyURLToFile` in `PlannedDataSe
 (same timeouts) and `NSRService` (which today uses 5 s timeouts and returns null on
 failure, which then fails the JAXB parse with an unhelpful exception; the new path
 throws a clear `IOException` instead).
+
+`HttpRequest.timeout` bounds only the time to the response headers, so `download` also
+enforces an overall body deadline of 10 minutes: past it the request is cancelled and an
+`IOException` is thrown, so a stalled 280 MB body cannot hang startup forever.
 
 ### `SnapshotUploader`
 
@@ -356,6 +361,8 @@ Identical for both datasets unless a row says otherwise.
 | Bucket unreachable or 403 on open | Warn log, full parse; upload still attempted and will log its own failure |
 | Object not found | Info log, full parse, upload |
 | Snapshot corrupt, truncated, wrong magic or version | Warn log with the key, discard, full parse, then upload *without* the does-not-exist precondition so the bad object is replaced. Concurrent replacements carry identical content, so the race is harmless. |
+| Snapshot temp file cannot be created or written on the miss path | Warn log, dataset still installed from the parse, no upload |
+| Parse skipped one or more NeTEx entries | Dataset installed as today, no upload (a partial parse must not become the fleet's snapshot) |
 | Replayed planned dataset fails the size checks | Same `PlannedDataLoadException` as today: fatal on startup, logged on reload |
 | Export download or parse fails | Fatal on startup for both datasets, as today; logged on the planned-data reload |
 | Upload gets 412 | Info log, done |
