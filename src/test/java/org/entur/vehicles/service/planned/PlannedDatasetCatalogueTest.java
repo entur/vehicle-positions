@@ -79,6 +79,36 @@ public class PlannedDatasetCatalogueTest {
     }
 
     @Test
+    public void serviceJourneysByIdsKeepRequestOrderDropUnknownsAndHonourFilters() {
+        PlannedDataset dataset = dataset();
+
+        assertThat(dataset.serviceJourneys(List.of(
+                "RUT:ServiceJourney:3", "RUT:DatedServiceJourney:1", "RUT:ServiceJourney:nope", "RUT:ServiceJourney:3"),
+                null, null))
+                .withFailMessage("request order is kept, unknown ids are dropped, duplicates collapse")
+                .extracting(ServiceJourney::getId)
+                .containsExactly("RUT:ServiceJourney:3", "RUT:ServiceJourney:1");
+        assertThat(dataset.serviceJourneys(List.of("RUT:DatedServiceJourney:1"), null, null).get(0).getDate())
+                .isEqualTo("2026-08-25");
+
+        assertThat(dataset.serviceJourneys(List.of("RUT:ServiceJourney:3", "SKY:ServiceJourney:1"), null, "SKY"))
+                .extracting(ServiceJourney::getId).containsExactly("SKY:ServiceJourney:1");
+        assertThat(dataset.serviceJourneys(List.of("RUT:ServiceJourney:3", "RUT:DatedServiceJourney:1"), "RUT:Line:1", null))
+                .extracting(ServiceJourney::getId).containsExactly("RUT:ServiceJourney:1");
+        assertThat(dataset.serviceJourneys(List.of("RUT:ServiceJourney:3"), "RUT:Line:.*", "RUT"))
+                .extracting(ServiceJourney::getId).containsExactly("RUT:ServiceJourney:3");
+
+        assertThat(dataset.serviceJourneys(List.of("X:ServiceJourney:orphan"), null, null))
+                .withFailMessage("a journey on an undeclared line is still found by id")
+                .hasSize(1);
+        assertThat(dataset.serviceJourneys(List.of("X:ServiceJourney:orphan"), "X:Line:.*", null))
+                .withFailMessage("line filters match the line ref the journey carries, declared or not")
+                .hasSize(1);
+        assertThat(dataset.serviceJourneys(List.of("X:ServiceJourney:orphan"), "RUT:Line:.*", null)).isEmpty();
+        assertThat(dataset.serviceJourneys(List.of(), null, null)).isEmpty();
+    }
+
+    @Test
     public void serviceJourneyResolvesByServiceJourneyIdOrDatedServiceJourneyId() {
         PlannedDataset dataset = dataset();
 

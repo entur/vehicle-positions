@@ -72,7 +72,10 @@ type Query {
 
     serviceJourney(id: String!) : ServiceJourney
 
-    serviceJourneys(lineRef: String, codespaceId: String) : [ServiceJourney]
+    # Looks up service journeys in the planned data. At least one of `ids`, `lineRef` or `codespaceId` is required.
+    # `ids` accepts ServiceJourney ids as well as DatedServiceJourney ids (resolved to the journey and its operating date);
+    # results keep the order of `ids`, unknown ids are skipped. `lineRef` and `codespaceId` further narrow the result.
+    serviceJourneys(ids: [String!], lineRef: String, codespaceId: String) : [ServiceJourney]
 
     operators(codespaceId: String) : [Operator]
 }

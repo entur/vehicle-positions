@@ -240,16 +240,21 @@ class Query {
     }
 
     @QueryMapping
-    List<ServiceJourney> serviceJourneys(@Argument String lineRef, @Argument String codespaceId) {
-        if (lineRef == null && codespaceId == null) {
+    List<ServiceJourney> serviceJourneys(@Argument List<String> ids, @Argument String lineRef, @Argument String codespaceId) {
+        if (ids == null && lineRef == null && codespaceId == null) {
             // The full catalogue is hundreds of thousands of journeys; a client must narrow it.
-            throw new IllegalArgumentException("serviceJourneys requires lineRef or codespaceId");
+            throw new IllegalArgumentException("serviceJourneys requires ids, lineRef or codespaceId");
         }
         final long start = System.currentTimeMillis();
 
-        final List<ServiceJourney> serviceJourneys = new ArrayList<>();
-        for (String id : plannedDataService.current().serviceJourneyIds(lineRef, codespaceId)) {
-            serviceJourneys.add(new ServiceJourney(id));
+        final List<ServiceJourney> serviceJourneys;
+        if (ids != null) {
+            serviceJourneys = plannedDataService.current().serviceJourneys(ids, lineRef, codespaceId);
+        } else {
+            serviceJourneys = new ArrayList<>();
+            for (String id : plannedDataService.current().serviceJourneyIds(lineRef, codespaceId)) {
+                serviceJourneys.add(new ServiceJourney(id));
+            }
         }
         LOG.info("Returning {} serviceJourneys in {} ms", serviceJourneys.size(), System.currentTimeMillis() - start);
 

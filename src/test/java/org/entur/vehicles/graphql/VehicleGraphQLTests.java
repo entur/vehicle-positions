@@ -154,23 +154,34 @@ public class VehicleGraphQLTests {
         assertEquals("TST:Operator:1", queryService.operators(null).get(0).getOperatorRef());
         assertTrue(queryService.operators("DSJ").isEmpty());
 
-        List<ServiceJourney> serviceJourneys = queryService.serviceJourneys("TST:Line:123", null);
+        List<ServiceJourney> serviceJourneys = queryService.serviceJourneys(null, "TST:Line:123", null);
         assertEquals(List.of("TST:ServiceJourney:1234567890"),
                 serviceJourneys.stream().map(ServiceJourney::getId).toList());
-        assertTrue(queryService.serviceJourneys("BAH:Line:321", null).isEmpty());
-        assertEquals(2, queryService.serviceJourneys(null, "TST").size());
+        assertTrue(queryService.serviceJourneys(null, "BAH:Line:321", null).isEmpty());
+        assertEquals(2, queryService.serviceJourneys(null, null, "TST").size());
 
         ServiceJourney byDatedId = queryService.serviceJourney("DSJ:DatedServiceJourney:1234567890");
         ServiceJourney byId = queryService.serviceJourney("DSJ:ServiceJourney:1234567890");
         assertEquals(byId, byDatedId);
         assertEquals("2020-12-15", byDatedId.getDate());
         assertNull(queryService.serviceJourney("TST:ServiceJourney:unknown"));
+
+        List<ServiceJourney> byIds = queryService.serviceJourneys(
+                List.of("TST:ServiceJourney:unknown", "DSJ:DatedServiceJourney:1234567890", "TST:ServiceJourney:1234567890"),
+                null, null);
+        assertEquals(List.of("DSJ:ServiceJourney:1234567890", "TST:ServiceJourney:1234567890"),
+                byIds.stream().map(ServiceJourney::getId).toList());
+        assertEquals("2020-12-15", byIds.get(0).getDate());
+        assertEquals(List.of("TST:ServiceJourney:1234567890"),
+                queryService.serviceJourneys(List.of("DSJ:ServiceJourney:1234567890", "TST:ServiceJourney:1234567890"), null, "TST")
+                        .stream().map(ServiceJourney::getId).toList());
+        assertTrue(queryService.serviceJourneys(List.of(), null, null).isEmpty());
     }
 
     @Test
     public void serviceJourneysRequiresAFilter() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> queryService.serviceJourneys(null, null));
+                () -> queryService.serviceJourneys(null, null, null));
         assertTrue(e.getMessage().contains("lineRef"), e.getMessage());
     }
 
