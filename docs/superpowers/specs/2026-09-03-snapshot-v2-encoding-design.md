@@ -1,7 +1,7 @@
 # Planned-data snapshot v2: a compact encoding
 
 Date: 2026-09-03
-Status: Implemented (2026-09-03) — measured results pending dev rollout
+Status: Implemented and measured in dev 2026-09-02
 Extends: `2026-09-02-planned-data-snapshot-design.md`
 
 ## Goal
@@ -26,10 +26,9 @@ uncompressed, 118 MB gzipped):
 | v1, today | 470 MB | 118 MB |
 | **v2 encoding** | **105 MB** | **70 MB** |
 
-The v1 row is measured from the dev snapshot itself. The v2 row is a prototype re-encoding of
-that same dev snapshot, not the output of the shipped Java writer — this document's status
-line says measured results are pending, and that refers to the shipped writer's actual output
-size, which awaits the dev rollout.
+The v1 row is measured from the dev snapshot itself. The v2 row was a prototype re-encoding of
+that same dev snapshot rather than the shipped Java writer's output; the Measured section below
+records what the shipped writer actually produced, which is larger.
 
 Where the bytes are today: dated service journeys 68.9% (136.7 MB of own ids, 184.7 MB of
 references), service links 17.6% (76.4 MB of it geometry), service journeys 7.5%, journey
@@ -121,9 +120,45 @@ file.
 - Both paths agree: parse, snapshot, replay, assert identical `Stats` and identical lookups.
 - Format guards from v1 still apply: bad magic, wrong version, truncation, count mismatch.
 
+## Measured
+
+Dev, 2026-09-02. Two rollouts twelve minutes apart read the same export (`59c79107…`), the
+first on v1 and the second on v2, so the comparison is like for like.
+
+| | v1 | v2 |
+|---|---:|---:|
+| Snapshot object | 117 918 591 B | 81 334 045 B |
+| Planned data, hit | 15 193 ms | 10 142 ms |
+| NSR, hit | 7 085 ms | 4 913 ms |
+| Startup to "Started Application", hit | 34.931 s | 27.125 s |
+| Planned data, miss (parse) | 70 583 ms | 77 234 ms |
+| Upload | 7 741 ms | 4 735 ms |
+
+The object is 31% smaller, the planned-data hit 33% faster, and startup on a hit 22% faster —
+27.1 s against the roughly 112 s this line of work started from. The miss path is unchanged
+within noise; it parses either way.
+
+Both pods of each rollout reported identical `Stats` — 383 533 service journeys, 2 227 779
+dated service journeys, `duplicateIds=8`, every `unresolved*Refs` zero — so the replay
+reproduces the parse on real data, duplicate count and dangling references included.
+
+The prototype predicted 70 MB gzipped and the shipped writer produced 81.3 MB, about 16%
+more. Three reasons, none of them a defect: the prototype gzipped a slightly different framing
+at `BEST_SPEED`, the shipped format stores operating-day dates as strings rather than epoch
+days (the fix for timezone-suffixed `xsd:date`), and this export is larger than the one the
+prototype measured — 383 533 service journeys against 379 796.
+
+Where the remaining bytes sit is unchanged in shape: the 2.2M dated-service-journey ids are
+128-bit hashes at 16 bytes each, about 36 MB that no encoding can compress. Halving that would
+mean storing a 64-bit hash of the id instead of the id, which trades a lookup guarantee for
+space and was not attempted.
+
 ## Rollout
 
 Merge and let it run. The format bump makes every pod miss once and re-upload in the new
 encoding; from the second pod of that rollout on, hits read the smaller object. Nothing is
 configurable and no behaviour changes — the dataset a pod ends up with is identical to
 what it builds today.
+
+Dev took this on 2026-09-02 with the rollout of `6a8f83e`, exactly as described: the first pod
+missed, parsed and uploaded; the second hit. tst and prd follow on their own deploys.
