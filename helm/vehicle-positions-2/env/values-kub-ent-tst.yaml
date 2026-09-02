@@ -8,3 +8,5 @@ configMap:
   sxEnabled: true
   sxSnapshotUrl: https://api.staging.entur.io/realtime/v1/rest/sx?SIRI_VERSION=2.1
   sxSnapshotEtClientName: ror.vehicle-positions.v2.graphql
+  # Startup snapshot cache. Bucket from terraform/snapshots.tf; empty disables it.
+  snapshotUri: gs://ent-gcs-vpos-snapshots-tst-001/snapshots
