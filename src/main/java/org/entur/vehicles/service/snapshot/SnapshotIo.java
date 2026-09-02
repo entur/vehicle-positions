@@ -9,7 +9,7 @@ import java.io.IOException;
  * Provides varint, zigzag, and string encoding suitable for compact serialization.
  * These methods are allocation-free except for strings themselves.
  */
-final class SnapshotIo {
+public final class SnapshotIo {
 
     private SnapshotIo() {
         // static-only utility
@@ -19,7 +19,7 @@ final class SnapshotIo {
      * Writes a long value as unsigned LEB128 varint.
      * Suitable for non-negative values; use writeZigZag for signed values.
      */
-    static void writeVarInt(DataOutputStream out, long v) throws IOException {
+    public static void writeVarInt(DataOutputStream out, long v) throws IOException {
         while ((v & ~0x7FL) != 0) {
             out.writeByte((byte) ((v & 0x7F) | 0x80));
             v >>>= 7;
@@ -30,7 +30,7 @@ final class SnapshotIo {
     /**
      * Reads a long value encoded as unsigned LEB128 varint.
      */
-    static long readVarInt(DataInputStream in) throws IOException {
+    public static long readVarInt(DataInputStream in) throws IOException {
         long result = 0;
         int shift = 0;
         int b;
@@ -46,7 +46,7 @@ final class SnapshotIo {
      * Writes a signed long value using zigzag encoding, then as varint.
      * ZigZag maps 0→0, -1→1, 1→2, -2→3, 2→4, ... Long.MIN_VALUE→Long.MAX_VALUE.
      */
-    static void writeZigZag(DataOutputStream out, long v) throws IOException {
+    public static void writeZigZag(DataOutputStream out, long v) throws IOException {
         long zigzag = (v << 1) ^ (v >> 63);
         writeVarInt(out, zigzag);
     }
@@ -54,7 +54,7 @@ final class SnapshotIo {
     /**
      * Reads a zigzag-encoded signed long value.
      */
-    static long readZigZag(DataInputStream in) throws IOException {
+    public static long readZigZag(DataInputStream in) throws IOException {
         long zigzag = readVarInt(in);
         return (zigzag >>> 1) ^ -(zigzag & 1);
     }
@@ -64,7 +64,7 @@ final class SnapshotIo {
      * Encodes null as varint 0, non-null string as varint (utf8_byte_length + 1) followed by UTF-8 bytes.
      * No 64 KB limit.
      */
-    static void writeString(DataOutputStream out, String s) throws IOException {
+    public static void writeString(DataOutputStream out, String s) throws IOException {
         if (s == null) {
             writeVarInt(out, 0);
         } else {
@@ -78,7 +78,7 @@ final class SnapshotIo {
      * Reads a string value encoded by writeString.
      * Returns null if the length varint is 0.
      */
-    static String readString(DataInputStream in) throws IOException {
+    public static String readString(DataInputStream in) throws IOException {
         long length = readVarInt(in);
         if (length == 0) {
             return null;

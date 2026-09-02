@@ -456,6 +456,11 @@ public final class PlannedDataset {
             return Collections.unmodifiableMap(rawDatedServiceJourneys);
         }
 
+        /** The duplicate-id count collected so far, mirroring {@link Stats#duplicateIds()} without requiring a full {@link #build()}. */
+        int duplicateIds() {
+            return duplicateIds;
+        }
+
         public PlannedDataset build() {
             // Canonicalise duplicate id Strings: every ref string comes fresh from the XML
             // reader, so the same logical id declared once (e.g. a JourneyPattern) but

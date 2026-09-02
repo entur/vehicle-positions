@@ -1,6 +1,10 @@
 package org.entur.vehicles.service.planned;
 
+import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.service.snapshot.IdCodec;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
+import org.entur.vehicles.service.snapshot.SnapshotIo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,9 +19,14 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The planned-data snapshot format: the raw records the NeTEx extractor emits, in order, so
@@ -33,9 +42,10 @@ public final class PlannedDataSnapshot {
     private static final Logger LOG = LoggerFactory.getLogger(PlannedDataSnapshot.class);
 
     public static final String DATASET = "planned-data";
-    public static final int FORMAT_VERSION = 1;
+    public static final int FORMAT_VERSION = 2;
 
     private static final byte[] MAGIC = {'V', 'P', 'P', 'D'};
+    private static final byte[] MAGIC_V2 = {'V', 'P', 'P', '2'};
     private static final byte TAG_OPERATOR = 1;
     private static final byte TAG_LINE = 2;
     private static final byte TAG_SERVICE_LINK = 3;
@@ -201,6 +211,239 @@ public final class PlannedDataSnapshot {
                 LOG.warn("Failed to close the planned-data snapshot file", e);
             }
         }
+    }
+
+    /**
+     * Writes the v2 snapshot from the builder's completed state (see the format doc:
+     * {@code docs/superpowers/specs/2026-09-03-snapshot-v2-window-and-encoding-design.md},
+     * "Snapshot format v2"). Unlike {@link Writer}, which tees raw records as the extractor
+     * emits them, this reads the builder's maps directly, so it must run only after the
+     * parse (or a replay) has finished populating them - and after
+     * {@link PlannedDataset.Builder#applyFutureWindow} has already trimmed the dated service
+     * journeys the caller wants dropped, since this method serialises whatever the builder
+     * currently holds.
+     *
+     * @param futureDays the configured window horizon, or null when it is unlimited - stored
+     *                    in the header as -1 in that case
+     * @param asOf        the date the window was computed against, or null when there is no
+     *                    window - stored in the header as epoch day -1 in that case
+     */
+    public static void write(PlannedDataset.Builder builder, Path file, String etag, Integer futureDays, LocalDate asOf) throws IOException {
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file), 1 << 16))) {
+            out.write(MAGIC_V2);
+            out.writeInt(FORMAT_VERSION);
+            out.writeUTF(etag);
+            out.writeLong(System.currentTimeMillis());
+            out.writeInt(futureDays == null ? -1 : futureDays);
+            out.writeLong(asOf == null ? -1L : asOf.toEpochDay());
+            out.writeInt(builder.duplicateIds());
+
+            Map<String, Operator> operators = builder.operators();
+            Map<String, Line> lines = builder.lines();
+            Map<String, String> operatingDays = builder.operatingDays();
+            Map<String, int[]> linkGeometry = builder.linkGeometry();
+            Map<String, String[]> patternLinks = builder.patternLinks();
+            Map<String, String> serviceJourneyPattern = builder.serviceJourneyPattern();
+            Map<String, String> serviceJourneyLine = builder.serviceJourneyLine();
+            Map<String, PlannedDataset.Builder.RawDatedServiceJourney> rawDatedServiceJourneys = builder.rawDatedServiceJourneys();
+
+            IdCodec.Writer ids = new IdCodec.Writer();
+            internIds(ids, operators, lines, operatingDays, linkGeometry, patternLinks, serviceJourneyPattern,
+                    serviceJourneyLine, rawDatedServiceJourneys);
+            ids.writeTable(out);
+
+            int totalRecords = 0;
+
+            // 1. operators - no references
+            SnapshotIo.writeVarInt(out, operators.size());
+            for (Map.Entry<String, Operator> e : operators.entrySet()) {
+                ids.writeId(out, e.getKey());
+                SnapshotIo.writeString(out, e.getValue().getName());
+                totalRecords++;
+            }
+
+            // 2. lines - no references
+            Map<String, Integer> lineIndex = new HashMap<>(lines.size() * 2);
+            SnapshotIo.writeVarInt(out, lines.size());
+            for (Map.Entry<String, Line> e : lines.entrySet()) {
+                lineIndex.put(e.getKey(), lineIndex.size());
+                ids.writeId(out, e.getKey());
+                SnapshotIo.writeString(out, e.getValue().getLineName());
+                SnapshotIo.writeString(out, e.getValue().getPublicCode());
+                totalRecords++;
+            }
+
+            // 3. operatingDays - no references
+            Map<String, Integer> operatingDayIndex = new HashMap<>(operatingDays.size() * 2);
+            SnapshotIo.writeVarInt(out, operatingDays.size());
+            for (Map.Entry<String, String> e : operatingDays.entrySet()) {
+                operatingDayIndex.put(e.getKey(), operatingDayIndex.size());
+                ids.writeId(out, e.getKey());
+                writeOperatingDayDate(out, e.getValue());
+                totalRecords++;
+            }
+
+            // 4. serviceLinks - no references, delta-encoded geometry
+            Map<String, Integer> linkIndex = new HashMap<>(linkGeometry.size() * 2);
+            SnapshotIo.writeVarInt(out, linkGeometry.size());
+            for (Map.Entry<String, int[]> e : linkGeometry.entrySet()) {
+                linkIndex.put(e.getKey(), linkIndex.size());
+                ids.writeId(out, e.getKey());
+                writeGeometry(out, e.getValue());
+                totalRecords++;
+            }
+
+            // 5. journeyPatterns - refs into serviceLinks
+            Map<String, Integer> patternIndex = new HashMap<>(patternLinks.size() * 2);
+            SnapshotIo.writeVarInt(out, patternLinks.size());
+            for (Map.Entry<String, String[]> e : patternLinks.entrySet()) {
+                patternIndex.put(e.getKey(), patternIndex.size());
+                ids.writeId(out, e.getKey());
+                String[] linkIds = e.getValue();
+                SnapshotIo.writeVarInt(out, linkIds.length);
+                for (String linkId : linkIds) {
+                    writeRef(out, ids, linkId, linkIndex, linkGeometry.size());
+                }
+                totalRecords++;
+            }
+
+            // 6. serviceJourneys - refs into journeyPatterns and lines
+            Map<String, Integer> journeyIndex = new HashMap<>(serviceJourneyPattern.size() * 2);
+            SnapshotIo.writeVarInt(out, serviceJourneyPattern.size());
+            for (Map.Entry<String, String> e : serviceJourneyPattern.entrySet()) {
+                String id = e.getKey();
+                journeyIndex.put(id, journeyIndex.size());
+                ids.writeId(out, id);
+                // The builder stores "" (not null) for an absent pattern ref; write that as a
+                // null reference rather than interning and writing the empty string.
+                String patternId = e.getValue().isEmpty() ? null : e.getValue();
+                writeRef(out, ids, patternId, patternIndex, patternLinks.size());
+                writeRef(out, ids, serviceJourneyLine.get(id), lineIndex, lines.size());
+                totalRecords++;
+            }
+
+            // 7. datedServiceJourneys - refs into serviceJourneys and operatingDays. Whatever
+            // the builder currently holds is what gets serialised; applying the window is the
+            // caller's job (via Builder#applyFutureWindow), done before this method is called.
+            SnapshotIo.writeVarInt(out, rawDatedServiceJourneys.size());
+            for (Map.Entry<String, PlannedDataset.Builder.RawDatedServiceJourney> e : rawDatedServiceJourneys.entrySet()) {
+                ids.writeId(out, e.getKey());
+                PlannedDataset.Builder.RawDatedServiceJourney raw = e.getValue();
+                writeRef(out, ids, raw.serviceJourneyId(), journeyIndex, serviceJourneyPattern.size());
+                writeRef(out, ids, raw.operatingDayId(), operatingDayIndex, operatingDays.size());
+                totalRecords++;
+            }
+
+            out.writeByte(TAG_END);
+            SnapshotIo.writeVarInt(out, totalRecords);
+        }
+    }
+
+    /**
+     * Populates the id-codec prefix dictionary with every id the builder holds - owner ids
+     * and reference values alike - so it is complete before any record (and therefore any
+     * reference, resolvable or dangling) is written. One traversal, no retained memory beyond
+     * the resulting prefix table.
+     */
+    private static void internIds(IdCodec.Writer ids,
+                                   Map<String, Operator> operators,
+                                   Map<String, Line> lines,
+                                   Map<String, String> operatingDays,
+                                   Map<String, int[]> linkGeometry,
+                                   Map<String, String[]> patternLinks,
+                                   Map<String, String> serviceJourneyPattern,
+                                   Map<String, String> serviceJourneyLine,
+                                   Map<String, PlannedDataset.Builder.RawDatedServiceJourney> rawDatedServiceJourneys) {
+        internAll(ids, operators.keySet());
+        internAll(ids, lines.keySet());
+        internAll(ids, operatingDays.keySet());
+        internAll(ids, linkGeometry.keySet());
+        for (Map.Entry<String, String[]> e : patternLinks.entrySet()) {
+            ids.intern(e.getKey());
+            for (String linkId : e.getValue()) {
+                ids.intern(linkId);
+            }
+        }
+        for (Map.Entry<String, String> e : serviceJourneyPattern.entrySet()) {
+            ids.intern(e.getKey());
+            if (!e.getValue().isEmpty()) {
+                ids.intern(e.getValue());
+            }
+        }
+        internAll(ids, serviceJourneyLine.values());
+        for (Map.Entry<String, PlannedDataset.Builder.RawDatedServiceJourney> e : rawDatedServiceJourneys.entrySet()) {
+            ids.intern(e.getKey());
+            PlannedDataset.Builder.RawDatedServiceJourney raw = e.getValue();
+            if (raw.serviceJourneyId() != null) {
+                ids.intern(raw.serviceJourneyId());
+            }
+            if (raw.operatingDayId() != null) {
+                ids.intern(raw.operatingDayId());
+            }
+        }
+    }
+
+    private static void internAll(IdCodec.Writer ids, Collection<String> values) {
+        for (String id : values) {
+            ids.intern(id);
+        }
+    }
+
+    /**
+     * Writes a reference: varint 0 for null, {@code index + 1} for a hit in {@code index},
+     * or {@code sectionSize + 1} followed by the literal id when {@code id} is not in
+     * {@code index} - a dangling reference, kept instead of dropped so it survives the round
+     * trip exactly as {@code Stats.unresolved*Refs} found it.
+     */
+    private static void writeRef(DataOutputStream out, IdCodec.Writer ids, String id, Map<String, Integer> index, int sectionSize) throws IOException {
+        if (id == null) {
+            SnapshotIo.writeVarInt(out, 0);
+            return;
+        }
+        Integer position = index.get(id);
+        if (position != null) {
+            SnapshotIo.writeVarInt(out, position + 1L);
+        } else {
+            SnapshotIo.writeVarInt(out, sectionSize + 1L);
+            ids.writeId(out, id);
+        }
+    }
+
+    /**
+     * Writes interleaved lat/lon microdegrees as a count followed by one zigzag varint per
+     * value, each delta-encoded against the value two positions back (0 for the first two
+     * entries) - the two-back rule needs no special case for an odd-length array.
+     */
+    private static void writeGeometry(DataOutputStream out, int[] geometry) throws IOException {
+        SnapshotIo.writeVarInt(out, geometry.length);
+        for (int i = 0; i < geometry.length; i++) {
+            long previous = i >= 2 ? geometry[i - 2] : 0;
+            SnapshotIo.writeZigZag(out, geometry[i] - previous);
+        }
+    }
+
+    /**
+     * Writes an operating day's calendar date as varint 0 for null (or an unparseable date -
+     * kept rather than failing the whole snapshot over one bad record), else the zigzag
+     * encoding of its epoch day, offset by one so a real date can never collide with the null
+     * sentinel.
+     */
+    private static void writeOperatingDayDate(DataOutputStream out, String calendarDate) throws IOException {
+        LocalDate date = null;
+        if (calendarDate != null) {
+            try {
+                date = LocalDate.parse(calendarDate);
+            } catch (DateTimeParseException e) {
+                date = null;
+            }
+        }
+        if (date == null) {
+            SnapshotIo.writeVarInt(out, 0);
+            return;
+        }
+        long epochDay = date.toEpochDay();
+        long zigzag = (epochDay << 1) ^ (epochDay >> 63);
+        SnapshotIo.writeVarInt(out, zigzag + 1);
     }
 
     /** Feeds every record of a snapshot into the sink. Throws {@link SnapshotFormatException} on a header or count mismatch and {@link IOException} on truncation. */
