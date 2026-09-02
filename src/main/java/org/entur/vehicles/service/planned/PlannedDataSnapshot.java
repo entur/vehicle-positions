@@ -538,7 +538,10 @@ public final class PlannedDataSnapshot {
                 totalRecords++;
             }
 
-            in.readByte(); // trailer marker, 0xFF
+            byte trailer = in.readByte();
+            if (trailer != TAG_END) {
+                throw new SnapshotFormatException("Planned-data v2 snapshot trailer marker " + (trailer & 0xFF) + ", expected " + (TAG_END & 0xFF));
+            }
             int expected = (int) SnapshotIo.readVarInt(in);
             if (expected != totalRecords) {
                 throw new SnapshotFormatException("Planned-data v2 snapshot record count " + totalRecords + ", header says " + expected);

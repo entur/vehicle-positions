@@ -403,6 +403,14 @@ public class PlannedDataSnapshotTest {
         assertThatThrownBy(() -> PlannedDataSnapshot.replayV2(new ByteArrayInputStream(wrongCount), new PlannedDataset.Builder()))
                 .isInstanceOf(SnapshotFormatException.class).hasMessageContaining("count");
 
+        // Trailer marker byte (0xFF) is the one right before the record-count varint.
+        byte[] wrongTrailer = good.clone();
+        int trailerIndex = wrongTrailer.length - 2;
+        assertThat(wrongTrailer[trailerIndex]).isEqualTo((byte) 0xFF);
+        wrongTrailer[trailerIndex] = 0x00;
+        assertThatThrownBy(() -> PlannedDataSnapshot.replayV2(new ByteArrayInputStream(wrongTrailer), new PlannedDataset.Builder()))
+                .isInstanceOf(SnapshotFormatException.class).hasMessageContaining("trailer");
+
         assertThatThrownBy(() -> PlannedDataSnapshot.replayV2(new ByteArrayInputStream(new byte[0]), new PlannedDataset.Builder()))
                 .isInstanceOf(SnapshotFormatException.class);
     }
