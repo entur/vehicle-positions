@@ -5,18 +5,13 @@ import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.service.snapshot.IdCodec;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
 import org.entur.vehicles.service.snapshot.SnapshotIo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -29,9 +24,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The planned-data snapshot format: the raw records the NeTEx extractor emits, in order, so
- * a replay through {@link PlannedDataset.Builder} builds exactly what a parse would. Header,
- * then tagged records, then an end marker and the record count.
+ * The planned-data snapshot format: the builder's completed state, written after the parse
+ * has finished, so a replay through {@link PlannedDataset.Builder} builds exactly what a
+ * parse would. Header, dictionary of id prefixes, sections in dependency order, then an end
+ * marker and the record count.
  * <p>
  * Bump {@link #FORMAT_VERSION} whenever a record's layout or the set of extracted fields
  * changes; the version is part of the object name, so old and new images never read each
@@ -39,190 +35,24 @@ import java.util.Map;
  */
 public final class PlannedDataSnapshot {
 
-    private static final Logger LOG = LoggerFactory.getLogger(PlannedDataSnapshot.class);
-
     public static final String DATASET = "planned-data";
     public static final int FORMAT_VERSION = 2;
 
-    private static final byte[] MAGIC = {'V', 'P', 'P', 'D'};
-    private static final byte[] MAGIC_V2 = {'V', 'P', 'P', '2'};
-    private static final byte TAG_OPERATOR = 1;
-    private static final byte TAG_LINE = 2;
-    private static final byte TAG_SERVICE_LINK = 3;
-    private static final byte TAG_JOURNEY_PATTERN = 4;
-    private static final byte TAG_SERVICE_JOURNEY = 5;
-    private static final byte TAG_DATED_SERVICE_JOURNEY = 6;
-    private static final byte TAG_OPERATING_DAY = 7;
+    private static final byte[] MAGIC = {'V', 'P', 'P', '2'};
     private static final byte TAG_END = (byte) 0xFF;
 
     private PlannedDataSnapshot() {
     }
 
-    public static Writer writer(Path file, String etag) throws IOException {
-        return writer(new BufferedOutputStream(Files.newOutputStream(file), 1 << 16), etag);
-    }
-
-    /** Package-private for tests: builds a writer directly over any stream, buffered or not. */
-    static Writer writer(OutputStream out, String etag) throws IOException {
-        return new Writer(out, etag);
-    }
-
-    /** A {@link PlannedDataSink} that appends each record to the file. Write failures surface as {@link UncheckedIOException}. */
-    public static final class Writer implements PlannedDataSink, Closeable {
-
-        private final DataOutputStream out;
-        private int count = 0;
-        private boolean closed = false;
-        private boolean failed = false;
-
-        private Writer(OutputStream stream, String etag) throws IOException {
-            this.out = new DataOutputStream(stream);
-            out.write(MAGIC);
-            out.writeInt(FORMAT_VERSION);
-            out.writeUTF(etag);
-            out.writeLong(System.currentTimeMillis());
-        }
-
-        /** True once a write to the underlying stream has failed; the writer is poisoned and no longer used. */
-        public boolean failed() {
-            return failed;
-        }
-
-        @Override
-        public Writer addOperator(String id, String name) {
-            return record(TAG_OPERATOR, () -> {
-                out.writeUTF(id);
-                nullable(name);
-            });
-        }
-
-        @Override
-        public Writer addLine(String id, String name, String publicCode) {
-            return record(TAG_LINE, () -> {
-                out.writeUTF(id);
-                nullable(name);
-                nullable(publicCode);
-            });
-        }
-
-        @Override
-        public Writer addServiceLink(String id, int[] geometry) {
-            return record(TAG_SERVICE_LINK, () -> {
-                out.writeUTF(id);
-                if (geometry == null) {
-                    out.writeInt(-1);
-                } else {
-                    out.writeInt(geometry.length);
-                    for (int v : geometry) {
-                        out.writeInt(v);
-                    }
-                }
-            });
-        }
-
-        @Override
-        public Writer addJourneyPattern(String id, List<String> serviceLinkIds) {
-            return record(TAG_JOURNEY_PATTERN, () -> {
-                out.writeUTF(id);
-                out.writeInt(serviceLinkIds.size());
-                for (String link : serviceLinkIds) {
-                    out.writeUTF(link);
-                }
-            });
-        }
-
-        @Override
-        public Writer addServiceJourney(String id, String journeyPatternId, String lineId) {
-            return record(TAG_SERVICE_JOURNEY, () -> {
-                out.writeUTF(id);
-                nullable(journeyPatternId);
-                nullable(lineId);
-            });
-        }
-
-        @Override
-        public Writer addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId) {
-            return record(TAG_DATED_SERVICE_JOURNEY, () -> {
-                out.writeUTF(id);
-                nullable(serviceJourneyId);
-                nullable(operatingDayId);
-            });
-        }
-
-        @Override
-        public Writer addOperatingDay(String id, String calendarDate) {
-            return record(TAG_OPERATING_DAY, () -> {
-                out.writeUTF(id);
-                nullable(calendarDate);
-            });
-        }
-
-        private interface Body {
-            void write() throws IOException;
-        }
-
-        private Writer record(byte tag, Body body) {
-            if (closed) {
-                // The buffered stream would silently absorb writes after close until its
-                // buffer filled; fail at once instead so the tee drops the writer immediately.
-                throw new UncheckedIOException(new IOException("snapshot writer is closed"));
-            }
-            try {
-                out.writeByte(tag);
-                body.write();
-                count++;
-                return this;
-            } catch (IOException e) {
-                failed = true;
-                throw new UncheckedIOException(e);
-            }
-        }
-
-        private void nullable(String s) throws IOException {
-            out.writeBoolean(s != null);
-            if (s != null) {
-                out.writeUTF(s);
-            }
-        }
-
-        /**
-         * Never throws: the snapshot is a cache, not a dependency, so a write failure here is
-         * logged and latched into {@link #failed()} rather than escaping to the caller.
-         */
-        @Override
-        public void close() {
-            if (closed) {
-                return;
-            }
-            closed = true;
-            if (!failed) {
-                try {
-                    out.writeByte(TAG_END);
-                    out.writeInt(count);
-                } catch (IOException e) {
-                    failed = true;
-                    LOG.warn("Failed to write the planned-data snapshot trailer", e);
-                }
-            }
-            try {
-                out.close();
-            } catch (IOException e) {
-                failed = true;
-                LOG.warn("Failed to close the planned-data snapshot file", e);
-            }
-        }
-    }
-
     /**
-     * Writes the v2 snapshot from the builder's completed state (see the format doc:
+     * Writes the snapshot from the builder's completed state (see the format doc:
      * {@code docs/superpowers/specs/2026-09-03-snapshot-v2-encoding-design.md}, "Snapshot
-     * format v2"). Unlike {@link Writer}, which tees raw records as the extractor emits them,
-     * this reads the builder's maps directly, so it must run only after the parse (or a
-     * replay) has finished populating them.
+     * format v2"). Reads the builder's maps directly, so it must run only after the parse (or
+     * a replay) has finished populating them.
      */
     public static void write(PlannedDataset.Builder builder, Path file, String etag) throws IOException {
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file), 1 << 16))) {
-            out.write(MAGIC_V2);
+            out.write(MAGIC);
             out.writeInt(FORMAT_VERSION);
             out.writeUTF(etag);
             out.writeLong(System.currentTimeMillis());
@@ -435,22 +265,22 @@ public final class PlannedDataSnapshot {
     }
 
     /**
-     * Reads a v2 snapshot (see {@link #write}) and feeds its records into {@code sink} in
-     * section order, so refs resolve against sections already read. Throws {@link
+     * Reads a snapshot (see {@link #write}) and feeds its records into {@code sink} in section
+     * order, so refs resolve against sections already read. Throws {@link
      * SnapshotFormatException} on bad magic, wrong version, a truncated file or a record-count
      * mismatch.
      */
-    public static void replayV2(InputStream stream, PlannedDataSink sink) throws IOException {
+    public static void replay(InputStream stream, PlannedDataSink sink) throws IOException {
         DataInputStream in = new DataInputStream(new BufferedInputStream(stream, 1 << 16));
         try {
-            byte[] magic = new byte[MAGIC_V2.length];
+            byte[] magic = new byte[MAGIC.length];
             in.readFully(magic);
-            if (!Arrays.equals(magic, MAGIC_V2)) {
-                throw new SnapshotFormatException("Not a v2 planned-data snapshot (bad magic)");
+            if (!Arrays.equals(magic, MAGIC)) {
+                throw new SnapshotFormatException("Not a planned-data snapshot (bad magic)");
             }
             int version = in.readInt();
             if (version != FORMAT_VERSION) {
-                throw new SnapshotFormatException("Planned-data v2 snapshot version " + version + ", expected " + FORMAT_VERSION);
+                throw new SnapshotFormatException("Planned-data snapshot version " + version + ", expected " + FORMAT_VERSION);
             }
             in.readUTF(); // etag, informational
             in.readLong(); // createdAt, informational
@@ -540,14 +370,14 @@ public final class PlannedDataSnapshot {
 
             byte trailer = in.readByte();
             if (trailer != TAG_END) {
-                throw new SnapshotFormatException("Planned-data v2 snapshot trailer marker " + (trailer & 0xFF) + ", expected " + (TAG_END & 0xFF));
+                throw new SnapshotFormatException("Planned-data snapshot trailer marker " + (trailer & 0xFF) + ", expected " + (TAG_END & 0xFF));
             }
             int expected = (int) SnapshotIo.readVarInt(in);
             if (expected != totalRecords) {
-                throw new SnapshotFormatException("Planned-data v2 snapshot record count " + totalRecords + ", header says " + expected);
+                throw new SnapshotFormatException("Planned-data snapshot record count " + totalRecords + ", header says " + expected);
             }
         } catch (java.io.EOFException e) {
-            throw new SnapshotFormatException("Truncated planned-data v2 snapshot");
+            throw new SnapshotFormatException("Truncated planned-data snapshot");
         }
     }
 
@@ -597,64 +427,4 @@ public final class PlannedDataSnapshot {
         return LocalDate.ofEpochDay(epochDay).toString();
     }
 
-    /** Feeds every record of a snapshot into the sink. Throws {@link SnapshotFormatException} on a header or count mismatch and {@link IOException} on truncation. */
-    public static void replay(InputStream stream, PlannedDataSink sink) throws IOException {
-        DataInputStream in = new DataInputStream(new BufferedInputStream(stream, 1 << 16));
-        byte[] magic = new byte[MAGIC.length];
-        in.readFully(magic);
-        if (!Arrays.equals(magic, MAGIC)) {
-            throw new SnapshotFormatException("Not a planned-data snapshot (bad magic)");
-        }
-        int version = in.readInt();
-        if (version != FORMAT_VERSION) {
-            throw new SnapshotFormatException("Planned-data snapshot version " + version + ", expected " + FORMAT_VERSION);
-        }
-        in.readUTF(); // etag, informational
-        in.readLong(); // createdAt, informational
-
-        int count = 0;
-        while (true) {
-            byte tag = in.readByte();
-            if (tag == TAG_END) {
-                break;
-            }
-            String id = in.readUTF();
-            switch (tag) {
-                case TAG_OPERATOR -> sink.addOperator(id, nullable(in));
-                case TAG_LINE -> sink.addLine(id, nullable(in), nullable(in));
-                case TAG_SERVICE_LINK -> {
-                    int length = in.readInt();
-                    int[] geometry = null;
-                    if (length >= 0) {
-                        geometry = new int[length];
-                        for (int i = 0; i < length; i++) {
-                            geometry[i] = in.readInt();
-                        }
-                    }
-                    sink.addServiceLink(id, geometry);
-                }
-                case TAG_JOURNEY_PATTERN -> {
-                    int size = in.readInt();
-                    List<String> links = new ArrayList<>(size);
-                    for (int i = 0; i < size; i++) {
-                        links.add(in.readUTF());
-                    }
-                    sink.addJourneyPattern(id, links);
-                }
-                case TAG_SERVICE_JOURNEY -> sink.addServiceJourney(id, nullable(in), nullable(in));
-                case TAG_DATED_SERVICE_JOURNEY -> sink.addDatedServiceJourney(id, nullable(in), nullable(in));
-                case TAG_OPERATING_DAY -> sink.addOperatingDay(id, nullable(in));
-                default -> throw new SnapshotFormatException("Unknown planned-data record tag " + tag);
-            }
-            count++;
-        }
-        int expected = in.readInt();
-        if (expected != count) {
-            throw new SnapshotFormatException("Planned-data snapshot record count " + count + ", header says " + expected);
-        }
-    }
-
-    private static String nullable(DataInputStream in) throws IOException {
-        return in.readBoolean() ? in.readUTF() : null;
-    }
 }

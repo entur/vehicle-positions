@@ -28,9 +28,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * nightly reload. A failed startup load is fatal; a failed nightly reload keeps the
  * previous dataset.
  * <p>
- * Each load tries the snapshot named by the export's ETag before parsing; a parse tees its
- * records into a new snapshot that is uploaded after the dataset is live. See
- * {@code docs/superpowers/specs/2026-09-02-planned-data-snapshot-design.md}.
+ * Each load tries the snapshot named by the export's ETag before parsing; a parse that
+ * completes without skipping anything is written to a new snapshot, from the builder, and
+ * uploaded after the dataset is live. See
+ * {@code docs/superpowers/specs/2026-09-02-planned-data-snapshot-design.md} and
+ * {@code docs/superpowers/specs/2026-09-03-snapshot-v2-encoding-design.md}.
  * <p>
  * The {@code find*} methods are the lookup surface the enrichment services use. They return
  * null on a miss and count it, so a producer referencing ids the export lacks is visible.
@@ -134,7 +136,8 @@ public class PlannedDataService {
                 }
             }
 
-            // 2. Full parse, teeing the records into a snapshot file when we know which export this is.
+            // 2. Full parse into the builder; the snapshot, if any, is written from the
+            //    builder's completed state afterwards - see PlannedDataSnapshot.write.
             if (source == null) {
                 zip = Files.createTempFile("planned-netex", ".zip");
                 long downloadStart = System.currentTimeMillis();
@@ -148,41 +151,25 @@ public class PlannedDataService {
                 Optional<SnapshotKey> uploadKey = snapshots.enabled()
                         ? etag.flatMap(e -> SnapshotKey.of(PlannedDataSnapshot.DATASET, PlannedDataSnapshot.FORMAT_VERSION, e))
                         : Optional.empty();
-                PlannedDataSnapshot.Writer writer = null;
-                if (uploadKey.isPresent()) {
-                    // The bucket is a cache, never a dependency: failing to prepare the snapshot
-                    // file costs the snapshot, never the load.
+
+                int skipped = loader.load(zip, builder);
+
+                if (uploadKey.isPresent() && skipped == 0) {
+                    // The bucket is a cache, never a dependency: failing to prepare or write the
+                    // snapshot file costs the snapshot, never the load.
                     try {
                         raw = createSnapshotFile("planned-snapshot", ".bin");
-                        writer = PlannedDataSnapshot.writer(raw, uploadKey.get().etag());
+                        PlannedDataSnapshot.write(builder, raw, uploadKey.get().etag());
+                        key = uploadKey.get();
                     } catch (IOException e) {
-                        LOG.warn("Could not prepare snapshot file - loading without a snapshot", e);
-                        deleteQuietly(raw);
-                        raw = null;
-                        writer = null;
-                    }
-                }
-                if (writer != null) {
-                    TeeSink tee;
-                    int skipped;
-                    try (PlannedDataSnapshot.Writer open = writer) {
-                        tee = new TeeSink(builder, open);
-                        skipped = loader.load(zip, tee);
-                    }
-                    if (tee.writerFailed()) {
-                        deleteQuietly(raw);
-                        raw = null;
-                    } else if (skipped > 0) {
-                        // A partial parse must not become this export's snapshot for the whole fleet.
-                        LOG.warn("{} NeTEx entries were skipped - not snapshotting a partial parse", skipped);
+                        LOG.warn("Could not write the planned-data snapshot - loading without one", e);
                         deleteQuietly(raw);
                         raw = null;
                         key = null;
-                    } else {
-                        key = uploadKey.get();
                     }
-                } else {
-                    loader.load(zip, builder);
+                } else if (uploadKey.isPresent()) {
+                    // A partial parse must not become this export's snapshot for the whole fleet.
+                    LOG.warn("{} NeTEx entries were skipped - not snapshotting a partial parse", skipped);
                 }
                 source = "export";
             }
