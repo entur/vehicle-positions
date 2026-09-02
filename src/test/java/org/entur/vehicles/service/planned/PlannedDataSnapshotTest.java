@@ -299,4 +299,111 @@ public class PlannedDataSnapshotTest {
         byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
         assertThat(actualTail).containsExactly(expectedTail);
     }
+
+    // ---- v2 reader ----
+
+    @Test
+    public void aReplayedV2SnapshotBuildsTheSameDatasetAsTheBuilder(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder original = new PlannedDataset.Builder();
+        original.addOperator("RUT:Operator:1", "One");
+        original.addOperator("RUT:Operator:1", "One again"); // duplicate id -> duplicateIds = 1
+
+        original.addLine("RUT:Line:1", "Line One", "1");
+        original.addLine("RUT:Line:2", null, null); // null name + null public code
+
+        original.addServiceLink("RUT:ServiceLink:empty", new int[0]); // empty geometry
+        original.addServiceLink("RUT:ServiceLink:odd", new int[]{10, 20, 5}); // odd-length geometry
+
+        original.addJourneyPattern("RUT:JourneyPattern:1", List.of("RUT:ServiceLink:odd", "RUT:ServiceLink:dangling")); // dangling link ref
+        original.addJourneyPattern("RUT:JourneyPattern:2", List.of()); // empty link list
+
+        original.addServiceJourney("RUT:ServiceJourney:1", "RUT:JourneyPattern:missing", "RUT:Line:dangling"); // dangling pattern + dangling line
+        original.addServiceJourney("RUT:ServiceJourney:2", null, "RUT:Line:1"); // null pattern -> "" placeholder
+        original.addServiceJourney("RUT:ServiceJourney:3", "RUT:JourneyPattern:1", null); // resolvable pattern, null line
+
+        original.addOperatingDay("RUT:OperatingDay:1", "2026-09-02");
+        original.addOperatingDay("RUT:OperatingDay:2", null); // null calendar date
+
+        original.addDatedServiceJourney("RUT:DatedServiceJourney:1", "RUT:ServiceJourney:missing", "RUT:OperatingDay:1"); // dangling journey ref
+        original.addDatedServiceJourney("RUT:DatedServiceJourney:2", "RUT:ServiceJourney:2", "RUT:OperatingDay:missing"); // dangling operating-day ref
+        original.addDatedServiceJourney("RUT:DatedServiceJourney:3", "RUT:ServiceJourney:3", "RUT:OperatingDay:2"); // resolvable both
+
+        Path file = dir.resolve("planned-v2.bin");
+        PlannedDataSnapshot.write(original, file, "etag-1");
+
+        PlannedDataset.Builder replayed = new PlannedDataset.Builder();
+        try (InputStream in = Files.newInputStream(file)) {
+            PlannedDataSnapshot.replayV2(in, replayed);
+        }
+
+        PlannedDataset fromSnapshot = replayed.build();
+        PlannedDataset fromOriginal = original.build();
+
+        assertThat(fromSnapshot.stats()).isEqualTo(fromOriginal.stats());
+        assertThat(fromSnapshot.stats().duplicateIds()).isEqualTo(1);
+
+        assertThat(fromSnapshot.operator("RUT:Operator:1").getName())
+                .isEqualTo(fromOriginal.operator("RUT:Operator:1").getName());
+        assertThat(fromSnapshot.line("RUT:Line:1").getLineName())
+                .isEqualTo(fromOriginal.line("RUT:Line:1").getLineName());
+        assertThat(fromSnapshot.line("RUT:Line:1").getPublicCode())
+                .isEqualTo(fromOriginal.line("RUT:Line:1").getPublicCode());
+        assertThat(fromSnapshot.line("RUT:Line:2").getLineName()).isNull();
+        assertThat(fromSnapshot.line("RUT:Line:2").getPublicCode()).isNull();
+        assertThat(fromSnapshot.journeyPatternOf("RUT:ServiceJourney:1"))
+                .isEqualTo(fromOriginal.journeyPatternOf("RUT:ServiceJourney:1"))
+                .isEqualTo("RUT:JourneyPattern:missing"); // dangling ref kept
+        assertThat(fromSnapshot.journeyPatternOf("RUT:ServiceJourney:2"))
+                .isEqualTo(fromOriginal.journeyPatternOf("RUT:ServiceJourney:2"))
+                .isEqualTo(""); // null pattern -> "" placeholder
+        assertThat(fromSnapshot.lineOf("RUT:ServiceJourney:1"))
+                .isEqualTo(fromOriginal.lineOf("RUT:ServiceJourney:1"))
+                .isEqualTo("RUT:Line:dangling"); // dangling ref kept
+        assertThat(fromSnapshot.datedServiceJourney("RUT:DatedServiceJourney:1"))
+                .isEqualTo(fromOriginal.datedServiceJourney("RUT:DatedServiceJourney:1"));
+        assertThat(fromSnapshot.datedServiceJourney("RUT:DatedServiceJourney:2"))
+                .isEqualTo(fromOriginal.datedServiceJourney("RUT:DatedServiceJourney:2"));
+        assertThat(fromSnapshot.datedServiceJourney("RUT:DatedServiceJourney:3"))
+                .isEqualTo(fromOriginal.datedServiceJourney("RUT:DatedServiceJourney:3"))
+                .isEqualTo(new DatedJourneyRef("RUT:ServiceJourney:3", null));
+
+        assertThat(fromSnapshot.pointsOnLink("RUT:JourneyPattern:2"))
+                .isEqualTo(fromOriginal.pointsOnLink("RUT:JourneyPattern:2"));
+        var snapshotPoints = fromSnapshot.pointsOnLink("RUT:JourneyPattern:1");
+        var originalPoints = fromOriginal.pointsOnLink("RUT:JourneyPattern:1");
+        assertThat(snapshotPoints.getPoints()).isEqualTo(originalPoints.getPoints());
+        assertThat(snapshotPoints.getLength()).isEqualTo(originalPoints.getLength());
+    }
+
+    @Test
+    public void v2HeaderAndTruncationAreGuarded(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addOperator("O:1", "One");
+        builder.addServiceLink("L:1", new int[]{10, 20, 5});
+        Path file = dir.resolve("planned-v2.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] good = Files.readAllBytes(file);
+
+        byte[] wrongMagic = good.clone();
+        wrongMagic[0] = 'X';
+        assertThatThrownBy(() -> PlannedDataSnapshot.replayV2(new ByteArrayInputStream(wrongMagic), new PlannedDataset.Builder()))
+                .isInstanceOf(SnapshotFormatException.class).hasMessageContaining("magic");
+
+        byte[] wrongVersion = good.clone();
+        wrongVersion[7] = (byte) (wrongVersion[7] + 1);
+        assertThatThrownBy(() -> PlannedDataSnapshot.replayV2(new ByteArrayInputStream(wrongVersion), new PlannedDataset.Builder()))
+                .isInstanceOf(SnapshotFormatException.class).hasMessageContaining("version");
+
+        byte[] truncated = java.util.Arrays.copyOf(good, good.length - 3);
+        assertThatThrownBy(() -> PlannedDataSnapshot.replayV2(new ByteArrayInputStream(truncated), new PlannedDataset.Builder()))
+                .isInstanceOf(SnapshotFormatException.class);
+
+        byte[] wrongCount = good.clone();
+        wrongCount[wrongCount.length - 1] = (byte) (wrongCount[wrongCount.length - 1] + 1);
+        assertThatThrownBy(() -> PlannedDataSnapshot.replayV2(new ByteArrayInputStream(wrongCount), new PlannedDataset.Builder()))
+                .isInstanceOf(SnapshotFormatException.class).hasMessageContaining("count");
+
+        assertThatThrownBy(() -> PlannedDataSnapshot.replayV2(new ByteArrayInputStream(new byte[0]), new PlannedDataset.Builder()))
+                .isInstanceOf(SnapshotFormatException.class);
+    }
 }

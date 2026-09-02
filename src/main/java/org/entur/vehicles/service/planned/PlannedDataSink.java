@@ -23,4 +23,12 @@ public interface PlannedDataSink {
     PlannedDataSink addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId);
 
     PlannedDataSink addOperatingDay(String id, String calendarDate);
+
+    /**
+     * Seeds the duplicate-id count a v2 snapshot's header carries, so a replay can hand it to
+     * any sink without an {@code instanceof} check. A no-op for sinks (such as {@link
+     * PlannedDataSnapshot.Writer}) that have no use for it.
+     */
+    default void seedDuplicateIds(int duplicateIds) {
+    }
 }

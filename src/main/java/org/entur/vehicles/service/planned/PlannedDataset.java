@@ -374,7 +374,8 @@ public final class PlannedDataset {
          * so {@link Stats#duplicateIds()} must be seeded from the original parse instead of
          * being (re)derived from {@code countDuplicate}.
          */
-        void seedDuplicateIds(int duplicateIds) {
+        @Override
+        public void seedDuplicateIds(int duplicateIds) {
             this.duplicateIds = duplicateIds;
         }
 

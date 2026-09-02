@@ -434,6 +434,166 @@ public final class PlannedDataSnapshot {
         SnapshotIo.writeVarInt(out, zigzag + 1);
     }
 
+    /**
+     * Reads a v2 snapshot (see {@link #write}) and feeds its records into {@code sink} in
+     * section order, so refs resolve against sections already read. Throws {@link
+     * SnapshotFormatException} on bad magic, wrong version, a truncated file or a record-count
+     * mismatch.
+     */
+    public static void replayV2(InputStream stream, PlannedDataSink sink) throws IOException {
+        DataInputStream in = new DataInputStream(new BufferedInputStream(stream, 1 << 16));
+        try {
+            byte[] magic = new byte[MAGIC_V2.length];
+            in.readFully(magic);
+            if (!Arrays.equals(magic, MAGIC_V2)) {
+                throw new SnapshotFormatException("Not a v2 planned-data snapshot (bad magic)");
+            }
+            int version = in.readInt();
+            if (version != FORMAT_VERSION) {
+                throw new SnapshotFormatException("Planned-data v2 snapshot version " + version + ", expected " + FORMAT_VERSION);
+            }
+            in.readUTF(); // etag, informational
+            in.readLong(); // createdAt, informational
+            sink.seedDuplicateIds(in.readInt());
+
+            IdCodec.Reader ids = new IdCodec.Reader();
+            ids.readTable(in);
+
+            int totalRecords = 0;
+
+            // 1. operators - no references
+            int operatorCount = (int) SnapshotIo.readVarInt(in);
+            for (int i = 0; i < operatorCount; i++) {
+                String id = ids.readId(in);
+                sink.addOperator(id, SnapshotIo.readString(in));
+                totalRecords++;
+            }
+
+            // 2. lines - no references
+            int lineCount = (int) SnapshotIo.readVarInt(in);
+            String[] lineIds = new String[lineCount];
+            for (int i = 0; i < lineCount; i++) {
+                String id = ids.readId(in);
+                lineIds[i] = id;
+                String name = SnapshotIo.readString(in);
+                String publicCode = SnapshotIo.readString(in);
+                sink.addLine(id, name, publicCode);
+                totalRecords++;
+            }
+
+            // 3. operatingDays - no references
+            int operatingDayCount = (int) SnapshotIo.readVarInt(in);
+            String[] operatingDayIds = new String[operatingDayCount];
+            for (int i = 0; i < operatingDayCount; i++) {
+                String id = ids.readId(in);
+                operatingDayIds[i] = id;
+                sink.addOperatingDay(id, readOperatingDayDate(in));
+                totalRecords++;
+            }
+
+            // 4. serviceLinks - no references, delta-encoded geometry
+            int linkCount = (int) SnapshotIo.readVarInt(in);
+            String[] linkIds = new String[linkCount];
+            for (int i = 0; i < linkCount; i++) {
+                String id = ids.readId(in);
+                linkIds[i] = id;
+                sink.addServiceLink(id, readGeometry(in));
+                totalRecords++;
+            }
+
+            // 5. journeyPatterns - refs into serviceLinks
+            int patternCount = (int) SnapshotIo.readVarInt(in);
+            String[] patternIds = new String[patternCount];
+            for (int i = 0; i < patternCount; i++) {
+                String id = ids.readId(in);
+                patternIds[i] = id;
+                int linkRefCount = (int) SnapshotIo.readVarInt(in);
+                List<String> links = new ArrayList<>(linkRefCount);
+                for (int j = 0; j < linkRefCount; j++) {
+                    links.add(readRef(in, ids, linkIds));
+                }
+                sink.addJourneyPattern(id, links);
+                totalRecords++;
+            }
+
+            // 6. serviceJourneys - refs into journeyPatterns and lines
+            int journeyCount = (int) SnapshotIo.readVarInt(in);
+            String[] journeyIds = new String[journeyCount];
+            for (int i = 0; i < journeyCount; i++) {
+                String id = ids.readId(in);
+                journeyIds[i] = id;
+                String patternRef = readRef(in, ids, patternIds);
+                String lineRef = readRef(in, ids, lineIds);
+                sink.addServiceJourney(id, patternRef, lineRef);
+                totalRecords++;
+            }
+
+            // 7. datedServiceJourneys - refs into serviceJourneys and operatingDays
+            int datedCount = (int) SnapshotIo.readVarInt(in);
+            for (int i = 0; i < datedCount; i++) {
+                String id = ids.readId(in);
+                String journeyRef = readRef(in, ids, journeyIds);
+                String operatingDayRef = readRef(in, ids, operatingDayIds);
+                sink.addDatedServiceJourney(id, journeyRef, operatingDayRef);
+                totalRecords++;
+            }
+
+            in.readByte(); // trailer marker, 0xFF
+            int expected = (int) SnapshotIo.readVarInt(in);
+            if (expected != totalRecords) {
+                throw new SnapshotFormatException("Planned-data v2 snapshot record count " + totalRecords + ", header says " + expected);
+            }
+        } catch (java.io.EOFException e) {
+            throw new SnapshotFormatException("Truncated planned-data v2 snapshot");
+        }
+    }
+
+    /**
+     * Reads a reference written by the v2 writer's {@code writeRef}: varint 0 is null,
+     * {@code 1..N} is a 1-based index into {@code section} (already fully read), and
+     * {@code N+1} introduces a literal id - a dangling reference, kept as-is so it survives
+     * the round trip exactly as {@code Stats.unresolved*Refs} found it.
+     */
+    private static String readRef(DataInputStream in, IdCodec.Reader ids, String[] section) throws IOException {
+        long v = SnapshotIo.readVarInt(in);
+        if (v == 0) {
+            return null;
+        }
+        int index = (int) (v - 1);
+        return index < section.length ? section[index] : ids.readId(in);
+    }
+
+    /**
+     * Reads geometry written by the v2 writer's {@code writeGeometry}: a count followed by
+     * one zigzag varint per value, each delta-decoded against the value two positions back
+     * (0 for the first two entries).
+     */
+    private static int[] readGeometry(DataInputStream in) throws IOException {
+        int length = (int) SnapshotIo.readVarInt(in);
+        int[] geometry = new int[length];
+        for (int i = 0; i < length; i++) {
+            long delta = SnapshotIo.readZigZag(in);
+            long previous = i >= 2 ? geometry[i - 2] : 0;
+            geometry[i] = (int) (delta + previous);
+        }
+        return geometry;
+    }
+
+    /**
+     * Reads an operating day's calendar date written by the v2 writer's
+     * {@code writeOperatingDayDate}: varint 0 is null, else the value minus one is the zigzag
+     * encoding of the date's epoch day.
+     */
+    private static String readOperatingDayDate(DataInputStream in) throws IOException {
+        long v = SnapshotIo.readVarInt(in);
+        if (v == 0) {
+            return null;
+        }
+        long zigzag = v - 1;
+        long epochDay = (zigzag >>> 1) ^ -(zigzag & 1);
+        return LocalDate.ofEpochDay(epochDay).toString();
+    }
+
     /** Feeds every record of a snapshot into the sink. Throws {@link SnapshotFormatException} on a header or count mismatch and {@link IOException} on truncation. */
     public static void replay(InputStream stream, PlannedDataSink sink) throws IOException {
         DataInputStream in = new DataInputStream(new BufferedInputStream(stream, 1 << 16));
