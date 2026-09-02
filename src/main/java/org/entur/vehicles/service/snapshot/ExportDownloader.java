@@ -55,6 +55,9 @@ public final class ExportDownloader {
                 return Optional.empty();
             }
             return response.headers().firstValue("ETag");
+        } catch (IllegalArgumentException e) {
+            LOG.info("HEAD {} failed: {}", url, e.toString());
+            return Optional.empty();
         } catch (IOException e) {
             LOG.info("HEAD {} failed: {}", url, e.toString());
             return Optional.empty();
@@ -67,16 +70,22 @@ public final class ExportDownloader {
     /** Downloads the export to {@code target} and returns the ETag of what was downloaded, if the server sent one. */
     public Optional<String> download(String url, Path target) throws IOException {
         if (!isHttp(url)) {
-            Files.copy(Path.of(URI.create(url)), target, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.copy(Path.of(URI.create(url)), target, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IllegalArgumentException e) {
+                throw new IOException("Malformed URL " + url, e);
+            }
             return Optional.empty();
         }
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().timeout(timeout).build();
         try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().timeout(timeout).build();
             HttpResponse<Path> response = client.send(request, HttpResponse.BodyHandlers.ofFile(target));
             if (response.statusCode() / 100 != 2) {
                 throw new IOException("GET " + url + " returned " + response.statusCode());
             }
             return response.headers().firstValue("ETag");
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Malformed URL " + url, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while downloading " + url, e);

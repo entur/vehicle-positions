@@ -68,4 +68,13 @@ public class ExportDownloaderTest {
         assertThatThrownBy(() -> downloader.download(dir.resolve("missing.zip").toUri().toString(), dir.resolve("y")))
                 .isInstanceOf(IOException.class);
     }
+
+    @Test
+    public void malformedUrlsAreHandled(@TempDir Path dir) {
+        ExportDownloader downloader = new ExportDownloader(Duration.ofSeconds(5));
+
+        assertThat(downloader.head("http://[bad")).isEmpty();
+        assertThatThrownBy(() -> downloader.download("http://[bad", dir.resolve("x")))
+                .isInstanceOf(IOException.class);
+    }
 }
