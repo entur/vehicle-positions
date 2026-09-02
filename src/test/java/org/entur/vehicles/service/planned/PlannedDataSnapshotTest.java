@@ -10,12 +10,15 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class PlannedDataSnapshotTest {
@@ -141,5 +144,34 @@ public class PlannedDataSnapshotTest {
         PlannedDataset dataset = builder.build();
         assertThat(dataset.operator("O:1")).isNotNull();
         assertThat(dataset.line("L:1")).isNotNull();
+    }
+
+    @Test
+    public void aFailingStreamPoisonsTheWriterAndCloseDoesNotThrow() throws Exception {
+        FailingAfterHeaderStream stream = new FailingAfterHeaderStream();
+        PlannedDataSnapshot.Writer writer = PlannedDataSnapshot.writer((OutputStream) stream, "e");
+        stream.fail = true; // header already written; every write from here on fails
+
+        assertThatThrownBy(() -> writer.addOperator("O:1", "One")).isInstanceOf(UncheckedIOException.class);
+        assertThat(writer.failed()).isTrue();
+        assertThatCode(writer::close).doesNotThrowAnyException();
+
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        TeeSink tee = new TeeSink(builder, writer);
+        assertThat(tee.writerFailed()).isTrue();
+    }
+
+    /** Accepts every byte until {@link #fail} is flipped, then fails every subsequent write. */
+    private static final class FailingAfterHeaderStream extends OutputStream {
+        volatile boolean fail = false;
+        private final ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        @Override
+        public void write(int b) throws IOException {
+            if (fail) {
+                throw new IOException("disk full");
+            }
+            sink.write(b);
+        }
     }
 }

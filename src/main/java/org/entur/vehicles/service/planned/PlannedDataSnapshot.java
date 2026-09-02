@@ -1,6 +1,8 @@
 package org.entur.vehicles.service.planned;
 
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -9,6 +11,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,6 +30,8 @@ import java.util.List;
  */
 public final class PlannedDataSnapshot {
 
+    private static final Logger LOG = LoggerFactory.getLogger(PlannedDataSnapshot.class);
+
     public static final String DATASET = "planned-data";
     public static final int FORMAT_VERSION = 1;
 
@@ -44,7 +49,12 @@ public final class PlannedDataSnapshot {
     }
 
     public static Writer writer(Path file, String etag) throws IOException {
-        return new Writer(file, etag);
+        return writer(new BufferedOutputStream(Files.newOutputStream(file), 1 << 16), etag);
+    }
+
+    /** Package-private for tests: builds a writer directly over any stream, buffered or not. */
+    static Writer writer(OutputStream out, String etag) throws IOException {
+        return new Writer(out, etag);
     }
 
     /** A {@link PlannedDataSink} that appends each record to the file. Write failures surface as {@link UncheckedIOException}. */
@@ -53,13 +63,19 @@ public final class PlannedDataSnapshot {
         private final DataOutputStream out;
         private int count = 0;
         private boolean closed = false;
+        private boolean failed = false;
 
-        private Writer(Path file, String etag) throws IOException {
-            this.out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file), 1 << 16));
+        private Writer(OutputStream stream, String etag) throws IOException {
+            this.out = new DataOutputStream(stream);
             out.write(MAGIC);
             out.writeInt(FORMAT_VERSION);
             out.writeUTF(etag);
             out.writeLong(System.currentTimeMillis());
+        }
+
+        /** True once a write to the underlying stream has failed; the writer is poisoned and no longer used. */
+        public boolean failed() {
+            return failed;
         }
 
         @Override
@@ -147,6 +163,7 @@ public final class PlannedDataSnapshot {
                 count++;
                 return this;
             } catch (IOException e) {
+                failed = true;
                 throw new UncheckedIOException(e);
             }
         }
@@ -158,17 +175,30 @@ public final class PlannedDataSnapshot {
             }
         }
 
+        /**
+         * Never throws: the snapshot is a cache, not a dependency, so a write failure here is
+         * logged and latched into {@link #failed()} rather than escaping to the caller.
+         */
         @Override
-        public void close() throws IOException {
+        public void close() {
             if (closed) {
                 return;
             }
             closed = true;
+            if (!failed) {
+                try {
+                    out.writeByte(TAG_END);
+                    out.writeInt(count);
+                } catch (IOException e) {
+                    failed = true;
+                    LOG.warn("Failed to write the planned-data snapshot trailer", e);
+                }
+            }
             try {
-                out.writeByte(TAG_END);
-                out.writeInt(count);
-            } finally {
                 out.close();
+            } catch (IOException e) {
+                failed = true;
+                LOG.warn("Failed to close the planned-data snapshot file", e);
             }
         }
     }

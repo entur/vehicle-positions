@@ -25,7 +25,7 @@ final class TeeSink implements PlannedDataSink {
     }
 
     boolean writerFailed() {
-        return writerFailed;
+        return writerFailed || writer.failed();
     }
 
     private interface Write {
