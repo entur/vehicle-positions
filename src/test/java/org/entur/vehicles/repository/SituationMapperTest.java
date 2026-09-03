@@ -535,4 +535,97 @@ public class SituationMapperTest {
                 situation.getAffects().getAffectedLines().get(0).getStops().get(0).getStop().getId());
         assertTrue(situation.getAffects().getVehicleJourneys().isEmpty());
     }
+
+    /**
+     * A producer splitting one journey's disruption into two AffectedVehicleJourney blocks - the
+     * same dated journey, different stop lists per section. Guarding entry creation on the flat
+     * list's dedup return value dropped the second block entirely: its stops reached neither the
+     * entry, nor allStopRefs (so the stopRef filter could not find them), nor the matcher. The
+     * entries are built first and the flat lists derived from them, so a repeat merges.
+     */
+    @Test
+    public void testTwoBlocksNamingTheSameJourneyMergeIntoOneEntryCarryingBothStopLists() {
+        AffectedVehicleJourneyRecord first = new AffectedVehicleJourneyRecord();
+        first.setVehicleJourneyRefs(List.of());
+        first.setDatedVehicleJourneyRefs(List.of("VYG:DatedServiceJourney:1123"));
+        first.setRoutes(List.of(route(
+                affectedStop("NSR:StopPlace:157", "startPoint"),
+                affectedStop("NSR:StopPlace:152"))));
+
+        AffectedVehicleJourneyRecord second = new AffectedVehicleJourneyRecord();
+        second.setVehicleJourneyRefs(List.of());
+        second.setDatedVehicleJourneyRefs(List.of("VYG:DatedServiceJourney:1123"));
+        second.setRoutes(List.of(route(
+                // 152 repeats across the two blocks and must not be duplicated.
+                affectedStop("NSR:StopPlace:152"),
+                affectedStop("NSR:StopPlace:288", "destination"))));
+
+        AffectsRecord affectsRecord = new AffectsRecord();
+        affectsRecord.setNetworks(List.of());
+        affectsRecord.setStopPoints(List.of());
+        affectsRecord.setStopPlaces(List.of());
+        affectsRecord.setVehicleJourneys(List.of(first, second));
+
+        PtSituationElementRecord record = recordAffectingDatedServiceJourney("VYG:DatedServiceJourney:1123");
+        record.setAffects(affectsRecord);
+
+        SituationUpdate situation = mapper.map(record);
+
+        assertEquals(1, situation.getAffects().getVehicleJourneys().size(),
+                "one journey named twice is still one entry");
+        AffectedVehicleJourney entry = situation.getAffects().getVehicleJourneys().get(0);
+        assertEquals("VYG:DatedServiceJourney:1123", entry.getDatedServiceJourney().getId());
+        assertEquals(List.of("NSR:StopPlace:157", "NSR:StopPlace:152", "NSR:StopPlace:288"),
+                entry.getStops().stream().map(stop -> stop.getStop().getId()).toList(),
+                "the entry must carry the union of both blocks' stops, in first-seen order");
+        assertEquals(List.of(StopConditionEnumeration.destination),
+                entry.getStops().get(2).getStopConditions());
+
+        // The flat view is unchanged, and the second block's stops are now discoverable.
+        assertEquals(1, situation.getAffects().getDatedServiceJourneys().size());
+        assertEquals(3, situation.getAffects().getAllStopRefs().size(),
+                "a stop named only by the second block must still reach the stopRef filter");
+    }
+
+    /** The same for a line ref repeated across two AffectedNetwork blocks. */
+    @Test
+    public void testTwoNetworksNamingTheSameLineMergeIntoOneEntryCarryingBothStopLists() {
+        AffectedLineRecord firstLine = new AffectedLineRecord();
+        firstLine.setLineRef("TST:Line:1");
+        firstLine.setRoutes(List.of(route(affectedStop("NSR:StopPlace:157"))));
+        firstLine.setSections(List.of());
+
+        AffectedNetworkRecord firstNetwork = new AffectedNetworkRecord();
+        firstNetwork.setVehicleMode("bus");
+        firstNetwork.setAffectedLines(List.of(firstLine));
+        firstNetwork.setAffectedOperators(List.of());
+
+        AffectedLineRecord secondLine = new AffectedLineRecord();
+        secondLine.setLineRef("TST:Line:1");
+        secondLine.setRoutes(List.of(route(affectedStop("NSR:StopPlace:288"))));
+        secondLine.setSections(List.of());
+
+        AffectedNetworkRecord secondNetwork = new AffectedNetworkRecord();
+        secondNetwork.setVehicleMode("bus");
+        secondNetwork.setAffectedLines(List.of(secondLine));
+        secondNetwork.setAffectedOperators(List.of());
+
+        AffectsRecord affectsRecord = new AffectsRecord();
+        affectsRecord.setNetworks(List.of(firstNetwork, secondNetwork));
+        affectsRecord.setStopPoints(List.of());
+        affectsRecord.setStopPlaces(List.of());
+        affectsRecord.setVehicleJourneys(List.of());
+
+        PtSituationElementRecord record = recordAffectingDatedServiceJourney("VYG:DatedServiceJourney:1123");
+        record.setAffects(affectsRecord);
+
+        SituationUpdate situation = mapper.map(record);
+
+        assertEquals(1, situation.getAffects().getAffectedLines().size());
+        assertEquals(List.of("NSR:StopPlace:157", "NSR:StopPlace:288"),
+                situation.getAffects().getAffectedLines().get(0).getStops().stream()
+                        .map(stop -> stop.getStop().getId()).toList());
+        assertEquals(1, situation.getAffects().getLines().size(), "the flat line list still dedupes");
+        assertEquals(2, situation.getAffects().getAllStopRefs().size());
+    }
 }

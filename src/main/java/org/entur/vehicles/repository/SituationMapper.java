@@ -41,7 +41,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.entur.vehicles.repository.helpers.Util.containsValues;
 import static org.entur.vehicles.repository.helpers.Util.convert;
@@ -239,11 +241,30 @@ public class SituationMapper {
         return conditions;
     }
 
+    /**
+     * Entries first, flat lists derived from them.
+     * <p>
+     * The entries are accumulated into maps keyed by what identifies them - dated journey id,
+     * service journey id, line ref - rather than emitted inline, because one PtSituationElement
+     * may name the same journey or line in more than one block: a producer splitting a
+     * disruption into sections sends two AffectedVehicleJourney blocks for the same journey with
+     * a stop list each. Guarding entry creation on the flat list's dedup return value, as an
+     * earlier version did, dropped the second block whole - its stops reached neither the entry,
+     * nor {@code allStopRefs} (so the {@code stopRef} filter could not find them), nor the
+     * matcher. A repeated key merges instead, unioning the stops in first-seen order.
+     * <p>
+     * The flat {@code add*} calls are unchanged and still carry their own dedup: their contents
+     * are exactly what they were before this method grew entries. Only the use of their return
+     * value as a guard is gone.
+     */
     private Affects mapAffects(AffectsRecord record) {
         Affects affects = new Affects();
         if (record == null) {
             return affects;
         }
+
+        Map<String, LineEntry> lineEntries = new LinkedHashMap<>();
+        Map<String, JourneyEntry> journeyEntries = new LinkedHashMap<>();
 
         if (containsValues(record.getNetworks())) {
             for (AffectedNetworkRecord network : record.getNetworks()) {
@@ -252,8 +273,12 @@ public class SituationMapper {
                 if (containsValues(network.getAffectedLines())) {
                     for (AffectedLineRecord affectedLine : network.getAffectedLines()) {
                         Line line = resolveLine(asString(affectedLine.getLineRef()));
-                        if (affects.addLine(line)) {
-                            affects.addAffectedLine(new AffectedLine(line, mapRouteStops(affectedLine.getRoutes())));
+                        affects.addLine(line);
+                        if (line != null && line.getLineRef() != null) {
+                            lineEntries
+                                    .computeIfAbsent(line.getLineRef(), key -> new LineEntry(line, new StopUnion()))
+                                    .stops()
+                                    .add(mapRouteStops(affectedLine.getRoutes()));
                         }
                     }
                 }
@@ -297,40 +322,109 @@ public class SituationMapper {
                 // appears both as a bare ref and as a framed ref, whichever is added first
                 // wins. The framed ref carries the dataFrameRef date, so it must be added
                 // before the bare vehicleJourneyRefs - otherwise the date is silently lost.
-                // Entries are guarded on the same return value, so the duplicate does not
-                // produce a second entry for the same journey either.
+                // The entry map is keyed by the same id, so the framed entry likewise wins
+                // there and the bare ref only merges its stops into it.
                 if (journey.getFramedVehicleJourneyRef() != null
                         && journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef() != null) {
                     ServiceJourney serviceJourney = new ServiceJourney(
                             journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef().toString(),
                             asString(journey.getFramedVehicleJourneyRef().getDataFrameRef()));
-                    if (affects.addServiceJourney(serviceJourney)) {
-                        affects.addVehicleJourney(
-                                new AffectedVehicleJourney(serviceJourney, null, line, operator, stops));
-                    }
+                    affects.addServiceJourney(serviceJourney);
+                    journeyEntry(journeyEntries, serviceJourney.getId(), serviceJourney, null, line, operator)
+                            .add(stops);
                 }
                 if (containsValues(journey.getVehicleJourneyRefs())) {
                     for (CharSequence ref : journey.getVehicleJourneyRefs()) {
                         ServiceJourney serviceJourney = new ServiceJourney(ref.toString());
-                        if (affects.addServiceJourney(serviceJourney)) {
-                            affects.addVehicleJourney(
-                                    new AffectedVehicleJourney(serviceJourney, null, line, operator, stops));
-                        }
+                        affects.addServiceJourney(serviceJourney);
+                        journeyEntry(journeyEntries, serviceJourney.getId(), serviceJourney, null, line, operator)
+                                .add(stops);
                     }
                 }
                 if (containsValues(journey.getDatedVehicleJourneyRefs())) {
                     for (CharSequence ref : journey.getDatedVehicleJourneyRefs()) {
                         DatedServiceJourney dated = resolveDatedServiceJourney(ref.toString());
-                        if (affects.addDatedServiceJourney(dated)) {
-                            affects.addVehicleJourney(
-                                    new AffectedVehicleJourney(null, dated, line, operator, stops));
-                        }
+                        affects.addDatedServiceJourney(dated);
+                        journeyEntry(journeyEntries, dated.getId(), null, dated, line, operator)
+                                .add(stops);
                     }
                 }
             }
         }
 
+        for (JourneyEntry entry : journeyEntries.values()) {
+            affects.addVehicleJourney(new AffectedVehicleJourney(entry.serviceJourney(),
+                    entry.datedServiceJourney(), entry.line(), entry.operator(), entry.stops().stops()));
+        }
+        for (LineEntry entry : lineEntries.values()) {
+            affects.addAffectedLine(new AffectedLine(entry.line(), entry.stops().stops()));
+        }
+
         return affects;
+    }
+
+    /**
+     * The accumulator for one journey key. The first block naming a key fixes its line and
+     * operator - they are display context, and a producer contradicting itself between two blocks
+     * about the same journey has bigger problems than which of the two is shown.
+     */
+    private static StopUnion journeyEntry(Map<String, JourneyEntry> entries,
+                                          String key,
+                                          ServiceJourney serviceJourney,
+                                          DatedServiceJourney datedServiceJourney,
+                                          Line line,
+                                          Operator operator) {
+        return entries.computeIfAbsent(key,
+                        k -> new JourneyEntry(serviceJourney, datedServiceJourney, line, operator, new StopUnion()))
+                .stops();
+    }
+
+    private record JourneyEntry(ServiceJourney serviceJourney,
+                                DatedServiceJourney datedServiceJourney,
+                                Line line,
+                                Operator operator,
+                                StopUnion stops) {}
+
+    private record LineEntry(Line line, StopUnion stops) {}
+
+    /**
+     * The stops of one entry, accumulated across however many blocks name it.
+     * <p>
+     * The overwhelmingly common case is a single block, and then this holds that block's list
+     * directly - no copy, and every entry the record produces shares the one list. The merging
+     * map is allocated only when a key actually repeats.
+     */
+    private static final class StopUnion {
+
+        private List<AffectedStop> stops = List.of();
+        private LinkedHashMap<String, AffectedStop> merged;
+
+        void add(List<AffectedStop> more) {
+            if (more.isEmpty()) {
+                return;
+            }
+            if (merged == null && stops.isEmpty()) {
+                stops = more;
+                return;
+            }
+            if (merged == null) {
+                merged = new LinkedHashMap<>();
+                putAll(stops);
+            }
+            putAll(more);
+        }
+
+        private void putAll(List<AffectedStop> candidates) {
+            for (AffectedStop stop : candidates) {
+                // Deduplicated by stop id: two sections of one journey commonly share a boundary
+                // stop, and the entry must list it once. First seen wins, conditions included.
+                merged.putIfAbsent(stop.getStop() != null ? stop.getStop().getId() : null, stop);
+            }
+        }
+
+        List<AffectedStop> stops() {
+            return merged != null ? List.copyOf(merged.values()) : stops;
+        }
     }
 
     /**
