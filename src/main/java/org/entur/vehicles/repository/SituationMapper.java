@@ -278,7 +278,7 @@ public class SituationMapper {
                             lineEntries
                                     .computeIfAbsent(line.getLineRef(), key -> new LineEntry(line, new StopUnion()))
                                     .stops()
-                                    .add(mapRouteStops(affectedLine.getRoutes()));
+                                    .add(List.copyOf(mapRouteStops(affectedLine.getRoutes())));
                         }
                     }
                 }
@@ -315,8 +315,10 @@ public class SituationMapper {
 
                 // Shared by every entry this record produces: the producer nests one stop
                 // list per affected journey, and a record naming several journeys means all
-                // of them are affected at those same stops.
-                List<AffectedStop> stops = mapRouteStops(journey.getRoutes());
+                // of them are affected at those same stops. Wrapped immutably once here, so
+                // each entry's own List.copyOf is a no-op on it rather than an N-th copy of
+                // the same content.
+                List<AffectedStop> stops = List.copyOf(mapRouteStops(journey.getRoutes()));
 
                 // Affects.addServiceJourney dedupes on getId() alone, so when the same id
                 // appears both as a bare ref and as a framed ref, whichever is added first

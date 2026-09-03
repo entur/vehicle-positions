@@ -35,6 +35,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SituationMapperTest {
@@ -627,5 +628,37 @@ public class SituationMapperTest {
                         .map(stop -> stop.getStop().getId()).toList());
         assertEquals(1, situation.getAffects().getLines().size(), "the flat line list still dedupes");
         assertEquals(2, situation.getAffects().getAllStopRefs().size());
+    }
+
+    /**
+     * The stops of one record are wrapped immutably once at the call site, so every entry that
+     * record produces shares the one list instead of each copying it. mapRouteStops returns a
+     * fresh ArrayList, and every entry's own List.copyOf would otherwise copy it again - N copies
+     * of the same content for a record naming N journeys.
+     */
+    @Test
+    public void testEveryEntryOfOneRecordSharesTheSameStopListInstance() {
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setVehicleJourneyRefs(List.of());
+        journey.setDatedVehicleJourneyRefs(
+                List.of("VYG:DatedServiceJourney:1", "VYG:DatedServiceJourney:2"));
+        journey.setRoutes(List.of(route(
+                affectedStop("NSR:StopPlace:157"), affectedStop("NSR:StopPlace:288"))));
+
+        AffectsRecord affectsRecord = new AffectsRecord();
+        affectsRecord.setNetworks(List.of());
+        affectsRecord.setStopPoints(List.of());
+        affectsRecord.setStopPlaces(List.of());
+        affectsRecord.setVehicleJourneys(List.of(journey));
+
+        PtSituationElementRecord record = recordAffectingDatedServiceJourney("VYG:DatedServiceJourney:1");
+        record.setAffects(affectsRecord);
+
+        SituationUpdate situation = mapper.map(record);
+
+        List<AffectedVehicleJourney> entries = situation.getAffects().getVehicleJourneys();
+        assertEquals(2, entries.size());
+        assertSame(entries.get(0).getStops(), entries.get(1).getStops(),
+                "one record's entries must share one immutable stop list, not copy it per entry");
     }
 }

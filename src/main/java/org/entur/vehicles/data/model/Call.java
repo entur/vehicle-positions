@@ -30,8 +30,16 @@ public class Call {
     /**
      * The journey this call belongs to, set by {@link org.entur.vehicles.data.EstimatedTimetableUpdate#addCall}.
      * Read by SituationMatcher so a stop scoped to a journey can be checked against the call's
-     * own journey. Deliberately not part of the GraphQL schema, and deliberately excluded from
-     * equals/hashCode/toString - it is a back-reference, and including it would recurse.
+     * own journey. Deliberately not part of the GraphQL schema.
+     * <p>
+     * There is nothing to exclude it from: {@code Call} declares no equals, hashCode or toString
+     * and so is compared by identity, inherited from Object. That is load-bearing rather than an
+     * oversight - the {@code Call.situations} {@code @BatchMapping} keys its DataLoader on the
+     * Call objects themselves, so two calls of one journey at the same stop must stay distinct
+     * keys and receive their own answers. Giving this class value equality would collapse them,
+     * and adding this back-reference to it would recurse besides. See
+     * {@code GraphQlBatchLoaderConfiguration} for what value equality on a batch key already cost
+     * on the {@code EstimatedTimetableUpdate} side.
      */
     private EstimatedTimetableUpdate owner;
 
