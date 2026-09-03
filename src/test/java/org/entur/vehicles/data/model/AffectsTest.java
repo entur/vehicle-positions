@@ -1,11 +1,15 @@
 package org.entur.vehicles.data.model;
 
+import org.entur.vehicles.data.StopConditionEnumeration;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class AffectsTest {
 
@@ -76,5 +80,56 @@ public class AffectsTest {
         affects.addVehicleMode(null);
 
         assertTrue(affects.isEmpty());
+    }
+
+    @Test
+    public void testScopedStopsReachAllStopRefsButNotStopRefs() {
+        Affects affects = new Affects();
+        affects.addStopPlace(new StopPoint("NSR:StopPlace:top"));
+
+        AffectedStop scoped = new AffectedStop(new StopPoint("NSR:StopPlace:157"),
+                List.of(StopConditionEnumeration.startPoint, StopConditionEnumeration.notStopping));
+        affects.addVehicleJourney(new AffectedVehicleJourney(
+                null, new DatedServiceJourney("TST:DatedServiceJourney:1"), null, null, List.of(scoped)));
+
+        // The matcher's set stays top-level only - widening it would re-create the
+        // over-matching this change exists to fix.
+        assertThat(affects.getStopRefs()).containsExactly("NSR:StopPlace:top");
+        // The filter's set is the union, so filtering by stop still finds the situation.
+        assertThat(affects.getAllStopRefs())
+                .containsExactlyInAnyOrder("NSR:StopPlace:top", "NSR:StopPlace:157");
+        // The flat display lists are top-level only too.
+        assertThat(affects.getStopPlaces()).hasSize(1);
+
+        assertThat(affects.getVehicleJourneys()).hasSize(1);
+        AffectedVehicleJourney entry = affects.getVehicleJourneys().get(0);
+        assertThat(entry.getDatedServiceJourney().getId()).isEqualTo("TST:DatedServiceJourney:1");
+        assertThat(entry.getStops()).hasSize(1);
+        assertThat(entry.getStops().get(0).getStopConditions())
+                .containsExactly(StopConditionEnumeration.startPoint, StopConditionEnumeration.notStopping);
+    }
+
+    @Test
+    public void testAffectedLineEntryCarriesItsOwnStops() {
+        Affects affects = new Affects();
+        Line line = new Line("TST:Line:1");
+        assertThat(affects.addLine(line)).isTrue();
+        assertThat(affects.addLine(line)).isFalse();
+
+        affects.addAffectedLine(new AffectedLine(line,
+                List.of(new AffectedStop(new StopPoint("NSR:StopPlace:288"), List.of()))));
+
+        assertThat(affects.getAffectedLines()).hasSize(1);
+        assertThat(affects.getAffectedLines().get(0).getLine().getLineRef()).isEqualTo("TST:Line:1");
+        assertThat(affects.getAllStopRefs()).containsExactly("NSR:StopPlace:288");
+        assertThat(affects.getStopRefs()).isEmpty();
+    }
+
+    @Test
+    public void testStopConditionFromValueIsNullForUnknownValues() {
+        assertThat(StopConditionEnumeration.fromValue("startPoint"))
+                .isEqualTo(StopConditionEnumeration.startPoint);
+        assertThat(StopConditionEnumeration.fromValue("somethingElse")).isNull();
+        assertThat(StopConditionEnumeration.fromValue(null)).isNull();
     }
 }
