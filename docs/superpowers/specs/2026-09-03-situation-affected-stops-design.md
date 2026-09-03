@@ -343,9 +343,11 @@ ref that resolves to nothing yields a bare `StopPoint` with just the ref, and a 
 whose codespace cannot be resolved is still skipped whole.
 
 `Polyline.stitch` skips links without geometry, leaving a gap rather than breaking the
-sequence. A projection can therefore snap across such a hole. This is pre-existing
-behaviour of the stitched geometry, not introduced here, and it is logged at debug when a
-chosen window spans one.
+sequence. A projection can therefore snap across such a hole, and a cut window can silently
+span one. This is pre-existing behaviour of the stitched geometry, not introduced here, and
+it cannot be detected on this path: projection is what frees us from extracting the pattern's
+stop sequence, and without that sequence there is no link boundary to test a window against.
+It is called out here as a known limit, not handled.
 
 ## Testing
 
