@@ -3,6 +3,7 @@ package org.entur.vehicles.data.model;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * One journey a situation names, with the stops it is affected at.
@@ -54,5 +55,45 @@ public class AffectedVehicleJourney {
 
     public List<AffectedStop> getStops() {
         return stops;
+    }
+
+    /**
+     * Value equality on identifiers - the service journey id, the dated service journey id, the
+     * line ref and the stops - never on the nested model objects. StopPoint, ServiceJourney and
+     * DatedServiceJourney all inherit ObjectRef.equals, which compares the bare ref across
+     * unrelated subtypes and ignores everything else, so delegating to them would compare
+     * something other than what it appears to. Operator is ignored outright: it is display
+     * context on an entry that is identified by its journey.
+     * <p>
+     * Exists so {@code SituationTriggeredRepublisher.affectsUnchanged} can see an edit to the
+     * stops nested inside an entry. Getting this wrong in the other direction - identity
+     * equality - would make every redelivery look changed and turn the republisher into a storm,
+     * so it is deliberately defined here rather than left to the default. Safe because this type
+     * is immutable.
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof AffectedVehicleJourney other)) {
+            return false;
+        }
+        return Objects.equals(serviceJourney != null ? serviceJourney.getId() : null,
+                        other.serviceJourney != null ? other.serviceJourney.getId() : null)
+                && Objects.equals(datedServiceJourney != null ? datedServiceJourney.getId() : null,
+                        other.datedServiceJourney != null ? other.datedServiceJourney.getId() : null)
+                && Objects.equals(line != null ? line.getLineRef() : null,
+                        other.line != null ? other.line.getLineRef() : null)
+                && stops.equals(other.stops);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                serviceJourney != null ? serviceJourney.getId() : null,
+                datedServiceJourney != null ? datedServiceJourney.getId() : null,
+                line != null ? line.getLineRef() : null,
+                stops);
     }
 }

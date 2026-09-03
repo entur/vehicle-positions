@@ -7,7 +7,11 @@ import org.entur.vehicles.data.MetricType;
 import org.entur.vehicles.data.QueryFilter;
 import org.entur.vehicles.data.SeverityEnumeration;
 import org.entur.vehicles.data.SituationUpdate;
+import org.entur.vehicles.data.StopConditionEnumeration;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
+import org.entur.vehicles.data.model.AffectedLine;
+import org.entur.vehicles.data.model.AffectedStop;
+import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.Call;
 import org.entur.vehicles.data.model.Codespace;
@@ -494,6 +498,117 @@ public class SituationTriggeredRepublisherTest {
     }
 
     /**
+     * The branch that made nested stops affect matching also made them client-visible
+     * ({@code affects { vehicleJourneys { stops } }}) and match-relevant (SituationMatcher's
+     * scoped index). A producer that edits only the stops nested inside a journey entry - the
+     * flat lines/journeys/stops sets untouched - must still schedule work, or a subscriber keeps
+     * the situation on the wrong field (journey level rather than {@code calls { situations }})
+     * indefinitely.
+     */
+    @Test
+    public void testANestedAffectedStopChangeStillSchedulesWork() {
+        SituationUpdate previous = situation();
+        previous.setProgress(WorkflowStatusEnumeration.published);
+        previous.getAffects().addLine(new Line("TST:Line:1"));
+        previous.getAffects().addVehicleJourney(affectedJourney("NSR:StopPlace:1"));
+
+        SituationUpdate current = situation();
+        current.setProgress(WorkflowStatusEnumeration.published);
+        current.getAffects().addLine(new Line("TST:Line:1"));
+        current.getAffects().addVehicleJourney(affectedJourney("NSR:StopPlace:1", "NSR:StopPlace:2"));
+
+        republisher.onSituationChanged(previous, current);
+
+        assertThat(republisher.takePending())
+                .withFailMessage("adding a stop inside an affected journey changes both what the "
+                        + "client sees and what the matcher scopes, so it must schedule work")
+                .containsExactly("TST:Line:1");
+    }
+
+    /** Same, for a change confined to one nested stop's conditions. */
+    @Test
+    public void testANestedStopConditionChangeStillSchedulesWork() {
+        SituationUpdate previous = situation();
+        previous.setProgress(WorkflowStatusEnumeration.published);
+        previous.getAffects().addLine(new Line("TST:Line:1"));
+        previous.getAffects().addVehicleJourney(new AffectedVehicleJourney(
+                new ServiceJourney("TST:ServiceJourney:1"), null, new Line("TST:Line:1"), null,
+                List.of(new AffectedStop(new StopPoint("NSR:StopPlace:1"),
+                        List.of(StopConditionEnumeration.startPoint)))));
+
+        SituationUpdate current = situation();
+        current.setProgress(WorkflowStatusEnumeration.published);
+        current.getAffects().addLine(new Line("TST:Line:1"));
+        current.getAffects().addVehicleJourney(new AffectedVehicleJourney(
+                new ServiceJourney("TST:ServiceJourney:1"), null, new Line("TST:Line:1"), null,
+                List.of(new AffectedStop(new StopPoint("NSR:StopPlace:1"),
+                        List.of(StopConditionEnumeration.notStopping)))));
+
+        republisher.onSituationChanged(previous, current);
+
+        assertThat(republisher.takePending())
+                .withFailMessage("a stop condition is serialized to the client, so changing it must "
+                        + "schedule work")
+                .containsExactly("TST:Line:1");
+    }
+
+    /** The counterpart: identical entries must still read as an unchanged redelivery. */
+    @Test
+    public void testIdenticalNestedStopsAreStillAnUnchangedRedelivery() {
+        SituationUpdate previous = situation();
+        previous.setProgress(WorkflowStatusEnumeration.published);
+        previous.getAffects().addLine(new Line("TST:Line:1"));
+        previous.getAffects().addVehicleJourney(affectedJourney("NSR:StopPlace:1", "NSR:StopPlace:2"));
+        previous.getAffects().addAffectedLine(new AffectedLine(new Line("TST:Line:1"),
+                List.of(new AffectedStop(new StopPoint("NSR:StopPlace:1"), List.of()))));
+
+        SituationUpdate current = situation();
+        current.setProgress(WorkflowStatusEnumeration.published);
+        current.getAffects().addLine(new Line("TST:Line:1"));
+        current.getAffects().addVehicleJourney(affectedJourney("NSR:StopPlace:1", "NSR:StopPlace:2"));
+        current.getAffects().addAffectedLine(new AffectedLine(new Line("TST:Line:1"),
+                List.of(new AffectedStop(new StopPoint("NSR:StopPlace:1"), List.of()))));
+
+        republisher.onSituationChanged(previous, current);
+
+        assertThat(republisher.takePending())
+                .withFailMessage("equal entries must compare equal by identifier, or every "
+                        + "redelivery of a stop-tagged situation becomes a republish storm")
+                .isEmpty();
+    }
+
+    /** A change to an AffectedLine entry's stops is as client-visible as a journey entry's. */
+    @Test
+    public void testANestedAffectedLineStopChangeStillSchedulesWork() {
+        SituationUpdate previous = situation();
+        previous.setProgress(WorkflowStatusEnumeration.published);
+        previous.getAffects().addLine(new Line("TST:Line:1"));
+        previous.getAffects().addAffectedLine(new AffectedLine(new Line("TST:Line:1"),
+                List.of(new AffectedStop(new StopPoint("NSR:StopPlace:1"), List.of()))));
+
+        SituationUpdate current = situation();
+        current.setProgress(WorkflowStatusEnumeration.published);
+        current.getAffects().addLine(new Line("TST:Line:1"));
+        current.getAffects().addAffectedLine(new AffectedLine(new Line("TST:Line:1"),
+                List.of(new AffectedStop(new StopPoint("NSR:StopPlace:2"), List.of()))));
+
+        republisher.onSituationChanged(previous, current);
+
+        assertThat(republisher.takePending())
+                .withFailMessage("a change to the stops nested under an affected line must schedule work")
+                .containsExactly("TST:Line:1");
+    }
+
+    private AffectedVehicleJourney affectedJourney(String... stopRefs) {
+        List<AffectedStop> stops = new ArrayList<>();
+        for (String stopRef : stopRefs) {
+            stops.add(new AffectedStop(new StopPoint(stopRef), List.of()));
+        }
+        return new AffectedVehicleJourney(new ServiceJourney("TST:ServiceJourney:1"), null,
+                new Line("TST:Line:1"), null, stops);
+    }
+
+    /**
      * Enumerates every public, zero-arg getter on {@code SituationUpdate} and requires each one
      * to be accounted for: either named in {@link #COMPARED_GETTERS} (and actually compared by
      * {@code isUnchangedRedelivery} - see the severity/summary tests above and the existing
@@ -522,6 +637,51 @@ public class SituationTriggeredRepublisherTest {
                         + "with a reason otherwise")
                 .isEqualTo(accounted);
     }
+
+    /**
+     * The same guard, one level down. {@code isUnchangedRedelivery} delegates the whole of
+     * {@code getAffects()} to {@code affectsUnchanged}, which compares {@code Affects} getter by
+     * getter - so a getter added to {@code Affects} is exactly as invisible to the predicate as
+     * one added to {@code SituationUpdate}. It has already happened once: the two entry lists this
+     * branch added were not compared, so a producer editing only the stops nested inside a journey
+     * scheduled nothing. Enumerating only {@code SituationUpdate} is why that slipped through.
+     */
+    @Test
+    public void testEveryClientVisibleGetterOnAffectsIsAccountedFor() {
+        Set<String> getters = Arrays.stream(Affects.class.getMethods())
+                .filter(m -> m.getDeclaringClass() == Affects.class)
+                .filter(m -> m.getParameterCount() == 0)
+                .filter(m -> m.getName().startsWith("get") || m.getName().startsWith("is"))
+                .map(Method::getName)
+                .collect(Collectors.toSet());
+
+        Set<String> accounted = new HashSet<>(COMPARED_AFFECTS_GETTERS);
+        accounted.addAll(IGNORED_AFFECTS_GETTERS.keySet());
+
+        assertThat(getters)
+                .withFailMessage("a getter was added to (or removed from) Affects that this test "
+                        + "does not know about - add it to COMPARED_AFFECTS_GETTERS (and to "
+                        + "SituationTriggeredRepublisher.affectsUnchanged) if it is client-visible, "
+                        + "or to IGNORED_AFFECTS_GETTERS with a reason otherwise")
+                .isEqualTo(accounted);
+    }
+
+    /** Getters on {@code Affects} compared by {@code affectsUnchanged}. */
+    private static final Set<String> COMPARED_AFFECTS_GETTERS = Set.of(
+            "getLines", "getStopPoints", "getStopPlaces", "getServiceJourneys",
+            "getDatedServiceJourneys", "getOperators", "getVehicleModes", "getVehicleJourneys",
+            "getAffectedLines");
+
+    /** Getters on {@code Affects} deliberately not compared, and why. */
+    private static final Map<String, String> IGNORED_AFFECTS_GETTERS = Map.of(
+            "getLineRefs", "the ids of getLines(), which is compared directly",
+            "getStopRefs", "the ids of getStopPoints() + getStopPlaces(), both compared directly",
+            "getServiceJourneyIds", "the ids of getServiceJourneys(), which is compared directly",
+            "getDatedServiceJourneyIds", "the ids of getDatedServiceJourneys(), compared directly",
+            "getOperatorRefs", "the ids of getOperators(), which is compared directly",
+            "getAllStopRefs", "getStopRefs() union the ids of the stops inside getVehicleJourneys() "
+                    + "and getAffectedLines() - every one of those is compared directly",
+            "isEmpty", "a derived predicate over the flat lists, all of which are compared directly");
 
     /** Client-visible getters compared by {@code SituationTriggeredRepublisher.isUnchangedRedelivery}. */
     private static final Set<String> COMPARED_GETTERS = Set.of(
