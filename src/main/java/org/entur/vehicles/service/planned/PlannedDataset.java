@@ -248,8 +248,23 @@ public final class PlannedDataset {
         return result == NO_GEOMETRY ? null : result;
     }
 
-    private PointsOnLink buildPointsOnLink(String journeyPatternId) {
+    /**
+     * The route geometry of a journey pattern as interleaved lat/lon microdegrees, stitched
+     * from its service links. Empty when the pattern is unknown or none of its links carry
+     * geometry; never null.
+     * <p>
+     * Deliberately not cached: this is built per request on the situation path, which is rare
+     * next to ingestion, and caching the arrays alongside the encoded strings in
+     * {@code patternPolylines} would double that memory for no steady-state gain.
+     */
+    public int[] stitchedGeometry(String journeyPatternId) {
+        if (journeyPatternId == null) {
+            return new int[0];
+        }
         String[] linkIds = patternLinks.get(journeyPatternId);
+        if (linkIds == null) {
+            return new int[0];
+        }
         List<int[]> geometries = new ArrayList<>(linkIds.length);
         for (String linkId : linkIds) {
             int[] geometry = linkGeometry.get(linkId);
@@ -257,7 +272,11 @@ public final class PlannedDataset {
                 geometries.add(geometry);
             }
         }
-        int[] stitched = Polyline.stitch(geometries);
+        return Polyline.stitch(geometries);
+    }
+
+    private PointsOnLink buildPointsOnLink(String journeyPatternId) {
+        int[] stitched = stitchedGeometry(journeyPatternId);
         if (stitched.length == 0) {
             return NO_GEOMETRY;
         }
