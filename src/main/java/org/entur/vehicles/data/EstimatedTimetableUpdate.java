@@ -137,11 +137,14 @@ public class EstimatedTimetableUpdate extends AbstractUpdate {
       return calls;
   }
 
-  public void addCall(Call calls) {
+  public void addCall(Call call) {
       if (this.calls == null) {
           this.calls = new ArrayList<>();
       }
-          this.calls.add(calls);
+      // The single funnel every construction path goes through - TimetableRepository and the
+      // tests alike - so setting the back-reference here covers all of them.
+      call.setOwner(this);
+      this.calls.add(call);
   }
 
   public enum CallType { RECORDED, ESTIMATED}

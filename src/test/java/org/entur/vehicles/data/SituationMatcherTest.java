@@ -1,6 +1,9 @@
 package org.entur.vehicles.data;
 
 import org.entur.vehicles.data.model.Affects;
+import org.entur.vehicles.data.model.AffectedLine;
+import org.entur.vehicles.data.model.AffectedStop;
+import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.Call;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
@@ -11,6 +14,7 @@ import org.entur.vehicles.data.model.ValidityPeriod;
 import org.junit.jupiter.api.Test;
 
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -396,5 +400,138 @@ public class SituationMatcherTest {
                 .withFailMessage("with NSR lookup disabled there is no hierarchy, so matching must "
                         + "fall back to literal stop ids exactly as it does today")
                 .isEmpty();
+    }
+
+    private AffectedVehicleJourney journeyEntry(String datedServiceJourneyId, String... stopRefs) {
+        List<AffectedStop> stops = new ArrayList<>();
+        for (String stopRef : stopRefs) {
+            stops.add(new AffectedStop(new StopPoint(stopRef), List.of()));
+        }
+        return new AffectedVehicleJourney(
+                null, new DatedServiceJourney(datedServiceJourneyId), null, null, stops);
+    }
+
+    private EstimatedTimetableUpdate datedTimetable(String lineRef,
+                                                    String serviceJourneyId,
+                                                    String datedServiceJourneyId,
+                                                    Call... calls) {
+        EstimatedTimetableUpdate timetable = timetable(lineRef, serviceJourneyId, calls);
+        timetable.setDatedServiceJourney(new DatedServiceJourney(
+                datedServiceJourneyId, new ServiceJourney(serviceJourneyId)));
+        return timetable;
+    }
+
+    /**
+     * The whole point of the change: a situation naming journey A *at* a stop must not attach
+     * to journey B's call at that same stop. Before scoped matching this was a flat stop-ref
+     * lookup, so every journey calling there picked it up.
+     */
+    @Test
+    public void testAStopScopedToOneJourneyDoesNotMatchAnotherJourneysCallThere() {
+        SituationUpdate situation = situation("TST:SituationNumber:scoped");
+        situation.getAffects().addDatedServiceJourney(new DatedServiceJourney("TST:DatedServiceJourney:A"));
+        situation.getAffects().addVehicleJourney(
+                journeyEntry("TST:DatedServiceJourney:A", "NSR:Quay:1", "NSR:Quay:2"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(situation));
+
+        Call ownCall = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+        datedTimetable("TST:Line:1", "TST:ServiceJourney:A", "TST:DatedServiceJourney:A", ownCall);
+        assertThat(matcher.match(ownCall))
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:scoped");
+
+        Call foreignCall = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+        datedTimetable("TST:Line:2", "TST:ServiceJourney:B", "TST:DatedServiceJourney:B", foreignCall);
+        assertThat(matcher.match(foreignCall)).isEmpty();
+    }
+
+    /** A top-level stop is unscoped and keeps matching any journey calling there. */
+    @Test
+    public void testAnUnscopedStopStillMatchesAnyJourney() {
+        SituationUpdate situation = situation("TST:SituationNumber:unscoped");
+        situation.getAffects().addStopPoint(new StopPoint("NSR:Quay:1"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(situation));
+
+        Call foreignCall = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+        datedTimetable("TST:Line:2", "TST:ServiceJourney:B", "TST:DatedServiceJourney:B", foreignCall);
+        assertThat(matcher.match(foreignCall))
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:unscoped");
+    }
+
+    /**
+     * The safety net: an entry whose stops the journey never calls at keeps the situation on
+     * the journey rather than dropping it. Nothing is removed because nothing matched a call.
+     */
+    @Test
+    public void testAScopedEntryMatchingNoCallStaysOnTheJourney() {
+        SituationUpdate situation = situation("TST:SituationNumber:elsewhere-on-this-journey");
+        situation.getAffects().addDatedServiceJourney(new DatedServiceJourney("TST:DatedServiceJourney:A"));
+        situation.getAffects().addVehicleJourney(
+                journeyEntry("TST:DatedServiceJourney:A", "NSR:Quay:not-called-at"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(situation));
+
+        EstimatedTimetableUpdate timetable = datedTimetable("TST:Line:1", "TST:ServiceJourney:A",
+                "TST:DatedServiceJourney:A", call("NSR:Quay:1", noon, noon.plusMinutes(1)));
+
+        assertThat(matcher.match(timetable))
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:elsewhere-on-this-journey");
+    }
+
+    /** A scoped stop matched through the hierarchy: situation on the stop place, call on a quay. */
+    @Test
+    public void testAScopedStopMatchesThroughTheAncestorClimb() {
+        SituationUpdate situation = situation("TST:SituationNumber:scoped-place");
+        situation.getAffects().addDatedServiceJourney(new DatedServiceJourney("TST:DatedServiceJourney:A"));
+        situation.getAffects().addVehicleJourney(
+                journeyEntry("TST:DatedServiceJourney:A", "NSR:StopPlace:157"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(situation),
+                ref -> "NSR:Quay:1".equals(ref) ? Set.of("NSR:StopPlace:157") : Set.of());
+
+        Call ownCall = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+        datedTimetable("TST:Line:1", "TST:ServiceJourney:A", "TST:DatedServiceJourney:A", ownCall);
+
+        assertThat(matcher.match(ownCall))
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:scoped-place");
+    }
+
+    /** A line entry's stops scope to that line, not to one journey. */
+    @Test
+    public void testALineEntrysStopsMatchAnyJourneyOnThatLineOnly() {
+        SituationUpdate situation = situation("TST:SituationNumber:line-scoped");
+        Line line = new Line("TST:Line:1");
+        situation.getAffects().addLine(line);
+        situation.getAffects().addAffectedLine(new AffectedLine(line,
+                List.of(new AffectedStop(new StopPoint("NSR:Quay:1"), List.of()))));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(situation));
+
+        Call onLine = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+        datedTimetable("TST:Line:1", "TST:ServiceJourney:A", "TST:DatedServiceJourney:A", onLine);
+        assertThat(matcher.match(onLine))
+                .extracting(SituationUpdate::getSituationNumber)
+                .containsExactly("TST:SituationNumber:line-scoped");
+
+        Call offLine = call("NSR:Quay:1", noon, noon.plusMinutes(1));
+        datedTimetable("TST:Line:2", "TST:ServiceJourney:B", "TST:DatedServiceJourney:B", offLine);
+        assertThat(matcher.match(offLine)).isEmpty();
+    }
+
+    /** A call never added to a journey has no owner; the scoped rule must not throw. */
+    @Test
+    public void testACallWithNoOwnerIsSafe() {
+        SituationUpdate situation = situation("TST:SituationNumber:scoped");
+        situation.getAffects().addDatedServiceJourney(new DatedServiceJourney("TST:DatedServiceJourney:A"));
+        situation.getAffects().addVehicleJourney(journeyEntry("TST:DatedServiceJourney:A", "NSR:Quay:1"));
+
+        SituationMatcher matcher = new SituationMatcher(List.of(situation));
+
+        assertThat(matcher.match(call("NSR:Quay:1", noon, noon.plusMinutes(1)))).isEmpty();
     }
 }

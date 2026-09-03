@@ -1,13 +1,18 @@
 package org.entur.vehicles.data;
 
 import org.entur.vehicles.data.model.Affects;
+import org.entur.vehicles.data.model.AffectedLine;
+import org.entur.vehicles.data.model.AffectedStop;
+import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.Call;
 import org.entur.vehicles.data.model.Codespace;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +36,19 @@ public class SituationMatcher {
     private final Map<String, List<SituationUpdate>> byStopRef = new HashMap<>();
     private final Map<String, List<SituationUpdate>> byServiceJourneyId = new HashMap<>();
     private final Map<String, List<SituationUpdate>> byDatedServiceJourneyId = new HashMap<>();
+
+    /**
+     * Stops that only apply to the object they were nested under, keyed by that object's
+     * service journey id, dated service journey id or line ref.
+     * <p>
+     * A journey entry is keyed by its journey refs only, never by its line: the line on an
+     * AffectedVehicleJourney is context for display, and keying on it would widen the
+     * situation back to every journey on that line - the exact over-matching this index exists
+     * to remove. Only an AffectedLine entry is keyed by line.
+     */
+    private final Map<String, List<ScopedStops>> scopedByObject = new HashMap<>();
+
+    private record ScopedStops(SituationUpdate situation, Set<String> stopRefs) {}
 
     private final Function<String, Set<String>> ancestorResolver;
 
@@ -64,6 +82,7 @@ public class SituationMatcher {
             index(byStopRef, affects.getStopRefs(), situation);
             index(byServiceJourneyId, affects.getServiceJourneyIds(), situation);
             index(byDatedServiceJourneyId, affects.getDatedServiceJourneyIds(), situation);
+            indexScoped(situation, affects);
         }
     }
 
@@ -73,6 +92,42 @@ public class SituationMatcher {
         for (String ref : refs) {
             target.computeIfAbsent(ref, key -> new ArrayList<>()).add(situation);
         }
+    }
+
+    private void indexScoped(SituationUpdate situation, Affects affects) {
+        for (AffectedVehicleJourney journey : affects.getVehicleJourneys()) {
+            Set<String> stopRefs = stopRefsOf(journey.getStops());
+            if (stopRefs.isEmpty()) {
+                // No stops means the journey is affected as a whole - journey-level matching
+                // through the flat id sets already covers it.
+                continue;
+            }
+            ScopedStops scoped = new ScopedStops(situation, stopRefs);
+            if (journey.getServiceJourney() != null && journey.getServiceJourney().getId() != null) {
+                scopedByObject.computeIfAbsent(journey.getServiceJourney().getId(), key -> new ArrayList<>()).add(scoped);
+            }
+            if (journey.getDatedServiceJourney() != null && journey.getDatedServiceJourney().getId() != null) {
+                scopedByObject.computeIfAbsent(journey.getDatedServiceJourney().getId(), key -> new ArrayList<>()).add(scoped);
+            }
+        }
+        for (AffectedLine affectedLine : affects.getAffectedLines()) {
+            Set<String> stopRefs = stopRefsOf(affectedLine.getStops());
+            if (stopRefs.isEmpty() || affectedLine.getLine() == null || affectedLine.getLine().getLineRef() == null) {
+                continue;
+            }
+            scopedByObject.computeIfAbsent(affectedLine.getLine().getLineRef(), key -> new ArrayList<>())
+                    .add(new ScopedStops(situation, stopRefs));
+        }
+    }
+
+    private static Set<String> stopRefsOf(List<AffectedStop> stops) {
+        Set<String> refs = new HashSet<>();
+        for (AffectedStop stop : stops) {
+            if (stop.getStop() != null && stop.getStop().getId() != null) {
+                refs.add(stop.getStop().getId());
+            }
+        }
+        return refs;
     }
 
     /**
@@ -123,6 +178,11 @@ public class SituationMatcher {
         // Skipping the walk when nothing matched at journey level is a pure shortcut: the loop
         // body only removes, so it cannot change an empty result. Revisit if match(Call) ever
         // gains a side effect.
+        //
+        // Still safe with scoped matching: a scoped match requires an entry naming this call's
+        // journey, dated journey or line, and every such ref is also in the flat id sets that
+        // drove the journey-level pass above. So match(Call) cannot return a situation the
+        // journey did not already match, and skipping the loop on an empty result loses nothing.
         if (calls != null && !matched.isEmpty()) {
             for (Call call : calls) {
                 for (SituationUpdate situation : match(call)) {
@@ -152,12 +212,57 @@ public class SituationMatcher {
             return List.of();
         }
         String stopId = call.getStopPoint().getId();
+        Set<String> ancestors = ancestorResolver.apply(stopId);
         Map<Identity, SituationUpdate> matched = new LinkedHashMap<>();
         collect(byStopRef.get(stopId), call.getWindowStart(), call.getWindowEnd(), matched);
-        for (String ancestor : ancestorResolver.apply(stopId)) {
+        for (String ancestor : ancestors) {
             collect(byStopRef.get(ancestor), call.getWindowStart(), call.getWindowEnd(), matched);
         }
+        collectScoped(call, stopId, ancestors, matched);
         return new ArrayList<>(matched.values());
+    }
+
+    /**
+     * Situations whose stops were nested under this call's own journey, dated journey or line.
+     * The temporal rule is the same as for an unscoped stop: the situation still has to be in
+     * force while the vehicle is at this call.
+     */
+    private void collectScoped(Call call,
+                               String stopId,
+                               Set<String> ancestors,
+                               Map<Identity, SituationUpdate> matched) {
+        EstimatedTimetableUpdate owner = call.getOwner();
+        if (owner == null) {
+            return;
+        }
+        if (owner.getServiceJourney() != null) {
+            collectScopedFor(owner.getServiceJourney().getId(), call, stopId, ancestors, matched);
+        }
+        if (owner.getDatedServiceJourney() != null) {
+            collectScopedFor(owner.getDatedServiceJourney().getId(), call, stopId, ancestors, matched);
+        }
+        if (owner.getLine() != null) {
+            collectScopedFor(owner.getLine().getLineRef(), call, stopId, ancestors, matched);
+        }
+    }
+
+    private void collectScopedFor(String key,
+                                  Call call,
+                                  String stopId,
+                                  Set<String> ancestors,
+                                  Map<Identity, SituationUpdate> matched) {
+        if (key == null) {
+            return;
+        }
+        List<ScopedStops> candidates = scopedByObject.get(key);
+        if (candidates == null) {
+            return;
+        }
+        for (ScopedStops scoped : candidates) {
+            if (scoped.stopRefs().contains(stopId) || !Collections.disjoint(scoped.stopRefs(), ancestors)) {
+                collect(List.of(scoped.situation()), call.getWindowStart(), call.getWindowEnd(), matched);
+            }
+        }
     }
 
     private static void collect(List<SituationUpdate> candidates,

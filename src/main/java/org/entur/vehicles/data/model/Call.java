@@ -27,6 +27,22 @@ public class Call {
     private String arrivalBoardingActivity;
     private String departureBoardingActivity;
 
+    /**
+     * The journey this call belongs to, set by {@link org.entur.vehicles.data.EstimatedTimetableUpdate#addCall}.
+     * Read by SituationMatcher so a stop scoped to a journey can be checked against the call's
+     * own journey. Deliberately not part of the GraphQL schema, and deliberately excluded from
+     * equals/hashCode/toString - it is a back-reference, and including it would recurse.
+     */
+    private EstimatedTimetableUpdate owner;
+
+    public EstimatedTimetableUpdate getOwner() {
+        return owner;
+    }
+
+    public void setOwner(EstimatedTimetableUpdate owner) {
+        this.owner = owner;
+    }
+
     public StopPoint getStopPoint() {
         return stopPoint;
     }
