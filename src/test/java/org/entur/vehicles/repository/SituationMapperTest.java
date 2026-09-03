@@ -3,17 +3,21 @@ package org.entur.vehicles.repository;
 import org.entur.avro.realtime.siri.model.AffectedLineRecord;
 import org.entur.avro.realtime.siri.model.AffectedNetworkRecord;
 import org.entur.avro.realtime.siri.model.AffectedOperatorRecord;
+import org.entur.avro.realtime.siri.model.AffectedRouteRecord;
 import org.entur.avro.realtime.siri.model.AffectedStopPlaceRecord;
 import org.entur.avro.realtime.siri.model.AffectedStopPointRecord;
 import org.entur.avro.realtime.siri.model.AffectedVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.AffectsRecord;
 import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
+import org.entur.avro.realtime.siri.model.StopPointsRecord;
 import org.entur.avro.realtime.siri.model.TranslatedStringRecord;
 import org.entur.avro.realtime.siri.model.ValidityPeriodRecord;
 import org.entur.vehicles.data.SeverityEnumeration;
 import org.entur.vehicles.data.SituationUpdate;
+import org.entur.vehicles.data.StopConditionEnumeration;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
+import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.StopPoint;
@@ -408,5 +412,127 @@ public class SituationMapperTest {
         record.setSituationNumber(":Foo:1");
 
         assertNull(mapper.map(record));
+    }
+
+    private static AffectedStopPointRecord affectedStop(String stopRef, String... conditions) {
+        AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+        stopPoint.setStopPointRef(stopRef);
+        stopPoint.setStopPointNames(List.of());
+        stopPoint.setStopConditions(List.of(conditions));
+        return stopPoint;
+    }
+
+    private static AffectedRouteRecord route(AffectedStopPointRecord... stopPoints) {
+        StopPointsRecord stops = new StopPointsRecord();
+        stops.setStopPoints(List.of(stopPoints));
+        AffectedRouteRecord route = new AffectedRouteRecord();
+        route.setStopPoints(stops);
+        route.setSections(List.of());
+        return route;
+    }
+
+    /**
+     * The shape real producers send: the stops are nested inside the journey they apply to,
+     * one journey listing three and another listing one. Both journeys must come back as
+     * their own entry carrying their own stops - a flat union would lose which is which.
+     */
+    @Test
+    public void testStopsNestedInAVehicleJourneyBecomeTheirOwnEntry() {
+        AffectedVehicleJourneyRecord first = new AffectedVehicleJourneyRecord();
+        first.setVehicleJourneyRefs(List.of());
+        first.setDatedVehicleJourneyRefs(List.of("VYG:DatedServiceJourney:1123"));
+        first.setRoutes(List.of(route(
+                affectedStop("NSR:StopPlace:157", "startPoint", "notStopping"),
+                affectedStop("NSR:StopPlace:152", "startPoint"),
+                affectedStop("NSR:StopPlace:288", "startPoint"))));
+
+        AffectedVehicleJourneyRecord second = new AffectedVehicleJourneyRecord();
+        second.setVehicleJourneyRefs(List.of());
+        second.setDatedVehicleJourneyRefs(List.of("VYG:DatedServiceJourney:518"));
+        second.setRoutes(List.of(route(affectedStop("NSR:StopPlace:157", "startPoint"))));
+
+        AffectsRecord affectsRecord = new AffectsRecord();
+        affectsRecord.setNetworks(List.of());
+        affectsRecord.setStopPoints(List.of());
+        affectsRecord.setStopPlaces(List.of());
+        affectsRecord.setVehicleJourneys(List.of(first, second));
+
+        PtSituationElementRecord record = recordAffectingDatedServiceJourney("VYG:DatedServiceJourney:1123");
+        record.setAffects(affectsRecord);
+
+        SituationUpdate situation = mapper.map(record);
+
+        assertEquals(2, situation.getAffects().getVehicleJourneys().size());
+
+        AffectedVehicleJourney one = situation.getAffects().getVehicleJourneys().get(0);
+        assertEquals("VYG:DatedServiceJourney:1123", one.getDatedServiceJourney().getId());
+        assertEquals(3, one.getStops().size());
+        assertEquals("NSR:StopPlace:157", one.getStops().get(0).getStop().getId());
+        assertEquals(List.of(StopConditionEnumeration.startPoint, StopConditionEnumeration.notStopping),
+                one.getStops().get(0).getStopConditions());
+
+        AffectedVehicleJourney two = situation.getAffects().getVehicleJourneys().get(1);
+        assertEquals("VYG:DatedServiceJourney:518", two.getDatedServiceJourney().getId());
+        assertEquals(1, two.getStops().size());
+
+        // The flat view is unchanged: scoped stops stay out of it, and both journeys are
+        // still listed as dated service journeys exactly as before.
+        assertTrue(situation.getAffects().getStopRefs().isEmpty());
+        assertTrue(situation.getAffects().getStopPlaces().isEmpty());
+        assertEquals(2, situation.getAffects().getDatedServiceJourneyIds().size());
+        // ...but the union set carries them, so the stopRef filter can find this situation.
+        assertEquals(3, situation.getAffects().getAllStopRefs().size());
+    }
+
+    @Test
+    public void testAnUnknownStopConditionIsDroppedRatherThanFailingTheMessage() {
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setVehicleJourneyRefs(List.of());
+        journey.setDatedVehicleJourneyRefs(List.of("VYG:DatedServiceJourney:1123"));
+        journey.setRoutes(List.of(route(affectedStop("NSR:StopPlace:157", "startPoint", "notAThing"))));
+
+        AffectsRecord affectsRecord = new AffectsRecord();
+        affectsRecord.setNetworks(List.of());
+        affectsRecord.setStopPoints(List.of());
+        affectsRecord.setStopPlaces(List.of());
+        affectsRecord.setVehicleJourneys(List.of(journey));
+
+        PtSituationElementRecord record = recordAffectingDatedServiceJourney("VYG:DatedServiceJourney:1123");
+        record.setAffects(affectsRecord);
+
+        SituationUpdate situation = mapper.map(record);
+
+        assertEquals(List.of(StopConditionEnumeration.startPoint),
+                situation.getAffects().getVehicleJourneys().get(0).getStops().get(0).getStopConditions());
+    }
+
+    @Test
+    public void testStopsNestedInAnAffectedLineBecomeALineEntry() {
+        AffectedLineRecord affectedLine = new AffectedLineRecord();
+        affectedLine.setLineRef("TST:Line:1");
+        affectedLine.setRoutes(List.of(route(affectedStop("NSR:StopPlace:288"))));
+        affectedLine.setSections(List.of());
+
+        AffectedNetworkRecord network = new AffectedNetworkRecord();
+        network.setVehicleMode("bus");
+        network.setAffectedLines(List.of(affectedLine));
+        network.setAffectedOperators(List.of());
+
+        AffectsRecord affectsRecord = new AffectsRecord();
+        affectsRecord.setNetworks(List.of(network));
+        affectsRecord.setStopPoints(List.of());
+        affectsRecord.setStopPlaces(List.of());
+        affectsRecord.setVehicleJourneys(List.of());
+
+        PtSituationElementRecord record = recordAffectingDatedServiceJourney("VYG:DatedServiceJourney:1123");
+        record.setAffects(affectsRecord);
+
+        SituationUpdate situation = mapper.map(record);
+
+        assertEquals(1, situation.getAffects().getAffectedLines().size());
+        assertEquals("TST:Line:1", situation.getAffects().getAffectedLines().get(0).getLine().getLineRef());
+        assertEquals("NSR:StopPlace:288",
+                situation.getAffects().getAffectedLines().get(0).getStops().get(0).getStop().getId());
+        assertTrue(situation.getAffects().getVehicleJourneys().isEmpty());
     }
 }

@@ -3,6 +3,7 @@ package org.entur.vehicles.repository;
 import org.entur.avro.realtime.siri.model.AffectedLineRecord;
 import org.entur.avro.realtime.siri.model.AffectedNetworkRecord;
 import org.entur.avro.realtime.siri.model.AffectedOperatorRecord;
+import org.entur.avro.realtime.siri.model.AffectedRouteRecord;
 import org.entur.avro.realtime.siri.model.AffectedStopPlaceRecord;
 import org.entur.avro.realtime.siri.model.AffectedStopPointRecord;
 import org.entur.avro.realtime.siri.model.AffectedVehicleJourneyRecord;
@@ -13,13 +14,18 @@ import org.entur.avro.realtime.siri.model.TranslatedStringRecord;
 import org.entur.avro.realtime.siri.model.ValidityPeriodRecord;
 import org.entur.vehicles.data.SeverityEnumeration;
 import org.entur.vehicles.data.SituationUpdate;
+import org.entur.vehicles.data.StopConditionEnumeration;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
 import org.entur.vehicles.data.model.Affects;
+import org.entur.vehicles.data.model.AffectedLine;
+import org.entur.vehicles.data.model.AffectedStop;
+import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.InfoLink;
 import org.entur.vehicles.data.model.Line;
+import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.data.model.TranslatedString;
@@ -192,6 +198,47 @@ public class SituationMapper {
         return links;
     }
 
+    /**
+     * The stops nested under an affected journey or line. SIRI allows several routes per
+     * object; their stops are flattened into one list, because the affected segment is a span
+     * over the journey and a per-route split would have no meaning for it.
+     */
+    private List<AffectedStop> mapRouteStops(List<AffectedRouteRecord> routes) {
+        List<AffectedStop> stops = new ArrayList<>();
+        if (!containsValues(routes)) {
+            return stops;
+        }
+        for (AffectedRouteRecord route : routes) {
+            if (route.getStopPoints() == null || !containsValues(route.getStopPoints().getStopPoints())) {
+                continue;
+            }
+            for (AffectedStopPointRecord stopPoint : route.getStopPoints().getStopPoints()) {
+                StopPoint stop = resolveStop(asString(stopPoint.getStopPointRef()));
+                if (stop == null) {
+                    continue;
+                }
+                stops.add(new AffectedStop(stop, mapStopConditions(stopPoint.getStopConditions())));
+            }
+        }
+        return stops;
+    }
+
+    private List<StopConditionEnumeration> mapStopConditions(List<CharSequence> values) {
+        List<StopConditionEnumeration> conditions = new ArrayList<>();
+        if (!containsValues(values)) {
+            return conditions;
+        }
+        for (CharSequence value : values) {
+            StopConditionEnumeration condition = StopConditionEnumeration.fromValue(asString(value));
+            if (condition != null) {
+                conditions.add(condition);
+            } else {
+                LOG.debug("Unknown stop condition {} - ignoring.", value);
+            }
+        }
+        return conditions;
+    }
+
     private Affects mapAffects(AffectsRecord record) {
         Affects affects = new Affects();
         if (record == null) {
@@ -204,7 +251,10 @@ public class SituationMapper {
 
                 if (containsValues(network.getAffectedLines())) {
                     for (AffectedLineRecord affectedLine : network.getAffectedLines()) {
-                        affects.addLine(resolveLine(asString(affectedLine.getLineRef())));
+                        Line line = resolveLine(asString(affectedLine.getLineRef()));
+                        if (affects.addLine(line)) {
+                            affects.addAffectedLine(new AffectedLine(line, mapRouteStops(affectedLine.getRoutes())));
+                        }
                     }
                 }
                 if (containsValues(network.getAffectedOperators())) {
@@ -229,28 +279,53 @@ public class SituationMapper {
 
         if (containsValues(record.getVehicleJourneys())) {
             for (AffectedVehicleJourneyRecord journey : record.getVehicleJourneys()) {
-                affects.addLine(resolveLine(asString(journey.getLineRef())));
+                Line line = resolveLine(asString(journey.getLineRef()));
+                affects.addLine(line);
 
+                Operator operator = null;
                 if (journey.getOperator() != null) {
-                    affects.addOperator(resolveOperator(asString(journey.getOperator().getOperatorRef())));
+                    operator = resolveOperator(asString(journey.getOperator().getOperatorRef()));
+                    affects.addOperator(operator);
                 }
+
+                // Shared by every entry this record produces: the producer nests one stop
+                // list per affected journey, and a record naming several journeys means all
+                // of them are affected at those same stops.
+                List<AffectedStop> stops = mapRouteStops(journey.getRoutes());
+
                 // Affects.addServiceJourney dedupes on getId() alone, so when the same id
                 // appears both as a bare ref and as a framed ref, whichever is added first
                 // wins. The framed ref carries the dataFrameRef date, so it must be added
                 // before the bare vehicleJourneyRefs - otherwise the date is silently lost.
+                // Entries are guarded on the same return value, so the duplicate does not
+                // produce a second entry for the same journey either.
                 if (journey.getFramedVehicleJourneyRef() != null
                         && journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef() != null) {
-                    affects.addServiceJourney(new ServiceJourney(
+                    ServiceJourney serviceJourney = new ServiceJourney(
                             journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef().toString(),
-                            asString(journey.getFramedVehicleJourneyRef().getDataFrameRef())));
+                            asString(journey.getFramedVehicleJourneyRef().getDataFrameRef()));
+                    if (affects.addServiceJourney(serviceJourney)) {
+                        affects.addVehicleJourney(
+                                new AffectedVehicleJourney(serviceJourney, null, line, operator, stops));
+                    }
                 }
                 if (containsValues(journey.getVehicleJourneyRefs())) {
-                    journey.getVehicleJourneyRefs().forEach(ref ->
-                            affects.addServiceJourney(new ServiceJourney(ref.toString())));
+                    for (CharSequence ref : journey.getVehicleJourneyRefs()) {
+                        ServiceJourney serviceJourney = new ServiceJourney(ref.toString());
+                        if (affects.addServiceJourney(serviceJourney)) {
+                            affects.addVehicleJourney(
+                                    new AffectedVehicleJourney(serviceJourney, null, line, operator, stops));
+                        }
+                    }
                 }
                 if (containsValues(journey.getDatedVehicleJourneyRefs())) {
-                    journey.getDatedVehicleJourneyRefs().forEach(ref ->
-                            affects.addDatedServiceJourney(resolveDatedServiceJourney(ref.toString())));
+                    for (CharSequence ref : journey.getDatedVehicleJourneyRefs()) {
+                        DatedServiceJourney dated = resolveDatedServiceJourney(ref.toString());
+                        if (affects.addDatedServiceJourney(dated)) {
+                            affects.addVehicleJourney(
+                                    new AffectedVehicleJourney(null, dated, line, operator, stops));
+                        }
+                    }
                 }
             }
         }
