@@ -2,8 +2,10 @@ package org.entur.vehicles.data.model;
 
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * One journey a situation names, with the stops it is affected at.
@@ -24,6 +26,7 @@ public class AffectedVehicleJourney {
     private final Line line;
     private final Operator operator;
     private final List<AffectedStop> stops;
+    private final Set<String> stopRefs;
 
     public AffectedVehicleJourney(ServiceJourney serviceJourney,
                                   DatedServiceJourney datedServiceJourney,
@@ -35,6 +38,7 @@ public class AffectedVehicleJourney {
         this.line = line;
         this.operator = operator;
         this.stops = stops == null ? List.of() : List.copyOf(stops);
+        this.stopRefs = stopRefsOf(this.stops);
     }
 
     public ServiceJourney getServiceJourney() {
@@ -55,6 +59,33 @@ public class AffectedVehicleJourney {
 
     public List<AffectedStop> getStops() {
         return stops;
+    }
+
+    /**
+     * The ids of {@link #getStops()}, derived once here rather than by every consumer.
+     * <p>
+     * {@code SituationMatcher} is rebuilt for every GraphQL batch - and a situation-triggered
+     * fan-out rebuilds it once per republished journey - so deriving this set there allocated one
+     * HashSet per entry per rebuild. A situation naming thousands of dated journeys made that
+     * megabytes of garbage, thousands of times over. Deriving it in the constructor is safe
+     * because this type is immutable, and the matcher then merely references it.
+     * <p>
+     * Note that {@code equals}/{@code hashCode} stay on the stops list, not on this set: the set
+     * drops both the stop conditions and the ordering, and the republisher has to see a change to
+     * either.
+     */
+    public Set<String> stopRefs() {
+        return stopRefs;
+    }
+
+    private static Set<String> stopRefsOf(List<AffectedStop> stops) {
+        Set<String> refs = new HashSet<>();
+        for (AffectedStop stop : stops) {
+            if (stop.getStop() != null && stop.getStop().getId() != null) {
+                refs.add(stop.getStop().getId());
+            }
+        }
+        return Set.copyOf(refs);
     }
 
     /**

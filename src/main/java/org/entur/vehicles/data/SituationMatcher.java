@@ -2,7 +2,6 @@ package org.entur.vehicles.data;
 
 import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.AffectedLine;
-import org.entur.vehicles.data.model.AffectedStop;
 import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.Call;
 import org.entur.vehicles.data.model.Codespace;
@@ -12,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,9 +92,16 @@ public class SituationMatcher {
         }
     }
 
+    /**
+     * Allocates nothing per entry: the stop-ref set is derived once at ingest, in the entry's
+     * constructor, and merely referenced here. This class is rebuilt for every GraphQL batch -
+     * and a situation-triggered fan-out rebuilds it once per republished journey - so building a
+     * set per entry here made a situation naming thousands of dated journeys cost megabytes of
+     * garbage, thousands of times over. The entries are immutable, so sharing the set is safe.
+     */
     private void indexScoped(SituationUpdate situation, Affects affects) {
         for (AffectedVehicleJourney journey : affects.getVehicleJourneys()) {
-            Set<String> stopRefs = stopRefsOf(journey.getStops());
+            Set<String> stopRefs = journey.stopRefs();
             if (stopRefs.isEmpty()) {
                 // No stops means the journey is affected as a whole - journey-level matching
                 // through the flat id sets already covers it.
@@ -111,23 +116,13 @@ public class SituationMatcher {
             }
         }
         for (AffectedLine affectedLine : affects.getAffectedLines()) {
-            Set<String> stopRefs = stopRefsOf(affectedLine.getStops());
+            Set<String> stopRefs = affectedLine.stopRefs();
             if (stopRefs.isEmpty() || affectedLine.getLine() == null || affectedLine.getLine().getLineRef() == null) {
                 continue;
             }
             scopedByObject.computeIfAbsent(affectedLine.getLine().getLineRef(), key -> new ArrayList<>())
                     .add(new ScopedStops(situation, stopRefs));
         }
-    }
-
-    private static Set<String> stopRefsOf(List<AffectedStop> stops) {
-        Set<String> refs = new HashSet<>();
-        for (AffectedStop stop : stops) {
-            if (stop.getStop() != null && stop.getStop().getId() != null) {
-                refs.add(stop.getStop().getId());
-            }
-        }
-        return refs;
     }
 
     /**
