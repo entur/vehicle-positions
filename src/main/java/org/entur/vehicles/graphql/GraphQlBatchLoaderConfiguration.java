@@ -30,10 +30,12 @@ import org.springframework.graphql.execution.DefaultBatchLoaderRegistry;
  * what was wrong here: the key is a value snapshot, not an identity to remember.
  * <p>
  * This bean is registry-wide - {@link BatchLoaderRegistry} has no per-registration caching
- * option in this Spring GraphQL version. That is acceptable only because
- * {@code SituationJoinController}'s two resolvers are the only batch loaders in this
- * application; a future batch loader keyed by a stable id would still be correct without
- * caching, just not optimally so within a single request.
+ * option in this Spring GraphQL version. That is acceptable because every batch loader in this
+ * application is keyed on a snapshot object rather than a stable id:
+ * {@code SituationJoinController}'s two, and {@code AffectedGeometryController}'s, whose key
+ * {@code AffectedVehicleJourney} likewise has value equality and would collapse two equal entries
+ * of one situation onto a single cached answer. A future batch loader keyed by a stable id would
+ * still be correct without caching, just not optimally so within a single request.
  */
 @Configuration
 public class GraphQlBatchLoaderConfiguration {
