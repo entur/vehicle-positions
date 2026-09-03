@@ -362,11 +362,12 @@ arrays:
 - one named stop → null
 - unknown pattern, and a pattern whose links carry no geometry → null
 
-**`SituationMapperTest`** - an SX fixture in `src/test/resources/sx` shaped exactly like the
-example above: one `AffectedVehicleJourney` with three `AffectedStopPoint`s carrying
-`startPoint` / `notStopping`, and a second journey with one. Asserts the entries and their
-conditions, **and** that the flat lists and id sets are byte-identical to today's output.
-A second fixture covers `AffectedLine` with routes.
+**`SituationMapperTest`** - Avro records built programmatically, as every test in that class
+already does (`src/test/resources/sx` holds snapshot JSON, not SX fixtures), shaped exactly
+like the example above: one `AffectedVehicleJourney` with three `AffectedStopPoint`s
+carrying `startPoint` / `notStopping`, and a second journey with one. Asserts the entries
+and their conditions, **and** that the flat lists and id sets are unchanged from today's
+output. A second case covers `AffectedLine` with routes.
 
 **`SituationMatcherTest`** - the over-matching case directly:
 - journey A + stops X,Y does **not** attach to journey B's call at X
