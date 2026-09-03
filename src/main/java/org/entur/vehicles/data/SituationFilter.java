@@ -134,7 +134,10 @@ public class SituationFilter {
         if (lineRef != null && (affects == null || !affects.getLineRefs().contains(lineRef))) {
             return false;
         }
-        if (stopRefs != null && (affects == null || Collections.disjoint(affects.getStopRefs(), stopRefs))) {
+        // allStopRefs, not stopRefs: filtering is discovery - a client asking about a stop
+        // wants situations that mention it anywhere, including inside an affected journey.
+        // Matching (SituationMatcher) deliberately uses the narrower stopRefs instead.
+        if (stopRefs != null && (affects == null || Collections.disjoint(affects.getAllStopRefs(), stopRefs))) {
             return false;
         }
         if (serviceJourneyId != null && (affects == null || !affects.getServiceJourneyIds().contains(serviceJourneyId))) {
