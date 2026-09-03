@@ -125,4 +125,32 @@ public class PolylineSlicerTest {
         assertThat(PolylineSlicer.slice(new int[]{59_000_000, 10_000_000}, stops, MAX_SNAP_METERS)).isNull();
         assertThat(PolylineSlicer.slice(null, stops, MAX_SNAP_METERS)).isNull();
     }
+
+    /**
+     * A duplicated consecutive vertex on the approach to a stop makes the distance profile
+     * flatten for one step while still descending. That shelf is not a local minimum, and
+     * accepting it as a candidate would let a span anchor short of the true nearest vertex.
+     */
+    @Test
+    public void testAShelfOnADescendingProfileIsNotACandidate() {
+        // Vertices 0,1,2,3,4 where 1 and 2 are the same point, so the distance to a stop
+        // sitting on vertex 3 flattens across them before continuing to fall.
+        int[] geometry = {
+                59_000_000, 10_000_000,
+                59_001_000, 10_000_000,
+                59_001_000, 10_000_000,
+                59_002_000, 10_000_000,
+                59_003_000, 10_000_000,
+        };
+        Location onVertexThree = new Location(10.0, 59.002);
+        Location onVertexZero = new Location(10.0, 59.000);
+
+        PointsOnLink result = PolylineSlicer.slice(
+                geometry, List.of(onVertexZero, onVertexThree), MAX_SNAP_METERS);
+
+        assertThat(result).isNotNull();
+        // Vertices 0..3 inclusive - four points. Anchoring on the shelf at index 1 or 2
+        // instead of the true minimum at index 0 would give three or fewer.
+        assertThat(result.getLength()).isEqualTo(4);
+    }
 }

@@ -86,12 +86,21 @@ public final class PolylineSlicer {
         }
 
         List<Integer> minima = new ArrayList<>();
-        for (int i = 0; i < points; i++) {
-            boolean risingFromTheLeft = i == 0 || distances[i] < distances[i - 1];
-            boolean notRisingToTheRight = i == points - 1 || distances[i] <= distances[i + 1];
-            if (risingFromTheLeft && notRisingToTheRight && distances[i] <= limitSquared) {
+        int i = 0;
+        while (i < points) {
+            // A run of equal distances is one candidate, not several: only its first index can
+            // be the minimum, and the comparison has to reach past the whole run - looking one
+            // neighbour ahead would accept a shelf on a still-descending profile.
+            int runEnd = i;
+            while (runEnd + 1 < points && distances[runEnd + 1] == distances[i]) {
+                runEnd++;
+            }
+            boolean belowTheLeft = i == 0 || distances[i] < distances[i - 1];
+            boolean belowTheRight = runEnd == points - 1 || distances[runEnd] < distances[runEnd + 1];
+            if (belowTheLeft && belowTheRight && distances[i] <= limitSquared) {
                 minima.add(i);
             }
+            i = runEnd + 1;
         }
         if (minima.size() > MAX_CANDIDATES_PER_STOP) {
             minima.sort(Comparator.comparingDouble(index -> distances[index]));
@@ -100,8 +109,8 @@ public final class PolylineSlicer {
         }
 
         int[] result = new int[minima.size()];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = minima.get(i);
+        for (int j = 0; j < result.length; j++) {
+            result[j] = minima.get(j);
         }
         return result;
     }
