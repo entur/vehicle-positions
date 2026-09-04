@@ -31,11 +31,9 @@ import org.springframework.graphql.execution.DefaultBatchLoaderRegistry;
  * <p>
  * This bean is registry-wide - {@link BatchLoaderRegistry} has no per-registration caching
  * option in this Spring GraphQL version. That is acceptable because every batch loader in this
- * application is keyed on a snapshot object rather than a stable id:
- * {@code SituationJoinController}'s two, and {@code AffectedGeometryController}'s, whose key
- * {@code AffectedVehicleJourney} likewise has value equality and would collapse two equal entries
- * of one situation onto a single cached answer. A future batch loader keyed by a stable id would
- * still be correct without caching, just not optimally so within a single request.
+ * application - {@code SituationJoinController}'s two - is keyed on a snapshot object rather
+ * than a stable id. A future batch loader keyed by a stable id would still be correct without
+ * caching, just not optimally so within a single request.
  */
 @Configuration
 public class GraphQlBatchLoaderConfiguration {

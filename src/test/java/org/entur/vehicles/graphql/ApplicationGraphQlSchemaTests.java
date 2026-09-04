@@ -155,6 +155,9 @@ class ApplicationGraphQlSchemaTests {
     private static final String AFFECTED_GEOMETRY_STOP_2 = "NSR:StopPlace:affected-geometry-probe-2";
     private static final String AFFECTED_GEOMETRY_OPT_OUT_SITUATION = "TST:SituationNumber:affected-geometry-opt-out";
     private static final String AFFECTED_GEOMETRY_OPT_OUT_DSJ = "TST:DatedServiceJourney:affected-geometry-opt-out";
+    private static final String MIXED_GEOMETRY_SITUATION = "TST:SituationNumber:mixed-geometry-probe";
+    private static final String MIXED_GEOMETRY_KNOWN_DSJ = "TST:DatedServiceJourney:mixed-geometry-known";
+    private static final String MIXED_GEOMETRY_UNKNOWN_DSJ = "TST:DatedServiceJourney:mixed-geometry-unknown";
 
     /**
      * NSR lookup is disabled in the test context, so the real hierarchy is empty and this test
@@ -1399,5 +1402,139 @@ class ApplicationGraphQlSchemaTests {
         // What a client sees: the classification is written into extensions on serialization
         Map<String, Object> extensions = (Map<String, Object>) error.toSpecification().get("extensions");
         assertThat(String.valueOf(extensions.get("classification"))).isEqualTo("BAD_REQUEST");
+    }
+
+    /**
+     * A situation naming two journeys where only one of them resolves to a pattern with geometry.
+     * This is the ordinary case in production - an unfiltered situations query spans journeys the
+     * planned data does not know - and it is what a single-entry fixture cannot reach: the
+     * unresolvable entry contributes a null to whatever the resolver hands back, and a null is
+     * exactly what a List-returning @BatchMapping may not contain.
+     */
+    @Test
+    void aSituationMixingResolvableAndUnresolvableJourneysStillAnswers() {
+        int[] geometry = new int[12];
+        for (int i = 0; i < 6; i++) {
+            geometry[i * 2] = 59_000_000 + i * 1_000;
+            geometry[i * 2 + 1] = 10_000_000;
+        }
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addServiceLink(AFFECTED_GEOMETRY_LINK, geometry)
+                .addJourneyPattern(AFFECTED_GEOMETRY_PATTERN, List.of(AFFECTED_GEOMETRY_LINK))
+                .addServiceJourney(AFFECTED_GEOMETRY_SJ, AFFECTED_GEOMETRY_PATTERN)
+                .addOperatingDay("TST:OperatingDay:mixed-geometry-probe", "2026-09-03")
+                .addDatedServiceJourney(MIXED_GEOMETRY_KNOWN_DSJ, AFFECTED_GEOMETRY_SJ,
+                        "TST:OperatingDay:mixed-geometry-probe")
+                .build();
+        when(plannedDataService.current()).thenReturn(dataset);
+        // Only the first journey is known to the planned data. The second is left unstubbed, so
+        // it stays a bare ref with no service journey - and therefore no pattern to cut.
+        when(plannedDataService.findDatedServiceJourney(MIXED_GEOMETRY_KNOWN_DSJ))
+                .thenReturn(dataset.datedServiceJourney(MIXED_GEOMETRY_KNOWN_DSJ));
+        when(nsrService.getStop(AFFECTED_GEOMETRY_STOP_1))
+                .thenReturn(new StopPoint(AFFECTED_GEOMETRY_STOP_1, "One", new Location(10.0, 59.001)));
+        when(nsrService.getStop(AFFECTED_GEOMETRY_STOP_2))
+                .thenReturn(new StopPoint(AFFECTED_GEOMETRY_STOP_2, "Two", new Location(10.0, 59.004)));
+
+        situationRepository.add(situationAffectingTwoJourneysAtStops(
+                MIXED_GEOMETRY_SITUATION, MIXED_GEOMETRY_KNOWN_DSJ, MIXED_GEOMETRY_UNKNOWN_DSJ,
+                AFFECTED_GEOMETRY_STOP_1, AFFECTED_GEOMETRY_STOP_2));
+
+        String document = """
+                query {
+                  situations(includeClosed: true, situationNumbers: ["%s"]) {
+                    affects {
+                      vehicleJourneys {
+                        datedServiceJourney { id }
+                        affectedPointsOnLink { length points }
+                      }
+                    }
+                  }
+                }
+                """.formatted(MIXED_GEOMETRY_SITUATION);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(),
+                        "test-mixed-geometry", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors())
+                .withFailMessage("a journey with no resolvable geometry must yield a null field, "
+                        + "not fail the whole query")
+                .isEmpty();
+
+        List<Map<String, Object>> journeys =
+                response.field("situations[0].affects.vehicleJourneys").getValue();
+        assertThat(journeys).hasSize(2);
+
+        Map<String, Object> known = journeys.stream()
+                .filter(j -> MIXED_GEOMETRY_KNOWN_DSJ.equals(
+                        ((Map<String, Object>) j.get("datedServiceJourney")).get("id")))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> unknown = journeys.stream()
+                .filter(j -> MIXED_GEOMETRY_UNKNOWN_DSJ.equals(
+                        ((Map<String, Object>) j.get("datedServiceJourney")).get("id")))
+                .findFirst()
+                .orElseThrow();
+
+        // length is a GraphQL Float, so it arrives as a Double.
+        Number length = (Number) ((Map<String, Object>) known.get("affectedPointsOnLink")).get("length");
+        assertThat(length.intValue()).isEqualTo(4);
+        assertThat(unknown.get("affectedPointsOnLink"))
+                .withFailMessage("the unresolvable journey keeps its own slot as null")
+                .isNull();
+    }
+
+    private static PtSituationElementRecord situationAffectingTwoJourneysAtStops(String situationNumber,
+                                                                                 String firstDatedServiceJourneyId,
+                                                                                 String secondDatedServiceJourneyId,
+                                                                                 String... stopRefs) {
+        AffectsRecord affects = new AffectsRecord();
+        affects.setNetworks(List.of());
+        affects.setStopPoints(List.of());
+        affects.setStopPlaces(List.of());
+        affects.setVehicleJourneys(List.of(
+                affectedVehicleJourney(firstDatedServiceJourneyId, stopRefs),
+                affectedVehicleJourney(secondDatedServiceJourneyId, stopRefs)));
+
+        PtSituationElementRecord record = new PtSituationElementRecord();
+        record.setSituationNumber(situationNumber);
+        record.setParticipantRef("TST");
+        record.setCreationTime(ZonedDateTime.now().minusHours(1).toString());
+        record.setReportType("general");
+        record.setValidityPeriods(List.of());
+        record.setKeywords(List.of());
+        record.setSummaries(List.of());
+        record.setDescriptions(List.of());
+        record.setDetails(List.of());
+        record.setAdvices(List.of());
+        record.setInfoLinks(List.of());
+        record.setAffects(affects);
+        return record;
+    }
+
+    private static AffectedVehicleJourneyRecord affectedVehicleJourney(String datedServiceJourneyId,
+                                                                       String... stopRefs) {
+        List<AffectedStopPointRecord> stopPoints = new ArrayList<>();
+        for (String stopRef : stopRefs) {
+            AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+            stopPoint.setStopPointRef(stopRef);
+            stopPoint.setStopPointNames(List.of());
+            stopPoint.setStopConditions(List.of("startPoint"));
+            stopPoints.add(stopPoint);
+        }
+        StopPointsRecord stops = new StopPointsRecord();
+        stops.setStopPoints(stopPoints);
+        AffectedRouteRecord route = new AffectedRouteRecord();
+        route.setStopPoints(stops);
+        route.setSections(List.of());
+
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setVehicleJourneyRefs(List.of());
+        journey.setDatedVehicleJourneyRefs(List.of(datedServiceJourneyId));
+        journey.setRoutes(List.of(route));
+        return journey;
     }
 }

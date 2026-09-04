@@ -1,5 +1,6 @@
 package org.entur.vehicles.graphql;
 
+import graphql.GraphQLContext;
 import org.entur.vehicles.data.model.AffectedStop;
 import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.Location;
@@ -21,12 +22,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * The resolver is batched rather than per-object because a situation naming N journeys is the
- * normal case, not the exceptional one: a line-wide rail closure names hundreds of dated
- * journeys, and {@code PlannedDataset.stitchedGeometry} deliberately does not cache. Per object
- * that is N full pattern stitches plus a linear scan per stop per journey, per request. The
- * journeys of one situation overwhelmingly share a handful of patterns, so memoizing the
- * stitched array per pattern within the batch collapses the fan-out.
+ * A situation naming N journeys is the normal case, not the exceptional one: a line-wide rail
+ * closure names hundreds of dated journeys, and {@code PlannedDataset.stitchedGeometry}
+ * deliberately does not cache. Unmemoized that is N full pattern stitches plus a linear scan per
+ * stop per journey, per request. The journeys of one situation overwhelmingly share a handful of
+ * patterns, so the stitched array is memoized per pattern in the request's {@code GraphQLContext}.
+ * <p>
+ * The resolver is per object rather than batched because the field is nullable and a
+ * {@code List}-returning {@code @BatchMapping} cannot carry a null element - see the controller's
+ * Javadoc. These tests therefore drive one journey at a time, sharing one context the way a
+ * single request does.
  */
 class AffectedGeometryControllerTest {
 
@@ -67,50 +72,68 @@ class AffectedGeometryControllerTest {
 
     /**
      * Two journeys on one pattern must stitch that pattern once, not once each - the whole point
-     * of the batch. The memo is keyed by journey pattern, not by service journey, because the
-     * journeys of one situation are distinct objects sharing one route.
+     * of the memo. It is keyed by journey pattern, not by service journey, because the journeys
+     * of one situation are distinct objects sharing one route.
      */
     @Test
-    void stitchesAPatternOnceForEveryJourneyInTheBatchThatSharesIt() {
-        List<PointsOnLink> resolved = controller.affectedPointsOnLink(List.of(
-                journey(SERVICE_JOURNEY_1, STOP_1, STOP_2),
-                journey(SERVICE_JOURNEY_2, STOP_1, STOP_2)));
+    void stitchesAPatternOnceForEveryJourneyInTheRequestThatSharesIt() {
+        GraphQLContext context = GraphQLContext.newContext().build();
 
-        assertThat(resolved).hasSize(2);
-        assertThat(resolved.get(0)).isNotNull();
-        assertThat(resolved.get(1)).isNotNull();
+        PointsOnLink first = controller.affectedPointsOnLink(
+                journey(SERVICE_JOURNEY_1, STOP_1, STOP_2), context);
+        PointsOnLink second = controller.affectedPointsOnLink(
+                journey(SERVICE_JOURNEY_2, STOP_1, STOP_2), context);
+
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
         // Vertices 1..4 - the span between the two stops, not the pattern's full six points.
-        assertThat(resolved.get(0).getLength()).isEqualTo(4);
-        assertThat(resolved.get(1).getLength()).isEqualTo(4);
+        assertThat(first.getLength()).isEqualTo(4);
+        assertThat(second.getLength()).isEqualTo(4);
 
         verify(dataset, times(1)).stitchedGeometry(PATTERN);
     }
 
-    /**
-     * The batch returns a list aligned by position with its input, exactly as
-     * {@link SituationJoinController} does and for the same reason - see its Javadoc. Entries
-     * that resolve to no polyline hold their slot as null rather than being dropped, or every
-     * journey after them would receive another journey's geometry.
-     */
+    /** A second request shares nothing with the first - the memo dies with its context. */
     @Test
-    void returnsAListPositionallyAlignedWithItsInputIncludingTheNulls() {
-        List<PointsOnLink> resolved = controller.affectedPointsOnLink(List.of(
-                journey(SERVICE_JOURNEY_1, STOP_1),
-                journey(SERVICE_JOURNEY_1, STOP_1, STOP_2),
-                journey("TST:ServiceJourney:unknown", STOP_1, STOP_2),
-                journey(SERVICE_JOURNEY_2, STOP_1, STOP_2)));
+    void aFreshRequestStitchesAgainRatherThanReadingAnotherRequestsMemo() {
+        controller.affectedPointsOnLink(journey(SERVICE_JOURNEY_1, STOP_1, STOP_2),
+                GraphQLContext.newContext().build());
+        controller.affectedPointsOnLink(journey(SERVICE_JOURNEY_1, STOP_1, STOP_2),
+                GraphQLContext.newContext().build());
 
-        assertThat(resolved).hasSize(4);
-        assertThat(resolved.get(0)).withFailMessage("a single named stop is a point, not a span").isNull();
-        assertThat(resolved.get(1)).isNotNull();
-        assertThat(resolved.get(2)).withFailMessage("an unknown journey has no pattern to cut").isNull();
-        assertThat(resolved.get(3)).isNotNull();
+        verify(dataset, times(2)).stitchedGeometry(PATTERN);
     }
 
-    /** An empty batch must not touch the planned data at all. */
+    /**
+     * A journey with no span to draw resolves to null, and a null journey next to a resolvable
+     * one must not disturb it. Nullability is the reason this resolver is not a
+     * {@code @BatchMapping}: a {@code List}-returning batch method may not contain a null, and
+     * Spring GraphQL fails the whole dispatch if it does.
+     */
     @Test
-    void anEmptyBatchResolvesToAnEmptyList() {
-        assertThat(controller.affectedPointsOnLink(List.of())).isEmpty();
+    void aJourneyWithNoSpanResolvesToNullWithoutDisturbingItsNeighbours() {
+        GraphQLContext context = GraphQLContext.newContext().build();
+
+        assertThat(controller.affectedPointsOnLink(journey(SERVICE_JOURNEY_1, STOP_1), context))
+                .withFailMessage("a single named stop is a point, not a span")
+                .isNull();
+        assertThat(controller.affectedPointsOnLink(
+                journey("TST:ServiceJourney:unknown", STOP_1, STOP_2), context))
+                .withFailMessage("an unknown journey has no pattern to cut")
+                .isNull();
+        assertThat(controller.affectedPointsOnLink(
+                journey(SERVICE_JOURNEY_1, STOP_1, STOP_2), context)).isNotNull();
+        assertThat(controller.affectedPointsOnLink(
+                journey(SERVICE_JOURNEY_2, STOP_1, STOP_2), context)).isNotNull();
+    }
+
+    /** A journey failing the cheap checks must not touch the planned data at all. */
+    @Test
+    void aJourneyWithTooFewStopsNeverReadsTheDataset() {
+        assertThat(controller.affectedPointsOnLink(
+                journey(SERVICE_JOURNEY_1, STOP_1), GraphQLContext.newContext().build())).isNull();
+
+        Mockito.verifyNoInteractions(dataset);
     }
 
     private static AffectedVehicleJourney journey(String serviceJourneyId, String... stopRefs) {
