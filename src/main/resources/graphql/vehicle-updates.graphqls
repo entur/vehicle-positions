@@ -375,6 +375,44 @@ type Affects {
     datedServiceJourneys: [DatedServiceJourney]
     operators: [Operator]
     vehicleModes: [VehicleModeEnumeration]
+    # The journey-to-stops pairing SIRI carries: a situation is often tagged on a journey
+    # AND the stops it is affected at, and is only relevant to a traveller whose trip visits
+    # them. Every journey listed here also appears in serviceJourneys/datedServiceJourneys,
+    # and every line in lines, so existing clients see no change.
+    vehicleJourneys: [AffectedVehicleJourney]
+    affectedLines: [AffectedLine]
+}
+
+type AffectedVehicleJourney {
+    serviceJourney: ServiceJourney
+    datedServiceJourney: DatedServiceJourney
+    # Context for display. A journey entry is scoped to the journey it names, never to this line.
+    line: Line
+    operator: Operator
+    stops: [AffectedStop]
+    # The part of this journey's geometry between the first and last affected stop.
+    # Null when the journey has no pattern geometry, or any affected stop cannot be located
+    # on it - a partial span would draw a confident line over the wrong part of the route.
+    affectedPointsOnLink: PointsOnLink
+}
+
+type AffectedLine {
+    line: Line
+    # A line has many journey patterns, so a line entry carries no geometry.
+    stops: [AffectedStop]
+}
+
+type AffectedStop {
+    stop: Stop
+    stopConditions: [StopConditionEnumeration]
+}
+
+enum StopConditionEnumeration {
+    exceptionalStop
+    destination
+    notStopping
+    requestStop
+    startPoint
 }
 
 type ValidityPeriod {

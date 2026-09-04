@@ -3,6 +3,7 @@ package org.entur.vehicles.graphql;
 import graphql.ExecutionResult;
 import org.entur.avro.realtime.siri.model.AffectedLineRecord;
 import org.entur.avro.realtime.siri.model.AffectedNetworkRecord;
+import org.entur.avro.realtime.siri.model.AffectedRouteRecord;
 import org.entur.avro.realtime.siri.model.AffectedStopPlaceRecord;
 import org.entur.avro.realtime.siri.model.AffectedStopPointRecord;
 import org.entur.avro.realtime.siri.model.AffectedVehicleJourneyRecord;
@@ -12,7 +13,9 @@ import org.entur.avro.realtime.siri.model.EstimatedVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.LocationRecord;
 import org.entur.avro.realtime.siri.model.MonitoredVehicleJourneyRecord;
 import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
+import org.entur.avro.realtime.siri.model.StopPointsRecord;
 import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
+import org.entur.vehicles.data.model.Location;
 import org.entur.vehicles.data.model.StopPoint;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
@@ -49,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -141,6 +145,19 @@ class ApplicationGraphQlSchemaTests {
     private static final String INVALID_LOCATION_SUBSCRIPTION_INCLUDE_LINE = "TST:Line:invalid-location-subscription-include-probe";
     private static final String INVALID_LOCATION_SUBSCRIPTION_INCLUDE_INVALID_VEHICLE =
             "TST:Vehicle:invalid-location-subscription-include-invalid";
+
+    private static final String AFFECTED_GEOMETRY_SITUATION = "TST:SituationNumber:affected-geometry-probe";
+    private static final String AFFECTED_GEOMETRY_DSJ = "TST:DatedServiceJourney:affected-geometry-probe";
+    private static final String AFFECTED_GEOMETRY_SJ = "TST:ServiceJourney:affected-geometry-probe";
+    private static final String AFFECTED_GEOMETRY_PATTERN = "TST:JourneyPattern:affected-geometry-probe";
+    private static final String AFFECTED_GEOMETRY_LINK = "TST:ServiceLink:affected-geometry-probe";
+    private static final String AFFECTED_GEOMETRY_STOP_1 = "NSR:StopPlace:affected-geometry-probe-1";
+    private static final String AFFECTED_GEOMETRY_STOP_2 = "NSR:StopPlace:affected-geometry-probe-2";
+    private static final String AFFECTED_GEOMETRY_OPT_OUT_SITUATION = "TST:SituationNumber:affected-geometry-opt-out";
+    private static final String AFFECTED_GEOMETRY_OPT_OUT_DSJ = "TST:DatedServiceJourney:affected-geometry-opt-out";
+    private static final String MIXED_GEOMETRY_SITUATION = "TST:SituationNumber:mixed-geometry-probe";
+    private static final String MIXED_GEOMETRY_KNOWN_DSJ = "TST:DatedServiceJourney:mixed-geometry-known";
+    private static final String MIXED_GEOMETRY_UNKNOWN_DSJ = "TST:DatedServiceJourney:mixed-geometry-unknown";
 
     /**
      * NSR lookup is disabled in the test context, so the real hierarchy is empty and this test
@@ -896,6 +913,113 @@ class ApplicationGraphQlSchemaTests {
                 .isEmpty();
     }
 
+    /**
+     * The whole feature, through the real schema: stops nested under a dated journey come back
+     * as that journey's own entry, and the polyline is cut to the span between them rather than
+     * being the journey's full geometry.
+     */
+    @Test
+    void anAffectedJourneysStopsResolveWithAPolylineCutToTheirSpan() {
+        // Six points about 111 m apart, due north.
+        int[] geometry = new int[12];
+        for (int i = 0; i < 6; i++) {
+            geometry[i * 2] = 59_000_000 + i * 1_000;
+            geometry[i * 2 + 1] = 10_000_000;
+        }
+        PlannedDataset affectedGeometryDataset = new PlannedDataset.Builder()
+                .addServiceLink(AFFECTED_GEOMETRY_LINK, geometry)
+                .addJourneyPattern(AFFECTED_GEOMETRY_PATTERN, List.of(AFFECTED_GEOMETRY_LINK))
+                .addServiceJourney(AFFECTED_GEOMETRY_SJ, AFFECTED_GEOMETRY_PATTERN)
+                .addOperatingDay("TST:OperatingDay:affected-geometry-probe", "2026-09-03")
+                .addDatedServiceJourney(AFFECTED_GEOMETRY_DSJ, AFFECTED_GEOMETRY_SJ,
+                        "TST:OperatingDay:affected-geometry-probe")
+                .build();
+        when(plannedDataService.current()).thenReturn(affectedGeometryDataset);
+        // PlannedDataService.findDatedServiceJourney reads its own internal AtomicReference,
+        // not the current() method - stubbing current() alone leaves it answering the mock
+        // default (null) on a full @MockitoBean. SituationMapper.resolveDatedServiceJourney
+        // goes through ServiceJourneyService, which calls findDatedServiceJourney, so it has
+        // to be stubbed too or the dated journey never resolves to its service journey.
+        when(plannedDataService.findDatedServiceJourney(AFFECTED_GEOMETRY_DSJ))
+                .thenReturn(affectedGeometryDataset.datedServiceJourney(AFFECTED_GEOMETRY_DSJ));
+        when(nsrService.getStop(AFFECTED_GEOMETRY_STOP_1))
+                .thenReturn(new StopPoint(AFFECTED_GEOMETRY_STOP_1, "One", new Location(10.0, 59.001)));
+        when(nsrService.getStop(AFFECTED_GEOMETRY_STOP_2))
+                .thenReturn(new StopPoint(AFFECTED_GEOMETRY_STOP_2, "Two", new Location(10.0, 59.004)));
+
+        situationRepository.add(situationAffectingJourneyAtStops(
+                AFFECTED_GEOMETRY_SITUATION, AFFECTED_GEOMETRY_DSJ,
+                AFFECTED_GEOMETRY_STOP_1, AFFECTED_GEOMETRY_STOP_2));
+
+        String document = """
+                query {
+                  situations(includeClosed: true, situationNumbers: ["%s"]) {
+                    affects {
+                      vehicleJourneys {
+                        datedServiceJourney { id }
+                        stops { stop { id } stopConditions }
+                        affectedPointsOnLink { length points }
+                      }
+                    }
+                  }
+                }
+                """.formatted(AFFECTED_GEOMETRY_SITUATION);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(),
+                        "test-affected-geometry", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        String datedId = response.field(
+                "situations[0].affects.vehicleJourneys[0].datedServiceJourney.id").getValue();
+        assertThat(datedId).isEqualTo(AFFECTED_GEOMETRY_DSJ);
+
+        List<Map<String, Object>> stops = response.field(
+                "situations[0].affects.vehicleJourneys[0].stops").getValue();
+        assertThat(stops).hasSize(2);
+        assertThat(stops.get(0).get("stopConditions")).isEqualTo(List.of("startPoint"));
+
+        // Vertices 1..4: the span between the two stops, not the pattern's full six points.
+        Number length = response.field(
+                "situations[0].affects.vehicleJourneys[0].affectedPointsOnLink.length").getValue();
+        assertThat(length.intValue()).isEqualTo(4);
+    }
+
+    /**
+     * The mirror of the existing opt-out test for journey situations: the cut is lazy, so a
+     * client that selects the stops but not the polyline must not make the resolver touch the
+     * planned dataset at all.
+     */
+    @Test
+    void anAffectsSelectionWithoutTheGeometryFieldDoesNoGeometryWork() {
+        situationRepository.add(situationAffectingJourneyAtStops(
+                AFFECTED_GEOMETRY_OPT_OUT_SITUATION, AFFECTED_GEOMETRY_OPT_OUT_DSJ,
+                AFFECTED_GEOMETRY_STOP_1, AFFECTED_GEOMETRY_STOP_2));
+        // The mapper resolves the dated journey through the dataset at ingest, so only what
+        // happens from here on is under test.
+        clearInvocations(plannedDataService);
+
+        String document = """
+                query {
+                  situations(includeClosed: true, situationNumbers: ["%s"]) {
+                    affects { vehicleJourneys { stops { stop { id } } } }
+                  }
+                }
+                """.formatted(AFFECTED_GEOMETRY_OPT_OUT_SITUATION);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(),
+                        "test-affected-geometry-opt-out", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+        verify(plannedDataService, never()).current();
+    }
+
     private VehicleActivityRecord vehicleActivity(String vehicleRef, String lineRef, double latitude, double longitude) {
         VehicleActivityRecord record = new VehicleActivityRecord();
         record.setRecordedAtTime(ZonedDateTime.now().toString());
@@ -1037,6 +1161,50 @@ class ApplicationGraphQlSchemaTests {
         affects.setVehicleJourneys(List.of(journey));
         record.setAffects(affects);
 
+        return record;
+    }
+
+    private static PtSituationElementRecord situationAffectingJourneyAtStops(String situationNumber,
+                                                                            String datedServiceJourneyId,
+                                                                            String... stopRefs) {
+        List<AffectedStopPointRecord> stopPoints = new ArrayList<>();
+        for (String stopRef : stopRefs) {
+            AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+            stopPoint.setStopPointRef(stopRef);
+            stopPoint.setStopPointNames(List.of());
+            stopPoint.setStopConditions(List.of("startPoint"));
+            stopPoints.add(stopPoint);
+        }
+        StopPointsRecord stops = new StopPointsRecord();
+        stops.setStopPoints(stopPoints);
+        AffectedRouteRecord route = new AffectedRouteRecord();
+        route.setStopPoints(stops);
+        route.setSections(List.of());
+
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setVehicleJourneyRefs(List.of());
+        journey.setDatedVehicleJourneyRefs(List.of(datedServiceJourneyId));
+        journey.setRoutes(List.of(route));
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setNetworks(List.of());
+        affects.setStopPoints(List.of());
+        affects.setStopPlaces(List.of());
+        affects.setVehicleJourneys(List.of(journey));
+
+        PtSituationElementRecord record = new PtSituationElementRecord();
+        record.setSituationNumber(situationNumber);
+        record.setParticipantRef("TST");
+        record.setCreationTime(ZonedDateTime.now().minusHours(1).toString());
+        record.setReportType("general");
+        record.setValidityPeriods(List.of());
+        record.setKeywords(List.of());
+        record.setSummaries(List.of());
+        record.setDescriptions(List.of());
+        record.setDetails(List.of());
+        record.setAdvices(List.of());
+        record.setInfoLinks(List.of());
+        record.setAffects(affects);
         return record;
     }
 
@@ -1234,5 +1402,139 @@ class ApplicationGraphQlSchemaTests {
         // What a client sees: the classification is written into extensions on serialization
         Map<String, Object> extensions = (Map<String, Object>) error.toSpecification().get("extensions");
         assertThat(String.valueOf(extensions.get("classification"))).isEqualTo("BAD_REQUEST");
+    }
+
+    /**
+     * A situation naming two journeys where only one of them resolves to a pattern with geometry.
+     * This is the ordinary case in production - an unfiltered situations query spans journeys the
+     * planned data does not know - and it is what a single-entry fixture cannot reach: the
+     * unresolvable entry contributes a null to whatever the resolver hands back, and a null is
+     * exactly what a List-returning @BatchMapping may not contain.
+     */
+    @Test
+    void aSituationMixingResolvableAndUnresolvableJourneysStillAnswers() {
+        int[] geometry = new int[12];
+        for (int i = 0; i < 6; i++) {
+            geometry[i * 2] = 59_000_000 + i * 1_000;
+            geometry[i * 2 + 1] = 10_000_000;
+        }
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addServiceLink(AFFECTED_GEOMETRY_LINK, geometry)
+                .addJourneyPattern(AFFECTED_GEOMETRY_PATTERN, List.of(AFFECTED_GEOMETRY_LINK))
+                .addServiceJourney(AFFECTED_GEOMETRY_SJ, AFFECTED_GEOMETRY_PATTERN)
+                .addOperatingDay("TST:OperatingDay:mixed-geometry-probe", "2026-09-03")
+                .addDatedServiceJourney(MIXED_GEOMETRY_KNOWN_DSJ, AFFECTED_GEOMETRY_SJ,
+                        "TST:OperatingDay:mixed-geometry-probe")
+                .build();
+        when(plannedDataService.current()).thenReturn(dataset);
+        // Only the first journey is known to the planned data. The second is left unstubbed, so
+        // it stays a bare ref with no service journey - and therefore no pattern to cut.
+        when(plannedDataService.findDatedServiceJourney(MIXED_GEOMETRY_KNOWN_DSJ))
+                .thenReturn(dataset.datedServiceJourney(MIXED_GEOMETRY_KNOWN_DSJ));
+        when(nsrService.getStop(AFFECTED_GEOMETRY_STOP_1))
+                .thenReturn(new StopPoint(AFFECTED_GEOMETRY_STOP_1, "One", new Location(10.0, 59.001)));
+        when(nsrService.getStop(AFFECTED_GEOMETRY_STOP_2))
+                .thenReturn(new StopPoint(AFFECTED_GEOMETRY_STOP_2, "Two", new Location(10.0, 59.004)));
+
+        situationRepository.add(situationAffectingTwoJourneysAtStops(
+                MIXED_GEOMETRY_SITUATION, MIXED_GEOMETRY_KNOWN_DSJ, MIXED_GEOMETRY_UNKNOWN_DSJ,
+                AFFECTED_GEOMETRY_STOP_1, AFFECTED_GEOMETRY_STOP_2));
+
+        String document = """
+                query {
+                  situations(includeClosed: true, situationNumbers: ["%s"]) {
+                    affects {
+                      vehicleJourneys {
+                        datedServiceJourney { id }
+                        affectedPointsOnLink { length points }
+                      }
+                    }
+                  }
+                }
+                """.formatted(MIXED_GEOMETRY_SITUATION);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(),
+                        "test-mixed-geometry", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors())
+                .withFailMessage("a journey with no resolvable geometry must yield a null field, "
+                        + "not fail the whole query")
+                .isEmpty();
+
+        List<Map<String, Object>> journeys =
+                response.field("situations[0].affects.vehicleJourneys").getValue();
+        assertThat(journeys).hasSize(2);
+
+        Map<String, Object> known = journeys.stream()
+                .filter(j -> MIXED_GEOMETRY_KNOWN_DSJ.equals(
+                        ((Map<String, Object>) j.get("datedServiceJourney")).get("id")))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> unknown = journeys.stream()
+                .filter(j -> MIXED_GEOMETRY_UNKNOWN_DSJ.equals(
+                        ((Map<String, Object>) j.get("datedServiceJourney")).get("id")))
+                .findFirst()
+                .orElseThrow();
+
+        // length is a GraphQL Float, so it arrives as a Double.
+        Number length = (Number) ((Map<String, Object>) known.get("affectedPointsOnLink")).get("length");
+        assertThat(length.intValue()).isEqualTo(4);
+        assertThat(unknown.get("affectedPointsOnLink"))
+                .withFailMessage("the unresolvable journey keeps its own slot as null")
+                .isNull();
+    }
+
+    private static PtSituationElementRecord situationAffectingTwoJourneysAtStops(String situationNumber,
+                                                                                 String firstDatedServiceJourneyId,
+                                                                                 String secondDatedServiceJourneyId,
+                                                                                 String... stopRefs) {
+        AffectsRecord affects = new AffectsRecord();
+        affects.setNetworks(List.of());
+        affects.setStopPoints(List.of());
+        affects.setStopPlaces(List.of());
+        affects.setVehicleJourneys(List.of(
+                affectedVehicleJourney(firstDatedServiceJourneyId, stopRefs),
+                affectedVehicleJourney(secondDatedServiceJourneyId, stopRefs)));
+
+        PtSituationElementRecord record = new PtSituationElementRecord();
+        record.setSituationNumber(situationNumber);
+        record.setParticipantRef("TST");
+        record.setCreationTime(ZonedDateTime.now().minusHours(1).toString());
+        record.setReportType("general");
+        record.setValidityPeriods(List.of());
+        record.setKeywords(List.of());
+        record.setSummaries(List.of());
+        record.setDescriptions(List.of());
+        record.setDetails(List.of());
+        record.setAdvices(List.of());
+        record.setInfoLinks(List.of());
+        record.setAffects(affects);
+        return record;
+    }
+
+    private static AffectedVehicleJourneyRecord affectedVehicleJourney(String datedServiceJourneyId,
+                                                                       String... stopRefs) {
+        List<AffectedStopPointRecord> stopPoints = new ArrayList<>();
+        for (String stopRef : stopRefs) {
+            AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+            stopPoint.setStopPointRef(stopRef);
+            stopPoint.setStopPointNames(List.of());
+            stopPoint.setStopConditions(List.of("startPoint"));
+            stopPoints.add(stopPoint);
+        }
+        StopPointsRecord stops = new StopPointsRecord();
+        stops.setStopPoints(stopPoints);
+        AffectedRouteRecord route = new AffectedRouteRecord();
+        route.setStopPoints(stops);
+        route.setSections(List.of());
+
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setVehicleJourneyRefs(List.of());
+        journey.setDatedVehicleJourneyRefs(List.of(datedServiceJourneyId));
+        journey.setRoutes(List.of(route));
+        return journey;
     }
 }

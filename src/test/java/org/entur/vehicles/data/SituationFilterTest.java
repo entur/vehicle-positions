@@ -1,6 +1,8 @@
 package org.entur.vehicles.data;
 
+import org.entur.vehicles.data.model.AffectedStop;
 import org.entur.vehicles.data.model.Affects;
+import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
@@ -315,5 +317,29 @@ public class SituationFilterTest {
                         + "reading it as 'match nothing' would silently empty every unfiltered "
                         + "situations query a future caller writes without the null ternary")
                 .isTrue();
+    }
+
+    /**
+     * Filtering is discovery, matching is attachment. A client asking "what is going on at
+     * Oslo S" must find a situation that names the stop only inside an affected journey,
+     * even though that scoped stop deliberately never widens what the journey matcher attaches.
+     */
+    @Test
+    public void testStopRefFindsAStopNamedOnlyInsideAnAffectedJourney() {
+        SituationUpdate situation = situation();
+        situation.getAffects().addVehicleJourney(new AffectedVehicleJourney(
+                null,
+                new DatedServiceJourney("TST:DatedServiceJourney:1"),
+                null,
+                null,
+                List.of(new AffectedStop(new StopPoint("NSR:StopPlace:157"), List.of()))));
+
+        SituationFilter matching = new SituationFilter(null, MetricType.QUERY, null, null, null, null,
+                Set.of("NSR:StopPlace:157"), null, null, null, null, null, null, null, null, null, null, null);
+        assertTrue(matching.isMatch(situation));
+
+        SituationFilter nonMatching = new SituationFilter(null, MetricType.QUERY, null, null, null, null,
+                Set.of("NSR:StopPlace:999"), null, null, null, null, null, null, null, null, null, null, null);
+        assertFalse(nonMatching.isMatch(situation));
     }
 }

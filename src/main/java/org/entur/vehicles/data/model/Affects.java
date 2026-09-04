@@ -36,35 +36,53 @@ public class Affects {
     private final Set<String> datedServiceJourneyIds = new HashSet<>();
     private final Set<String> operatorRefs = new HashSet<>();
 
-    public void addLine(Line line) {
+    private final List<AffectedVehicleJourney> vehicleJourneys = new ArrayList<>();
+    private final List<AffectedLine> affectedLines = new ArrayList<>();
+
+    /**
+     * Every stop this situation mentions, top-level and scoped alike. Backs the {@code stopRef}
+     * query filter - discovery. {@link #getStopRefs()} stays top-level-only and backs matching -
+     * attachment. The two are deliberately different sets; see the spec.
+     */
+    private final Set<String> allStopRefs = new HashSet<>();
+
+    public boolean addLine(Line line) {
         if (line != null && line.getLineRef() != null && lineRefs.add(line.getLineRef())) {
             lines.add(line);
+            return true;
         }
+        return false;
     }
 
     public void addStopPoint(StopPoint stopPoint) {
         if (stopPoint != null && stopPoint.getId() != null && stopRefs.add(stopPoint.getId())) {
             stopPoints.add(stopPoint);
+            allStopRefs.add(stopPoint.getId());
         }
     }
 
     public void addStopPlace(StopPoint stopPlace) {
         if (stopPlace != null && stopPlace.getId() != null && stopRefs.add(stopPlace.getId())) {
             stopPlaces.add(stopPlace);
+            allStopRefs.add(stopPlace.getId());
         }
     }
 
-    public void addServiceJourney(ServiceJourney serviceJourney) {
+    public boolean addServiceJourney(ServiceJourney serviceJourney) {
         if (serviceJourney != null && serviceJourney.getId() != null && serviceJourneyIds.add(serviceJourney.getId())) {
             serviceJourneys.add(serviceJourney);
+            return true;
         }
+        return false;
     }
 
-    public void addDatedServiceJourney(DatedServiceJourney datedServiceJourney) {
+    public boolean addDatedServiceJourney(DatedServiceJourney datedServiceJourney) {
         if (datedServiceJourney != null && datedServiceJourney.getId() != null
                 && datedServiceJourneyIds.add(datedServiceJourney.getId())) {
             datedServiceJourneys.add(datedServiceJourney);
+            return true;
         }
+        return false;
     }
 
     public void addOperator(Operator operator) {
@@ -126,6 +144,43 @@ public class Affects {
 
     public Set<String> getOperatorRefs() {
         return operatorRefs;
+    }
+
+    public void addVehicleJourney(AffectedVehicleJourney journey) {
+        if (journey == null) {
+            return;
+        }
+        vehicleJourneys.add(journey);
+        indexScopedStops(journey.getStops());
+    }
+
+    public void addAffectedLine(AffectedLine affectedLine) {
+        if (affectedLine == null) {
+            return;
+        }
+        affectedLines.add(affectedLine);
+        indexScopedStops(affectedLine.getStops());
+    }
+
+    private void indexScopedStops(List<AffectedStop> stops) {
+        for (AffectedStop stop : stops) {
+            if (stop.getStop() != null && stop.getStop().getId() != null) {
+                allStopRefs.add(stop.getStop().getId());
+            }
+        }
+    }
+
+    public List<AffectedVehicleJourney> getVehicleJourneys() {
+        return Collections.unmodifiableList(vehicleJourneys);
+    }
+
+    public List<AffectedLine> getAffectedLines() {
+        return Collections.unmodifiableList(affectedLines);
+    }
+
+    /** Top-level and scoped stops together. See {@link #allStopRefs}. */
+    public Set<String> getAllStopRefs() {
+        return allStopRefs;
     }
 
     public boolean isEmpty() {

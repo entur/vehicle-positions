@@ -404,6 +404,18 @@ public class SituationTriggeredRepublisher {
      * this compares it field by field via its own getters. {@code Line} overrides
      * {@code equals()} to include {@code lineName}, so this also catches a line rename that the
      * ref-only comparison the previous version of this predicate used would have missed.
+     * <p>
+     * The two entry lists are compared too, and they are the reason this is not merely a formality:
+     * a producer can edit the stops nested inside a journey entry, or one stop's conditions,
+     * without touching any flat list or id set. Those edits are both client-visible
+     * ({@code affects { vehicleJourneys { stops } }}) and match-relevant (SituationMatcher's
+     * scoped index decides whether the situation lands on {@code calls { situations }} or on the
+     * journey), so missing them would leave a subscriber on the wrong field indefinitely. The
+     * entry types define equals on their identifiers rather than on their nested model objects -
+     * see {@code AffectedVehicleJourney.equals} for why identity there would be the opposite
+     * failure, a republish storm.
+     * {@code SituationTriggeredRepublisherTest.testEveryClientVisibleGetterOnAffectsIsAccountedFor}
+     * guards this list the way its SituationUpdate twin guards the one above.
      */
     private static boolean affectsUnchanged(Affects previous, Affects current) {
         if (previous == null || current == null) {
@@ -415,7 +427,9 @@ public class SituationTriggeredRepublisher {
                 && Objects.equals(previous.getServiceJourneys(), current.getServiceJourneys())
                 && Objects.equals(previous.getDatedServiceJourneys(), current.getDatedServiceJourneys())
                 && Objects.equals(previous.getOperators(), current.getOperators())
-                && Objects.equals(previous.getVehicleModes(), current.getVehicleModes());
+                && Objects.equals(previous.getVehicleModes(), current.getVehicleModes())
+                && Objects.equals(previous.getVehicleJourneys(), current.getVehicleJourneys())
+                && Objects.equals(previous.getAffectedLines(), current.getAffectedLines());
     }
 
     /**
