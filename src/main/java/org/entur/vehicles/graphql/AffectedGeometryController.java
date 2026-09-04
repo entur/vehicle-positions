@@ -64,21 +64,34 @@ public class AffectedGeometryController {
     }
 
     /**
-     * Null when this journey has no span to draw: fewer than two affected stops, no service
-     * journey the planned data knows, a pattern without usable geometry, or stops that do not
-     * locate on the route. Every one of those is an ordinary shape in production, not an error.
+     * The affected span, or the journey's whole route when the situation names no stops under
+     * it - a journey affected as a whole is affected along all of it, and returning null there
+     * would make every client special-case the commonest tagging by falling back to
+     * {@code serviceJourney { pointsOnLink }}.
+     * <p>
+     * Null when this journey has no span to draw: exactly one affected stop (a point is not a
+     * span), no service journey the planned data knows, a pattern without usable geometry, or
+     * stops that do not locate on the route. Every one of those is an ordinary shape in
+     * production, not an error.
      */
     @SchemaMapping(typeName = "AffectedVehicleJourney", field = "affectedPointsOnLink")
     public PointsOnLink affectedPointsOnLink(AffectedVehicleJourney journey, GraphQLContext context) {
         List<AffectedStop> stops = journey.getStops();
         String serviceJourneyId = serviceJourneyIdOf(journey);
-        if (stops.size() < 2 || serviceJourneyId == null) {
+        if (serviceJourneyId == null || stops.size() == 1) {
             return null;
         }
         PlannedDataset dataset = plannedDataService.current();
         String journeyPatternId = dataset.journeyPatternOf(serviceJourneyId);
         if (journeyPatternId == null) {
             return null;
+        }
+        if (stops.isEmpty()) {
+            // The journey is affected as a whole, so the affected part is the whole route.
+            // Taken from the dataset's own encoded polyline rather than stitched and encoded
+            // here: that one is cached per pattern for the life of the dataset, and it is the
+            // identical value ServiceJourney.pointsOnLink serves.
+            return dataset.pointsOnLink(journeyPatternId);
         }
         // An absent key is a pattern not yet stitched; a present one may map to an empty array,
         // which is a pattern known to carry no usable geometry - so the memo is keyed on presence,

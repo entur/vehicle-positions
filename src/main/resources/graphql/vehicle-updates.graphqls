@@ -390,9 +390,13 @@ type AffectedVehicleJourney {
     line: Line
     operator: Operator
     stops: [AffectedStop]
-    # The part of this journey's geometry between the first and last affected stop.
-    # Null when the journey has no pattern geometry, or any affected stop cannot be located
-    # on it - a partial span would draw a confident line over the wrong part of the route.
+    # The part of this journey's geometry the situation affects: the span between the first
+    # and last affected stop, or - when the situation names no stops at all, meaning the
+    # journey is affected as a whole - the journey's entire route. An empty `stops` list is
+    # what tells those two cases apart.
+    # Null when the journey has no pattern geometry, when exactly one stop is affected (a
+    # point is not a span), or when any affected stop cannot be located on the route - a
+    # partial span would draw a confident line over the wrong part of it.
     affectedPointsOnLink: PointsOnLink
 }
 

@@ -127,6 +127,31 @@ class AffectedGeometryControllerTest {
                 journey(SERVICE_JOURNEY_2, STOP_1, STOP_2), context)).isNotNull();
     }
 
+    /**
+     * A situation can affect a journey as a whole rather than at particular stops - the producer
+     * names the journey and nests no stops under it. The affected part of a wholly affected
+     * journey is the whole journey, so the field returns its full route rather than nothing,
+     * sparing every client the special case of falling back to serviceJourney { pointsOnLink }.
+     * An empty stops list stays the unambiguous signal that this is what happened.
+     */
+    @Test
+    void aJourneyAffectedAsAWholeResolvesToItsEntireRoute() {
+        PointsOnLink resolved = controller.affectedPointsOnLink(
+                journey(SERVICE_JOURNEY_1), GraphQLContext.newContext().build());
+
+        assertThat(resolved).isNotNull();
+        // The pattern's full six points, not a span cut between named stops.
+        assertThat(resolved.getLength()).isEqualTo(6);
+    }
+
+    /** A journey affected as a whole, whose pattern has no geometry, still resolves to null. */
+    @Test
+    void aWhollyAffectedJourneyWithNoKnownPatternIsStillNull() {
+        assertThat(controller.affectedPointsOnLink(
+                journey("TST:ServiceJourney:unknown"), GraphQLContext.newContext().build()))
+                .isNull();
+    }
+
     /** A journey failing the cheap checks must not touch the planned data at all. */
     @Test
     void aJourneyWithTooFewStopsNeverReadsTheDataset() {

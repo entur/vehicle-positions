@@ -158,6 +158,8 @@ class ApplicationGraphQlSchemaTests {
     private static final String MIXED_GEOMETRY_SITUATION = "TST:SituationNumber:mixed-geometry-probe";
     private static final String MIXED_GEOMETRY_KNOWN_DSJ = "TST:DatedServiceJourney:mixed-geometry-known";
     private static final String MIXED_GEOMETRY_UNKNOWN_DSJ = "TST:DatedServiceJourney:mixed-geometry-unknown";
+    private static final String WHOLE_JOURNEY_SITUATION = "TST:SituationNumber:whole-journey-probe";
+    private static final String WHOLE_JOURNEY_DSJ = "TST:DatedServiceJourney:whole-journey-probe";
 
     /**
      * NSR lookup is disabled in the test context, so the real hierarchy is empty and this test
@@ -1536,5 +1538,69 @@ class ApplicationGraphQlSchemaTests {
         journey.setDatedVehicleJourneyRefs(List.of(datedServiceJourneyId));
         journey.setRoutes(List.of(route));
         return journey;
+    }
+
+    /**
+     * A situation affecting a journey as a whole - the producer names the journey and nests no
+     * stops under it - resolves to that journey's entire route, not to null. The empty stops
+     * list is what tells a client the situation is journey-wide rather than stop-scoped.
+     */
+    @Test
+    void aJourneyAffectedAsAWholeResolvesToItsEntireRouteThroughTheSchema() {
+        int[] geometry = new int[12];
+        for (int i = 0; i < 6; i++) {
+            geometry[i * 2] = 59_000_000 + i * 1_000;
+            geometry[i * 2 + 1] = 10_000_000;
+        }
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addServiceLink(AFFECTED_GEOMETRY_LINK, geometry)
+                .addJourneyPattern(AFFECTED_GEOMETRY_PATTERN, List.of(AFFECTED_GEOMETRY_LINK))
+                .addServiceJourney(AFFECTED_GEOMETRY_SJ, AFFECTED_GEOMETRY_PATTERN)
+                .addOperatingDay("TST:OperatingDay:whole-journey-probe", "2026-09-04")
+                .addDatedServiceJourney(WHOLE_JOURNEY_DSJ, AFFECTED_GEOMETRY_SJ,
+                        "TST:OperatingDay:whole-journey-probe")
+                .build();
+        when(plannedDataService.current()).thenReturn(dataset);
+        when(plannedDataService.findDatedServiceJourney(WHOLE_JOURNEY_DSJ))
+                .thenReturn(dataset.datedServiceJourney(WHOLE_JOURNEY_DSJ));
+
+        // No stop refs at all - the journey is affected as a whole.
+        situationRepository.add(situationAffectingJourneyAtStops(
+                WHOLE_JOURNEY_SITUATION, WHOLE_JOURNEY_DSJ));
+
+        String document = """
+                query {
+                  situations(includeClosed: true, situationNumbers: ["%s"]) {
+                    affects {
+                      vehicleJourneys {
+                        stops { stop { id } }
+                        affectedPointsOnLink { length points }
+                      }
+                    }
+                  }
+                }
+                """.formatted(WHOLE_JOURNEY_SITUATION);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(),
+                        "test-whole-journey", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        List<Map<String, Object>> stops =
+                response.field("situations[0].affects.vehicleJourneys[0].stops").getValue();
+        assertThat(stops)
+                .withFailMessage("an empty stops list is the signal that the whole journey is affected")
+                .isEmpty();
+
+        Number length = response.field(
+                "situations[0].affects.vehicleJourneys[0].affectedPointsOnLink.length").getValue();
+        assertThat(length)
+                .withFailMessage("a wholly affected journey resolves to its full route, not to null")
+                .isNotNull();
+        // The pattern's full six points.
+        assertThat(length.intValue()).isEqualTo(6);
     }
 }
