@@ -11,22 +11,22 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Flattened view of the objects a situation affects.
+ * What a situation affects: the stops, operators and modes it names outright, and the
+ * journey and line entries that pair a journey or line with the stops it is affected at.
  * <p>
- * Alongside the display lists, each identifier is kept in a {@link Set} so that
- * filtering is a constant-time lookup rather than a walk of nested lists. Adding
- * an object whose identifier is already present is a no-op, which deduplicates
- * references that SIRI carries in more than one place - a line, for instance, can
- * be named both by an affected network and by an affected vehicle journey.
+ * Lines and journeys have no flat list of their own - {@link #getVehicleJourneys()} and
+ * {@link #getAffectedLines()} carry them, and the mapper guarantees every line and journey the
+ * situation names reaches one of the two. Their identifiers are still kept in a {@link Set}
+ * each, so filtering and matching are constant-time lookups rather than a walk of the entries.
+ * Adding an identifier already present is a no-op, which deduplicates the references SIRI
+ * carries in more than one place - a line, for instance, can be named both by an affected
+ * network and by an affected vehicle journey.
  */
 @SchemaMapping
 public class Affects {
 
-    private final List<Line> lines = new ArrayList<>();
     private final List<StopPoint> stopPoints = new ArrayList<>();
     private final List<StopPoint> stopPlaces = new ArrayList<>();
-    private final List<ServiceJourney> serviceJourneys = new ArrayList<>();
-    private final List<DatedServiceJourney> datedServiceJourneys = new ArrayList<>();
     private final List<Operator> operators = new ArrayList<>();
     private final Set<VehicleModeEnumeration> vehicleModes = new LinkedHashSet<>();
 
@@ -46,12 +46,9 @@ public class Affects {
      */
     private final Set<String> allStopRefs = new HashSet<>();
 
+    /** @return true when this is the first time the situation names this line. */
     public boolean addLine(Line line) {
-        if (line != null && line.getLineRef() != null && lineRefs.add(line.getLineRef())) {
-            lines.add(line);
-            return true;
-        }
-        return false;
+        return line != null && line.getLineRef() != null && lineRefs.add(line.getLineRef());
     }
 
     public void addStopPoint(StopPoint stopPoint) {
@@ -68,21 +65,16 @@ public class Affects {
         }
     }
 
+    /** @return true when this is the first time the situation names this journey. */
     public boolean addServiceJourney(ServiceJourney serviceJourney) {
-        if (serviceJourney != null && serviceJourney.getId() != null && serviceJourneyIds.add(serviceJourney.getId())) {
-            serviceJourneys.add(serviceJourney);
-            return true;
-        }
-        return false;
+        return serviceJourney != null && serviceJourney.getId() != null
+                && serviceJourneyIds.add(serviceJourney.getId());
     }
 
+    /** @return true when this is the first time the situation names this dated journey. */
     public boolean addDatedServiceJourney(DatedServiceJourney datedServiceJourney) {
-        if (datedServiceJourney != null && datedServiceJourney.getId() != null
-                && datedServiceJourneyIds.add(datedServiceJourney.getId())) {
-            datedServiceJourneys.add(datedServiceJourney);
-            return true;
-        }
-        return false;
+        return datedServiceJourney != null && datedServiceJourney.getId() != null
+                && datedServiceJourneyIds.add(datedServiceJourney.getId());
     }
 
     public void addOperator(Operator operator) {
@@ -97,24 +89,12 @@ public class Affects {
         }
     }
 
-    public List<Line> getLines() {
-        return Collections.unmodifiableList(lines);
-    }
-
     public List<StopPoint> getStopPoints() {
         return Collections.unmodifiableList(stopPoints);
     }
 
     public List<StopPoint> getStopPlaces() {
         return Collections.unmodifiableList(stopPlaces);
-    }
-
-    public List<ServiceJourney> getServiceJourneys() {
-        return Collections.unmodifiableList(serviceJourneys);
-    }
-
-    public List<DatedServiceJourney> getDatedServiceJourneys() {
-        return Collections.unmodifiableList(datedServiceJourneys);
     }
 
     public List<Operator> getOperators() {
@@ -184,11 +164,11 @@ public class Affects {
     }
 
     public boolean isEmpty() {
-        return lines.isEmpty()
+        return lineRefs.isEmpty()
                 && stopPoints.isEmpty()
                 && stopPlaces.isEmpty()
-                && serviceJourneys.isEmpty()
-                && datedServiceJourneys.isEmpty()
+                && serviceJourneyIds.isEmpty()
+                && datedServiceJourneyIds.isEmpty()
                 && operators.isEmpty()
                 && vehicleModes.isEmpty();
     }

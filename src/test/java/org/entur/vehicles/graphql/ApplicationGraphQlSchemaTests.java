@@ -404,7 +404,7 @@ class ApplicationGraphQlSchemaTests {
                     openEnded
                     affects {
                       vehicleModes
-                      lines { lineRef }
+                      affectedLines { line { lineRef } }
                     }
                   }
                 }
@@ -445,7 +445,7 @@ class ApplicationGraphQlSchemaTests {
         List<String> vehicleModes = response.field("situations[0].affects.vehicleModes").getValue();
         assertThat(vehicleModes).containsExactly("BUS");
 
-        String lineRef = response.field("situations[0].affects.lines[0].lineRef").getValue();
+        String lineRef = response.field("situations[0].affects.affectedLines[0].line.lineRef").getValue();
         assertThat(lineRef).isEqualTo("TST:Line:1");
     }
 

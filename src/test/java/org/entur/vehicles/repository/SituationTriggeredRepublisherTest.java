@@ -668,20 +668,22 @@ public class SituationTriggeredRepublisherTest {
 
     /** Getters on {@code Affects} compared by {@code affectsUnchanged}. */
     private static final Set<String> COMPARED_AFFECTS_GETTERS = Set.of(
-            "getLines", "getStopPoints", "getStopPlaces", "getServiceJourneys",
-            "getDatedServiceJourneys", "getOperators", "getVehicleModes", "getVehicleJourneys",
-            "getAffectedLines");
+            "getStopPoints", "getStopPlaces", "getOperators", "getVehicleModes",
+            "getVehicleJourneys", "getAffectedLines");
 
     /** Getters on {@code Affects} deliberately not compared, and why. */
     private static final Map<String, String> IGNORED_AFFECTS_GETTERS = Map.of(
-            "getLineRefs", "the ids of getLines(), which is compared directly",
+            "getLineRefs", "the refs of the lines in getAffectedLines() and of the line on each "
+                    + "getVehicleJourneys() entry - both compared directly, and both compare the "
+                    + "line by ref",
             "getStopRefs", "the ids of getStopPoints() + getStopPlaces(), both compared directly",
-            "getServiceJourneyIds", "the ids of getServiceJourneys(), which is compared directly",
-            "getDatedServiceJourneyIds", "the ids of getDatedServiceJourneys(), compared directly",
+            "getServiceJourneyIds", "the ids of the journeys in getVehicleJourneys(), compared directly",
+            "getDatedServiceJourneyIds", "the ids of the dated journeys in getVehicleJourneys(), "
+                    + "compared directly",
             "getOperatorRefs", "the ids of getOperators(), which is compared directly",
             "getAllStopRefs", "getStopRefs() union the ids of the stops inside getVehicleJourneys() "
                     + "and getAffectedLines() - every one of those is compared directly",
-            "isEmpty", "a derived predicate over the flat lists, all of which are compared directly");
+            "isEmpty", "a derived predicate over the ref sets and the flat lists above");
 
     /** Client-visible getters compared by {@code SituationTriggeredRepublisher.isUnchangedRedelivery}. */
     private static final Set<String> COMPARED_GETTERS = Set.of(

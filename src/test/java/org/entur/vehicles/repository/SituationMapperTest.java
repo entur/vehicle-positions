@@ -17,7 +17,9 @@ import org.entur.vehicles.data.SituationUpdate;
 import org.entur.vehicles.data.StopConditionEnumeration;
 import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.WorkflowStatusEnumeration;
+import org.entur.vehicles.data.model.AffectedLine;
 import org.entur.vehicles.data.model.AffectedVehicleJourney;
+import org.entur.vehicles.data.model.Affects;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.StopPoint;
@@ -81,7 +83,7 @@ public class SituationMapperTest {
     /**
      * A DatedServiceJourney the planned data knows resolves to its ServiceJourney + operating
      * date - the mapping VehicleRepository and TimetableRepository already apply. The
-     * producer-tagged ServiceJourney list and its id index are deliberately left alone.
+     * producer-tagged service journey id index is deliberately left alone.
      */
     @Test
     public void testResolvedDatedServiceJourneyCarriesItsServiceJourney() {
@@ -93,25 +95,25 @@ public class SituationMapperTest {
 
         SituationUpdate situation = mapper.map(recordAffectingDatedServiceJourney("TST:DatedServiceJourney:1"));
 
-        List<DatedServiceJourney> dated = situation.getAffects().getDatedServiceJourneys();
-        assertEquals(1, dated.size());
-        assertEquals("TST:DatedServiceJourney:1", dated.get(0).getId());
-        assertNotNull(dated.get(0).getServiceJourney());
-        assertEquals("TST:ServiceJourney:1", dated.get(0).getServiceJourney().getId());
-        assertEquals("2026-08-25", dated.get(0).getServiceJourney().getDate());
+        List<AffectedVehicleJourney> entries = situation.getAffects().getVehicleJourneys();
+        assertEquals(1, entries.size());
+        DatedServiceJourney dated = entries.get(0).getDatedServiceJourney();
+        assertEquals("TST:DatedServiceJourney:1", dated.getId());
+        assertNotNull(dated.getServiceJourney());
+        assertEquals("TST:ServiceJourney:1", dated.getServiceJourney().getId());
+        assertEquals("2026-08-25", dated.getServiceJourney().getDate());
         assertTrue(situation.getAffects().getServiceJourneyIds().isEmpty(),
                 "resolving must not expand the producer-tagged service journeys");
-        assertTrue(situation.getAffects().getServiceJourneys().isEmpty());
     }
 
     @Test
     public void testUnresolvedDatedServiceJourneyKeepsServiceJourneyNull() {
         SituationUpdate situation = mapper.map(recordAffectingDatedServiceJourney("TST:DatedServiceJourney:unknown"));
 
-        List<DatedServiceJourney> dated = situation.getAffects().getDatedServiceJourneys();
-        assertEquals(1, dated.size());
-        assertEquals("TST:DatedServiceJourney:unknown", dated.get(0).getId());
-        assertNull(dated.get(0).getServiceJourney());
+        List<AffectedVehicleJourney> entries = situation.getAffects().getVehicleJourneys();
+        assertEquals(1, entries.size());
+        assertEquals("TST:DatedServiceJourney:unknown", entries.get(0).getDatedServiceJourney().getId());
+        assertNull(entries.get(0).getDatedServiceJourney().getServiceJourney());
     }
 
     private static DatedServiceJourney datedServiceJourney(String id, String serviceJourneyId, String date) {
@@ -233,8 +235,8 @@ public class SituationMapperTest {
 
         SituationUpdate situation = mapper.map(record);
 
-        // The line is named by both the network and the vehicle journey - it must appear once.
-        assertEquals(1, situation.getAffects().getLines().size());
+        // The line is named by both the network and the vehicle journey - it must count once.
+        assertEquals(1, situation.getAffects().getLineRefs().size());
         assertTrue(situation.getAffects().getLineRefs().contains("TST:Line:1"));
         assertTrue(situation.getAffects().getStopRefs().contains("TST:Quay:1"));
         assertTrue(situation.getAffects().getStopRefs().contains("TST:StopPlace:9"));
@@ -401,8 +403,9 @@ public class SituationMapperTest {
 
         SituationUpdate situation = mapper.map(record);
 
-        assertEquals(1, situation.getAffects().getServiceJourneys().size());
-        assertEquals("2026-08-05", situation.getAffects().getServiceJourneys().get(0).getDate(),
+        assertEquals(1, situation.getAffects().getVehicleJourneys().size());
+        assertEquals("2026-08-05",
+                situation.getAffects().getVehicleJourneys().get(0).getServiceJourney().getDate(),
                 "The framed ref's dataFrameRef date must not be discarded by the later bare ref");
     }
 
@@ -413,6 +416,63 @@ public class SituationMapperTest {
         record.setSituationNumber(":Foo:1");
 
         assertNull(mapper.map(record));
+    }
+
+    /**
+     * A producer can name a line under VehicleJourneys and no journey on it. The block then means
+     * "journeys on this line, unspecified", which is line-level - so it must surface as an
+     * AffectedLine entry carrying that block's stops. Nothing else in Affects would name the line
+     * at all, and the stops would have no entry to hang on.
+     */
+    @Test
+    public void testJourneyBlockNamingOnlyALineBecomesAnAffectedLineEntry() {
+        PtSituationElementRecord record = minimalRecord();
+
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setLineRef("TST:Line:1");
+        journey.setVehicleJourneyRefs(List.of());
+        journey.setDatedVehicleJourneyRefs(List.of());
+        journey.setRoutes(List.of(route(affectedStop("NSR:StopPlace:1"), affectedStop("NSR:StopPlace:2"))));
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setVehicleJourneys(List.of(journey));
+        record.setAffects(affects);
+
+        Affects mapped = mapper.map(record).getAffects();
+
+        assertTrue(mapped.getVehicleJourneys().isEmpty(),
+                "no journey was named, so there is no journey entry to carry the stops");
+        assertEquals(1, mapped.getAffectedLines().size());
+        AffectedLine affectedLine = mapped.getAffectedLines().get(0);
+        assertEquals("TST:Line:1", affectedLine.getLine().getLineRef());
+        assertEquals(List.of("NSR:StopPlace:1", "NSR:StopPlace:2"),
+                affectedLine.getStops().stream().map(stop -> stop.getStop().getId()).toList());
+    }
+
+    /**
+     * The other half of the rule: a block that does name a journey is scoped to that journey, and
+     * its LineRef is display context only. Promoting it to a line entry would widen the situation
+     * from one journey to every journey on the line.
+     */
+    @Test
+    public void testJourneyBlockNamingAJourneyProducesNoLineEntry() {
+        PtSituationElementRecord record = minimalRecord();
+
+        AffectedVehicleJourneyRecord journey = new AffectedVehicleJourneyRecord();
+        journey.setLineRef("TST:Line:1");
+        journey.setVehicleJourneyRefs(List.of("TST:ServiceJourney:1"));
+        journey.setDatedVehicleJourneyRefs(List.of());
+        journey.setRoutes(List.of(route(affectedStop("NSR:StopPlace:1"))));
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setVehicleJourneys(List.of(journey));
+        record.setAffects(affects);
+
+        Affects mapped = mapper.map(record).getAffects();
+
+        assertEquals(1, mapped.getVehicleJourneys().size());
+        assertTrue(mapped.getAffectedLines().isEmpty(),
+                "the line is context for the named journey, not an affected line in its own right");
     }
 
     private static AffectedStopPointRecord affectedStop(String stopRef, String... conditions) {
@@ -582,8 +642,8 @@ public class SituationMapperTest {
         assertEquals(List.of(StopConditionEnumeration.destination),
                 entry.getStops().get(2).getStopConditions());
 
-        // The flat view is unchanged, and the second block's stops are now discoverable.
-        assertEquals(1, situation.getAffects().getDatedServiceJourneys().size());
+        // The journey is still counted once, and the second block's stops are now discoverable.
+        assertEquals(1, situation.getAffects().getDatedServiceJourneyIds().size());
         assertEquals(3, situation.getAffects().getAllStopRefs().size(),
                 "a stop named only by the second block must still reach the stopRef filter");
     }
@@ -626,7 +686,7 @@ public class SituationMapperTest {
         assertEquals(List.of("NSR:StopPlace:157", "NSR:StopPlace:288"),
                 situation.getAffects().getAffectedLines().get(0).getStops().stream()
                         .map(stop -> stop.getStop().getId()).toList());
-        assertEquals(1, situation.getAffects().getLines().size(), "the flat line list still dedupes");
+        assertEquals(1, situation.getAffects().getLineRefs().size(), "the line ref set still dedupes");
         assertEquals(2, situation.getAffects().getAllStopRefs().size());
     }
 

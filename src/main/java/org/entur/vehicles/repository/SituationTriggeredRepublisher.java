@@ -421,11 +421,8 @@ public class SituationTriggeredRepublisher {
         if (previous == null || current == null) {
             return previous == current;
         }
-        return Objects.equals(previous.getLines(), current.getLines())
-                && Objects.equals(previous.getStopPoints(), current.getStopPoints())
+        return Objects.equals(previous.getStopPoints(), current.getStopPoints())
                 && Objects.equals(previous.getStopPlaces(), current.getStopPlaces())
-                && Objects.equals(previous.getServiceJourneys(), current.getServiceJourneys())
-                && Objects.equals(previous.getDatedServiceJourneys(), current.getDatedServiceJourneys())
                 && Objects.equals(previous.getOperators(), current.getOperators())
                 && Objects.equals(previous.getVehicleModes(), current.getVehicleModes())
                 && Objects.equals(previous.getVehicleJourneys(), current.getVehicleJourneys())

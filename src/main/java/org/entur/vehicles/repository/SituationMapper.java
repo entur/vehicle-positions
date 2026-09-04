@@ -351,6 +351,19 @@ public class SituationMapper {
                                 .add(stops);
                     }
                 }
+
+                // A block naming a line and no journey on it means "journeys on this line,
+                // unspecified" - which is line-level, and the only thing that would otherwise
+                // carry it. It merges into lineEntries like any other line block, so a line
+                // named both here and under Networks unions its stops rather than appearing
+                // twice. A block that does name journeys is scoped to them, and its line stays
+                // display context on their entries.
+                if (line != null && line.getLineRef() != null && !namedAJourney(journey)) {
+                    lineEntries
+                            .computeIfAbsent(line.getLineRef(), key -> new LineEntry(line, new StopUnion()))
+                            .stops()
+                            .add(stops);
+                }
             }
         }
 
@@ -363,6 +376,14 @@ public class SituationMapper {
         }
 
         return affects;
+    }
+
+    /** Whether the block names a journey in any of the three forms SIRI allows. */
+    private static boolean namedAJourney(AffectedVehicleJourneyRecord journey) {
+        return (journey.getFramedVehicleJourneyRef() != null
+                && journey.getFramedVehicleJourneyRef().getDatedVehicleJourneyRef() != null)
+                || containsValues(journey.getVehicleJourneyRefs())
+                || containsValues(journey.getDatedVehicleJourneyRefs());
     }
 
     /**

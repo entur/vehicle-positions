@@ -17,28 +17,30 @@ public class AffectsTest {
     public void testEmptyByDefault() {
         Affects affects = new Affects();
         assertTrue(affects.isEmpty());
-        assertTrue(affects.getLines().isEmpty());
         assertTrue(affects.getLineRefs().isEmpty());
+        assertTrue(affects.getAffectedLines().isEmpty());
+        assertTrue(affects.getVehicleJourneys().isEmpty());
     }
 
     @Test
-    public void testAddingLinePopulatesBothListAndRefSet() {
+    public void testAddingLinePopulatesTheRefSet() {
         Affects affects = new Affects();
-        affects.addLine(new Line("TST:Line:1"));
 
+        assertTrue(affects.addLine(new Line("TST:Line:1")));
         assertFalse(affects.isEmpty());
-        assertEquals(1, affects.getLines().size());
         assertTrue(affects.getLineRefs().contains("TST:Line:1"));
     }
 
+    /**
+     * The ref set is what dedupes a line SIRI names twice - once under a network and once on a
+     * vehicle journey. The second add reports false so a caller can tell the two apart.
+     */
     @Test
-    public void testDuplicateLineIsAddedOnce() {
+    public void testDuplicateLineIsCountedOnce() {
         Affects affects = new Affects();
-        affects.addLine(new Line("TST:Line:1", "First"));
-        affects.addLine(new Line("TST:Line:1", "Duplicate from vehicle journey"));
+        assertTrue(affects.addLine(new Line("TST:Line:1", "First")));
+        assertFalse(affects.addLine(new Line("TST:Line:1", "Duplicate from vehicle journey")));
 
-        assertEquals(1, affects.getLines().size());
-        assertEquals("First", affects.getLines().get(0).getLineName());
         assertEquals(1, affects.getLineRefs().size());
     }
 

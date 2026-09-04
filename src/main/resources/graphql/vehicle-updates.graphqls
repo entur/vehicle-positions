@@ -368,18 +368,18 @@ type Situation {
 }
 
 type Affects {
-    lines: [Line]
     stopPoints: [Stop]
     stopPlaces: [Stop]
-    serviceJourneys: [ServiceJourney]
-    datedServiceJourneys: [DatedServiceJourney]
     operators: [Operator]
     vehicleModes: [VehicleModeEnumeration]
     # The journey-to-stops pairing SIRI carries: a situation is often tagged on a journey
     # AND the stops it is affected at, and is only relevant to a traveller whose trip visits
-    # them. Every journey listed here also appears in serviceJourneys/datedServiceJourneys,
-    # and every line in lines, so existing clients see no change.
+    # them. Every journey the situation names appears here, so this is the only place to read
+    # them from - there is no flat serviceJourneys list beside it.
     vehicleJourneys: [AffectedVehicleJourney]
+    # Every line the situation names as affected in its own right, with the stops it is
+    # affected at. A line named only as context for an affected journey is not here - it is
+    # on that journey's entry.
     affectedLines: [AffectedLine]
 }
 
