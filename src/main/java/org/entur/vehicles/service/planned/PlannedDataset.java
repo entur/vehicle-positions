@@ -45,6 +45,8 @@ public final class PlannedDataset {
     private final Map<String, String> serviceJourneyLine;
     /** Line id -> service journey ids on it, sorted. Only lines the export declares. */
     private final Map<String, String[]> lineServiceJourneys;
+    /** Line id -> the distinct journey patterns of its journeys, most vertices first. */
+    private final Map<String, String[]> lineJourneyPatterns;
     private final List<Codespace> codespaces;
     private final ConcurrentHashMap<String, PointsOnLink> patternPolylines = new ConcurrentHashMap<>();
     private final Stats stats;
@@ -57,6 +59,7 @@ public final class PlannedDataset {
                            Map<String, int[]> linkGeometry,
                            Map<String, String> serviceJourneyLine,
                            Map<String, String[]> lineServiceJourneys,
+                           Map<String, String[]> lineJourneyPatterns,
                            List<Codespace> codespaces,
                            Stats stats) {
         this.operators = operators;
@@ -67,6 +70,7 @@ public final class PlannedDataset {
         this.linkGeometry = linkGeometry;
         this.serviceJourneyLine = serviceJourneyLine;
         this.lineServiceJourneys = lineServiceJourneys;
+        this.lineJourneyPatterns = lineJourneyPatterns;
         this.codespaces = codespaces;
         this.stats = stats;
     }
@@ -103,6 +107,25 @@ public final class PlannedDataset {
     /** The line id a service journey runs on, or null if unknown. */
     public String lineOf(String serviceJourneyId) {
         return serviceJourneyId == null ? null : serviceJourneyLine.get(serviceJourneyId);
+    }
+
+    /** Shared with every caller and never copied - callers must not mutate it. */
+    private static final String[] NO_PATTERNS = new String[0];
+
+    /**
+     * The line's distinct journey patterns, most vertices first and ties by id, so the pattern a
+     * line-level situation is drawn on is stable across reloads. Patterns without usable geometry
+     * are already excluded, so a caller can slice each in turn without re-checking. Empty, never
+     * null, for a line the export does not declare.
+     * <p>
+     * The returned array is shared; callers must treat it as read-only.
+     */
+    public String[] journeyPatternsOf(String lineId) {
+        if (lineId == null) {
+            return NO_PATTERNS;
+        }
+        String[] patterns = lineJourneyPatterns.get(lineId);
+        return patterns != null ? patterns : NO_PATTERNS;
     }
 
     // ---- Catalogue: what the export declares, independent of live vehicles. Filters keep
@@ -489,6 +512,54 @@ public final class PlannedDataset {
                 Arrays.sort(ids);
                 lineServiceJourneys.put(e.getKey(), ids);
             }
+
+            // Vertex count per pattern, summed from its links rather than stitched: ordering only
+            // needs the size of the shape, and stitching every pattern at build time would cost
+            // an array copy per pattern for a number we can add up.
+            Map<String, Integer> patternVertices = new HashMap<>(patternLinks.size());
+            for (Map.Entry<String, String[]> e : patternLinks.entrySet()) {
+                int vertices = 0;
+                for (String linkId : e.getValue()) {
+                    int[] geometry = linkGeometry.get(linkId);
+                    if (geometry != null) {
+                        vertices += geometry.length / 2;
+                    }
+                }
+                patternVertices.put(e.getKey(), vertices);
+            }
+
+            // A line's shape is the shape of its journeys' patterns. Ordered by vertex count
+            // descending so the most complete variant is the representative, ties by id so a
+            // reload does not silently move the representative around.
+            Comparator<String> byShapeThenId = Comparator
+                    .comparingInt((String patternId) -> patternVertices.getOrDefault(patternId, 0))
+                    .reversed()
+                    .thenComparing(Comparator.naturalOrder());
+            Map<String, String[]> lineJourneyPatterns = new HashMap<>(journeysByLine.size());
+            int linesWithoutGeometry = 0;
+            for (Map.Entry<String, List<String>> e : journeysByLine.entrySet()) {
+                TreeSet<String> patterns = new TreeSet<>(byShapeThenId);
+                for (String serviceJourneyId : e.getValue()) {
+                    String patternId = serviceJourneyPattern.get(serviceJourneyId);
+                    // "" is the builder's marker for a journey whose JourneyPatternRef was absent;
+                    // a zero vertex count is a pattern that can never yield a span.
+                    if (patternId != null && !patternId.isEmpty()
+                            && patternVertices.getOrDefault(patternId, 0) > 0) {
+                        patterns.add(patternId);
+                    }
+                }
+                if (patterns.isEmpty()) {
+                    linesWithoutGeometry++;
+                } else {
+                    lineJourneyPatterns.put(e.getKey(), patterns.toArray(new String[0]));
+                }
+            }
+            if (linesWithoutGeometry > 0) {
+                LOG.info("Planned data: {} of {} lines with journeys have no journey pattern with "
+                        + "geometry - line-level situations on them resolve no polyline.",
+                        linesWithoutGeometry, journeysByLine.size());
+            }
+
             TreeSet<String> codespaceIds = new TreeSet<>();
             for (String id : lines.keySet()) {
                 codespaceIds.add(codespaceOf(id));
@@ -557,6 +628,7 @@ public final class PlannedDataset {
                     Map.copyOf(linkGeometry),
                     Map.copyOf(serviceJourneyLine),
                     Map.copyOf(lineServiceJourneys),
+                    Map.copyOf(lineJourneyPatterns),
                     List.copyOf(codespaces),
                     stats);
         }

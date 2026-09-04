@@ -1,6 +1,7 @@
 package org.entur.vehicles.graphql;
 
 import graphql.GraphQLContext;
+import org.entur.vehicles.data.model.AffectedLine;
 import org.entur.vehicles.data.model.AffectedStop;
 import org.entur.vehicles.data.model.AffectedVehicleJourney;
 import org.entur.vehicles.data.model.Location;
@@ -21,9 +22,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Resolves {@code AffectedVehicleJourney.affectedPointsOnLink} lazily, mirroring
+ * Resolves {@code AffectedVehicleJourney.affectedPointsOnLink} and
+ * {@code AffectedLine.affectedPointsOnLink} lazily, mirroring
  * {@link ServiceJourneyGeometryController}: a client that does not select the field pays
  * nothing, and situations are never enriched with geometry at ingest.
+ * <p>
+ * Both live here to share the per-request memo below: a line-wide closure names the line and
+ * the journeys on it, and those resolve over the same handful of journey patterns.
  * <p>
  * Per object rather than batched, and that is not an oversight. This field is nullable - a
  * journey the planned data does not know, or one whose stops do not project onto its route,
@@ -53,14 +58,18 @@ public class AffectedGeometryController {
     private final PlannedDataService plannedDataService;
     private final NSRService nsrService;
     private final double maxSnapMeters;
+    private final int maxLinePatterns;
 
     public AffectedGeometryController(@Autowired PlannedDataService plannedDataService,
                                       @Autowired NSRService nsrService,
                                       @Value("${vehicle.situations.affected-geometry.max-snap-meters:500}")
-                                      double maxSnapMeters) {
+                                      double maxSnapMeters,
+                                      @Value("${vehicle.situations.affected-geometry.max-line-patterns:25}")
+                                      int maxLinePatterns) {
         this.plannedDataService = plannedDataService;
         this.nsrService = nsrService;
         this.maxSnapMeters = maxSnapMeters;
+        this.maxLinePatterns = maxLinePatterns;
     }
 
     /**
@@ -100,11 +109,65 @@ public class AffectedGeometryController {
         if (geometry.length < 4) {
             return null;
         }
-        List<Location> locations = new ArrayList<>(stops.size());
-        for (AffectedStop stop : stops) {
-            locations.add(locationOf(stop));
+        List<Location> locations = locationsOf(stops);
+        if (locations == null) {
+            return null;
         }
         return PolylineSlicer.slice(geometry, locations, maxSnapMeters);
+    }
+
+    /**
+     * The affected span of a line: the span between its affected stops on the first of the line's
+     * journey patterns they locate on, tried longest-first, or - when the situation names no stops
+     * - the whole route of its longest pattern.
+     * <p>
+     * A line has many patterns and the dataset holds no stop sequence for any of them (the export
+     * parse keeps service links only), so "which pattern serves these stops" cannot be asked
+     * directly. {@link PolylineSlicer} already answers the geometric form of that question: it
+     * yields null unless every stop snaps within {@code maxSnapMeters}, which makes first fit a
+     * search for the pattern the stops are actually on rather than a guess.
+     * <p>
+     * Null in exactly the cases the journey field is null for: one affected stop, a line without
+     * pattern geometry, or stops that locate on none of its patterns.
+     */
+    @SchemaMapping(typeName = "AffectedLine", field = "affectedPointsOnLink")
+    public PointsOnLink affectedPointsOnLink(AffectedLine affectedLine, GraphQLContext context) {
+        List<AffectedStop> stops = affectedLine.getStops();
+        String lineRef = affectedLine.getLine() != null ? affectedLine.getLine().getLineRef() : null;
+        if (lineRef == null || stops.size() == 1) {
+            return null;
+        }
+        PlannedDataset dataset = plannedDataService.current();
+        String[] patterns = dataset.journeyPatternsOf(lineRef);
+        if (patterns.length == 0) {
+            return null;
+        }
+        if (stops.isEmpty()) {
+            // Affected as a whole, so the affected part is the whole route - of the longest
+            // pattern, which journeyPatternsOf orders first. From the dataset's own encoded
+            // cache, so this is the identical value ServiceJourney.pointsOnLink serves.
+            return dataset.pointsOnLink(patterns[0]);
+        }
+        List<Location> locations = locationsOf(stops);
+        if (locations == null) {
+            return null;
+        }
+        // A line with dozens of variants whose stops fit none of them would otherwise stitch every
+        // one of them per request. Ordered longest-first, so the cap drops the least representative
+        // shapes rather than arbitrary ones.
+        int limit = Math.min(patterns.length, maxLinePatterns);
+        for (int i = 0; i < limit; i++) {
+            String journeyPatternId = patterns[i];
+            int[] geometry = memo(context).computeIfAbsent(journeyPatternId, dataset::stitchedGeometry);
+            if (geometry.length < 4) {
+                continue;
+            }
+            PointsOnLink sliced = PolylineSlicer.slice(geometry, locations, maxSnapMeters);
+            if (sliced != null) {
+                return sliced;
+            }
+        }
+        return null;
     }
 
     /**
@@ -126,6 +189,23 @@ public class AffectedGeometryController {
             return journey.getDatedServiceJourney().getServiceJourney().getId();
         }
         return journey.getServiceJourney() != null ? journey.getServiceJourney().getId() : null;
+    }
+
+    /**
+     * The affected stops' locations, or null when any of them has none - {@link PolylineSlicer}
+     * suppresses the whole span in that case, so on the line resolver, returning early here saves
+     * stitching every one of the line's patterns to reach a null that was certain from the start.
+     */
+    private List<Location> locationsOf(List<AffectedStop> stops) {
+        List<Location> locations = new ArrayList<>(stops.size());
+        for (AffectedStop stop : stops) {
+            Location location = locationOf(stop);
+            if (location == null) {
+                return null;
+            }
+            locations.add(location);
+        }
+        return locations;
     }
 
     /** Null when the stop is unknown to NSR or NSR lookup is disabled - the slicer then yields null. */

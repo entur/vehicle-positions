@@ -67,7 +67,7 @@ class AffectedGeometryControllerTest {
         when(nsrService.getStop(STOP_1)).thenReturn(new StopPoint(STOP_1, "One", new Location(10.0, 59.001)));
         when(nsrService.getStop(STOP_2)).thenReturn(new StopPoint(STOP_2, "Two", new Location(10.0, 59.004)));
 
-        controller = new AffectedGeometryController(plannedDataService, nsrService, 500);
+        controller = new AffectedGeometryController(plannedDataService, nsrService, 500, 25);
     }
 
     /**

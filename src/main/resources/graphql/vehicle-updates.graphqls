@@ -402,8 +402,15 @@ type AffectedVehicleJourney {
 
 type AffectedLine {
     line: Line
-    # A line has many journey patterns, so a line entry carries no geometry.
     stops: [AffectedStop]
+    # The part of this line's geometry the situation affects. A line has many journey
+    # patterns, so this is one representative pattern rather than the line as a whole:
+    # with stops, the span between the first and last affected stop on the first pattern
+    # they locate on; without stops - meaning the line is affected as a whole - the entire
+    # route of the line's longest pattern.
+    # Null when the line has no pattern geometry, when exactly one stop is affected (a
+    # point is not a span), or when the affected stops locate on none of its patterns.
+    affectedPointsOnLink: PointsOnLink
 }
 
 type AffectedStop {

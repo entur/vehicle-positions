@@ -161,6 +161,14 @@ class ApplicationGraphQlSchemaTests {
     private static final String WHOLE_JOURNEY_SITUATION = "TST:SituationNumber:whole-journey-probe";
     private static final String WHOLE_JOURNEY_DSJ = "TST:DatedServiceJourney:whole-journey-probe";
 
+    private static final String AFFECTED_LINE_GEOMETRY_SITUATION = "TST:SituationNumber:affected-line-geometry";
+    private static final String AFFECTED_LINE_GEOMETRY_LINE = "TST:Line:affected-line-geometry";
+    private static final String AFFECTED_LINE_GEOMETRY_LINK = "TST:ServiceLink:affected-line-geometry";
+    private static final String AFFECTED_LINE_GEOMETRY_PATTERN = "TST:JourneyPattern:affected-line-geometry";
+    private static final String AFFECTED_LINE_GEOMETRY_SJ = "TST:ServiceJourney:affected-line-geometry";
+    private static final String AFFECTED_LINE_GEOMETRY_STOP_1 = "NSR:StopPlace:affected-line-geometry-1";
+    private static final String AFFECTED_LINE_GEOMETRY_STOP_2 = "NSR:StopPlace:affected-line-geometry-2";
+
     /**
      * NSR lookup is disabled in the test context, so the real hierarchy is empty and this test
      * has to supply one. It replaces NSRService with a stub whose only knowledge is that the
@@ -991,6 +999,64 @@ class ApplicationGraphQlSchemaTests {
     }
 
     /**
+     * The line-level half of the feature, through the real schema: a situation tagged on a line
+     * and two of its stops resolves to a span on one of the line's journey patterns, not to null
+     * and not to the pattern's full geometry.
+     */
+    @Test
+    void anAffectedLinesStopsResolveWithAPolylineCutToTheirSpan() {
+        // Six points about 111 m apart, due north.
+        int[] geometry = new int[12];
+        for (int i = 0; i < 6; i++) {
+            geometry[i * 2] = 59_000_000 + i * 1_000;
+            geometry[i * 2 + 1] = 10_000_000;
+        }
+        when(plannedDataService.current()).thenReturn(new PlannedDataset.Builder()
+                .addServiceLink(AFFECTED_LINE_GEOMETRY_LINK, geometry)
+                .addJourneyPattern(AFFECTED_LINE_GEOMETRY_PATTERN, List.of(AFFECTED_LINE_GEOMETRY_LINK))
+                .addLine(AFFECTED_LINE_GEOMETRY_LINE, "Affected line", "31")
+                .addServiceJourney(AFFECTED_LINE_GEOMETRY_SJ, AFFECTED_LINE_GEOMETRY_PATTERN,
+                        AFFECTED_LINE_GEOMETRY_LINE)
+                .build());
+        when(nsrService.getStop(AFFECTED_LINE_GEOMETRY_STOP_1)).thenReturn(
+                new StopPoint(AFFECTED_LINE_GEOMETRY_STOP_1, "One", new Location(10.0, 59.001)));
+        when(nsrService.getStop(AFFECTED_LINE_GEOMETRY_STOP_2)).thenReturn(
+                new StopPoint(AFFECTED_LINE_GEOMETRY_STOP_2, "Two", new Location(10.0, 59.004)));
+
+        situationRepository.add(situationAffectingLineAtStops(
+                AFFECTED_LINE_GEOMETRY_SITUATION, AFFECTED_LINE_GEOMETRY_LINE,
+                AFFECTED_LINE_GEOMETRY_STOP_1, AFFECTED_LINE_GEOMETRY_STOP_2));
+
+        String document = """
+                query {
+                  situations(includeClosed: true, situationNumbers: ["%s"]) {
+                    affects {
+                      affectedLines {
+                        line { lineRef }
+                        stops { stop { id } }
+                        affectedPointsOnLink { length points }
+                      }
+                    }
+                  }
+                }
+                """.formatted(AFFECTED_LINE_GEOMETRY_SITUATION);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(),
+                        "test-affected-line-geometry", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+        String lineId = response.field("situations[0].affects.affectedLines[0].line.lineRef").getValue();
+        assertThat(lineId).isEqualTo(AFFECTED_LINE_GEOMETRY_LINE);
+        // Vertices 1..4: the span between the two stops, not the pattern's full six points.
+        Number length = response.field(
+                "situations[0].affects.affectedLines[0].affectedPointsOnLink.length").getValue();
+        assertThat(length.intValue()).isEqualTo(4);
+    }
+
+    /**
      * The mirror of the existing opt-out test for journey situations: the cut is lazy, so a
      * client that selects the stops but not the polyline must not make the resolver touch the
      * planned dataset at all.
@@ -1193,6 +1259,54 @@ class ApplicationGraphQlSchemaTests {
         affects.setStopPoints(List.of());
         affects.setStopPlaces(List.of());
         affects.setVehicleJourneys(List.of(journey));
+
+        PtSituationElementRecord record = new PtSituationElementRecord();
+        record.setSituationNumber(situationNumber);
+        record.setParticipantRef("TST");
+        record.setCreationTime(ZonedDateTime.now().minusHours(1).toString());
+        record.setReportType("general");
+        record.setValidityPeriods(List.of());
+        record.setKeywords(List.of());
+        record.setSummaries(List.of());
+        record.setDescriptions(List.of());
+        record.setDetails(List.of());
+        record.setAdvices(List.of());
+        record.setInfoLinks(List.of());
+        record.setAffects(affects);
+        return record;
+    }
+
+    /** The line-level shape of a tagged situation: AffectedLine with its stops, no journeys. */
+    private static PtSituationElementRecord situationAffectingLineAtStops(String situationNumber,
+                                                                         String lineRef,
+                                                                         String... stopRefs) {
+        List<AffectedStopPointRecord> stopPoints = new ArrayList<>();
+        for (String stopRef : stopRefs) {
+            AffectedStopPointRecord stopPoint = new AffectedStopPointRecord();
+            stopPoint.setStopPointRef(stopRef);
+            stopPoint.setStopPointNames(List.of());
+            stopPoint.setStopConditions(List.of("startPoint"));
+            stopPoints.add(stopPoint);
+        }
+        StopPointsRecord stops = new StopPointsRecord();
+        stops.setStopPoints(stopPoints);
+        AffectedRouteRecord route = new AffectedRouteRecord();
+        route.setStopPoints(stops);
+        route.setSections(List.of());
+
+        AffectedLineRecord affectedLine = new AffectedLineRecord();
+        affectedLine.setLineRef(lineRef);
+        affectedLine.setRoutes(List.of(route));
+
+        AffectedNetworkRecord network = new AffectedNetworkRecord();
+        network.setAffectedLines(List.of(affectedLine));
+        network.setAffectedOperators(List.of());
+
+        AffectsRecord affects = new AffectsRecord();
+        affects.setNetworks(List.of(network));
+        affects.setStopPoints(List.of());
+        affects.setStopPlaces(List.of());
+        affects.setVehicleJourneys(List.of());
 
         PtSituationElementRecord record = new PtSituationElementRecord();
         record.setSituationNumber(situationNumber);

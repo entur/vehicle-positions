@@ -8,8 +8,10 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * One line a situation names, with the stops it is affected at. Unlike a journey entry this
- * carries no geometry: a line has many journey patterns, so there is no single polyline to cut.
+ * One line a situation names, with the stops it is affected at. A line has many journey
+ * patterns, so its geometry is one representative pattern's, resolved lazily from the line ref
+ * by {@code AffectedGeometryController} and never stored here - so equals/hashCode, and with
+ * them the republisher's change detection, stay a function of the line ref and the stops alone.
  */
 @SchemaMapping
 public class AffectedLine {
