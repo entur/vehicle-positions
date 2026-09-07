@@ -3,6 +3,7 @@ package org.entur.vehicles.graphql;
 import graphql.GraphQLContext;
 import org.entur.vehicles.data.model.AffectedStop;
 import org.entur.vehicles.data.model.AffectedVehicleJourney;
+import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Location;
 import org.entur.vehicles.data.model.PointsOnLink;
 import org.entur.vehicles.data.model.ServiceJourney;
@@ -161,11 +162,76 @@ class AffectedGeometryControllerTest {
         Mockito.verifyNoInteractions(dataset);
     }
 
+    /**
+     * A producer that puts a ServiceJourney id in the standalone DatedVehicleJourneyRef slot -
+     * ATB does, across 28 refs - leaves the planned data unable to resolve a dated journey, so
+     * the entry carries no back-reference and the serviceJourney slot is empty. The id itself is
+     * perfectly resolvable, so it is tried as a service journey id rather than discarded.
+     */
+    @Test
+    void aDatedRefCarryingAServiceJourneyIdResolvesAsThatServiceJourney() {
+        PointsOnLink resolved = controller.affectedPointsOnLink(
+                datedJourney(SERVICE_JOURNEY_1), GraphQLContext.newContext().build());
+
+        assertThat(resolved).isNotNull();
+        // No stops named under it, so the whole route - the shape every one of these refs takes.
+        assertThat(resolved.getLength()).isEqualTo(6);
+    }
+
+    /** The same fallback feeds the slicer, so such a ref is not limited to the whole-route case. */
+    @Test
+    void aDatedRefCarryingAServiceJourneyIdIsAlsoCutBetweenItsStops() {
+        PointsOnLink resolved = controller.affectedPointsOnLink(
+                datedJourney(SERVICE_JOURNEY_1, STOP_1, STOP_2), GraphQLContext.newContext().build());
+
+        assertThat(resolved).isNotNull();
+        assertThat(resolved.getLength()).isEqualTo(4);
+    }
+
+    /**
+     * The dataset is what decides whether the id was really a service journey id, so an id that
+     * is no NeTEx id at all - SKY publishes "15139934_167845" - resolves to nothing, exactly as
+     * a genuine dated journey the planned data does not know does.
+     */
+    @Test
+    void aDatedRefThatNamesNothingTheDatasetKnowsIsStillNull() {
+        GraphQLContext context = GraphQLContext.newContext().build();
+
+        assertThat(controller.affectedPointsOnLink(datedJourney("15139934_167845"), context)).isNull();
+        assertThat(controller.affectedPointsOnLink(
+                datedJourney("TST:DatedServiceJourney:unknown"), context)).isNull();
+    }
+
+    /** A dated journey the planned data did resolve is still read through its back-reference. */
+    @Test
+    void aResolvedDatedJourneyIsReadThroughItsServiceJourneyNotItsOwnId() {
+        DatedServiceJourney dated = new DatedServiceJourney("TST:DatedServiceJourney:1",
+                new ServiceJourney(SERVICE_JOURNEY_1));
+
+        PointsOnLink resolved = controller.affectedPointsOnLink(
+                new AffectedVehicleJourney(null, dated, null, null, List.of()),
+                GraphQLContext.newContext().build());
+
+        assertThat(resolved).isNotNull();
+        assertThat(resolved.getLength()).isEqualTo(6);
+    }
+
+    /** A journey named only by a standalone dated ref that the planned data could not resolve. */
+    private static AffectedVehicleJourney datedJourney(String datedRef, String... stopRefs) {
+        return new AffectedVehicleJourney(null, new DatedServiceJourney(datedRef), null, null,
+                stops(stopRefs));
+    }
+
     private static AffectedVehicleJourney journey(String serviceJourneyId, String... stopRefs) {
+        return new AffectedVehicleJourney(new ServiceJourney(serviceJourneyId), null, null, null,
+                stops(stopRefs));
+    }
+
+    private static List<AffectedStop> stops(String... stopRefs) {
         List<AffectedStop> stops = new java.util.ArrayList<>();
         for (String stopRef : stopRefs) {
             stops.add(new AffectedStop(new StopPoint(stopRef), List.of()));
         }
-        return new AffectedVehicleJourney(new ServiceJourney(serviceJourneyId), null, null, null, stops);
+        return stops;
     }
 }

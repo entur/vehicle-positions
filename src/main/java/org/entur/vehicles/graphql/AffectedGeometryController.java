@@ -182,13 +182,30 @@ public class AffectedGeometryController {
      * A dated journey the planned data knows already carries its service journey - the mapper
      * resolved it at ingest - so this needs no further lookup. A journey named by a bare
      * service journey ref is used directly.
+     * <p>
+     * Failing both, an unresolved dated ref falls back to its own id. Producers do put a
+     * ServiceJourney id in SIRI's standalone DatedVehicleJourneyRef, which is for dated ids -
+     * ATB does, across 28 refs and 16 situations on the dev feed, every one of them otherwise
+     * without geometry. The slot the ref arrived in is what is wrong; the id it carries
+     * resolves. It is deliberately not re-routed into the serviceJourney slot at ingest: the
+     * ref stays where the producer put it, so the malformation remains visible to consumers
+     * that report on it while the geometry still resolves.
+     * <p>
+     * No check that the id looks like a ServiceJourney id, because the caller's
+     * {@code journeyPatternOf} is the better arbiter of that and runs either way: an id the
+     * planned data does not hold yields null there, as an unknown dated journey already did.
+     * A genuine dated id is never a service journey id, so this can only turn a null into the
+     * right geometry - never into the wrong geometry.
      */
     private String serviceJourneyIdOf(AffectedVehicleJourney journey) {
         if (journey.getDatedServiceJourney() != null
                 && journey.getDatedServiceJourney().getServiceJourney() != null) {
             return journey.getDatedServiceJourney().getServiceJourney().getId();
         }
-        return journey.getServiceJourney() != null ? journey.getServiceJourney().getId() : null;
+        if (journey.getServiceJourney() != null) {
+            return journey.getServiceJourney().getId();
+        }
+        return journey.getDatedServiceJourney() != null ? journey.getDatedServiceJourney().getId() : null;
     }
 
     /**
