@@ -61,7 +61,7 @@ jobs:
   deploy-dev:
     if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
     needs: [ helm-lint, docker-push ]
-    uses: entur/gha-helm/.github/workflows/deploy.yml@v1
+    uses: entur/gha-helm/.github/workflows/deploy.yml@v2
     with:
       environment: dev
       image: ${{ needs.docker-push.outputs.image_name }}:${{ needs.docker-push.outputs.image_tag}}
@@ -85,7 +85,7 @@ jobs:
   deploy-tst:
     if: ${{ github.ref == 'refs/heads/main' }}
     needs: [ docker-push, approval-tst ]
-    uses: entur/gha-helm/.github/workflows/deploy.yml@v1
+    uses: entur/gha-helm/.github/workflows/deploy.yml@v2
     with:
       environment: tst
       image: ${{ needs.docker-push.outputs.image_name }}:${{ needs.docker-push.outputs.image_tag}}
@@ -109,7 +109,7 @@ jobs:
   deploy-prd:
     if: ${{ github.ref == 'refs/heads/main' }}
     needs: [ docker-push, approval-prd ]
-    uses: entur/gha-helm/.github/workflows/deploy.yml@v1
+    uses: entur/gha-helm/.github/workflows/deploy.yml@v2
     with:
       environment: prd
       image: ${{ needs.docker-push.outputs.image_name }}:${{ needs.docker-push.outputs.image_tag}}
