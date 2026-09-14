@@ -6,6 +6,7 @@ configMap:
   graphiqlEnabled: true
   subscriptionProjectId: ent-vpos-dev
   topicProjectId: ent-anshar-dev
+  bearingCalculationEnabled: true
   etEnabled: true
   sxEnabled: true
   sxSnapshotUrl: https://api.dev.entur.io/realtime/v1/rest/sx?SIRI_VERSION=2.1

@@ -179,6 +179,8 @@ type VehicleUpdate {
     location: Location
     speed: Float
     heading: Float @deprecated(reason: "Use 'bearing''.")
+    # Compass bearing in degrees. When the producer reports none, it is calculated from the
+    # vehicle's previous position; null until the vehicle has moved.
     bearing: Float
 
     monitored: Boolean
