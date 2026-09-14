@@ -68,7 +68,7 @@
                 </KeyValue>
               </keyList>
               <PrivateCode>1001</PrivateCode>
-              <TransportMode>bus</TransportMode>
+              <TransportMode>coach</TransportMode>
               <dayTypes>
                 <DayTypeRef ref="TST:DayType:1"></DayTypeRef>
               </dayTypes>

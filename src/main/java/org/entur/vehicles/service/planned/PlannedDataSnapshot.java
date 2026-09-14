@@ -35,8 +35,11 @@ import java.util.Map;
 public final class PlannedDataSnapshot {
 
     public static final String DATASET = "planned-data";
-    /** 3: a line record carries its presentation colour and text colour after the public code. */
-    public static final int FORMAT_VERSION = 3;
+    /**
+     * 3: a line record carries its presentation colour and text colour after the public code.
+     * 4: a line record then carries its transport mode, and a service journey record its own.
+     */
+    public static final int FORMAT_VERSION = 4;
 
     private static final byte[] MAGIC = {'V', 'P', 'P', '2'};
     private static final byte TAG_END = (byte) 0xFF;
@@ -47,9 +50,9 @@ public final class PlannedDataSnapshot {
     /**
      * Writes the snapshot from the builder's completed state (see the format doc:
      * {@code docs/superpowers/specs/2026-09-03-snapshot-v2-encoding-design.md}, "Snapshot
-     * format v2"; format version 3 keeps that encoding and only appends the two presentation
-     * colours to each line record). Reads the builder's maps directly, so it must run only
-     * after the parse (or a replay) has finished populating them.
+     * format v2"; format versions 3 and 4 keep that encoding and only append fields to the line
+     * and service journey records, see {@link #FORMAT_VERSION}). Reads the builder's maps
+     * directly, so it must run only after the parse (or a replay) has finished populating them.
      */
     public static void write(PlannedDataset.Builder builder, Path file, String etag) throws IOException {
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file), 1 << 16))) {
@@ -66,6 +69,8 @@ public final class PlannedDataSnapshot {
             Map<String, String[]> patternLinks = builder.patternLinks();
             Map<String, String> serviceJourneyPattern = builder.serviceJourneyPattern();
             Map<String, String> serviceJourneyLine = builder.serviceJourneyLine();
+            Map<String, String> lineTransportMode = builder.lineTransportMode();
+            Map<String, String> serviceJourneyTransportMode = builder.serviceJourneyTransportMode();
             Map<String, PlannedDataset.Builder.RawDatedServiceJourney> rawDatedServiceJourneys = builder.rawDatedServiceJourneys();
 
             IdCodec.Writer ids = new IdCodec.Writer();
@@ -94,6 +99,7 @@ public final class PlannedDataSnapshot {
                 Presentation presentation = e.getValue().getPresentation();
                 SnapshotIo.writeString(out, presentation == null ? null : presentation.colour());
                 SnapshotIo.writeString(out, presentation == null ? null : presentation.textColour());
+                SnapshotIo.writeString(out, lineTransportMode.get(e.getKey()));
                 totalRecords++;
             }
 
@@ -143,6 +149,7 @@ public final class PlannedDataSnapshot {
                 String patternId = e.getValue().isEmpty() ? null : e.getValue();
                 writeRef(out, ids, patternId, patternIndex, patternLinks.size());
                 writeRef(out, ids, serviceJourneyLine.get(id), lineIndex, lines.size());
+                SnapshotIo.writeString(out, serviceJourneyTransportMode.get(id));
                 totalRecords++;
             }
 
@@ -289,7 +296,8 @@ public final class PlannedDataSnapshot {
                 String publicCode = SnapshotIo.readString(in);
                 String colour = SnapshotIo.readString(in);
                 String textColour = SnapshotIo.readString(in);
-                sink.addLine(id, name, publicCode, colour, textColour);
+                String transportMode = SnapshotIo.readString(in);
+                sink.addLine(id, name, publicCode, colour, textColour, transportMode);
                 totalRecords++;
             }
 
@@ -336,7 +344,8 @@ public final class PlannedDataSnapshot {
                 journeyIds[i] = id;
                 String patternRef = readRef(in, ids, patternIds);
                 String lineRef = readRef(in, ids, lineIds);
-                sink.addServiceJourney(id, patternRef, lineRef);
+                String transportMode = SnapshotIo.readString(in);
+                sink.addServiceJourney(id, patternRef, lineRef, transportMode);
                 totalRecords++;
             }
 

@@ -1,5 +1,6 @@
 package org.entur.vehicles.service.planned;
 
+import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.model.Presentation;
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +57,19 @@ public class NetexPlannedDataExtractorTest {
         assertThat(dataset.line("TST:FlexibleLine:8202").getPresentation())
                 .withFailMessage("a line publishing no colours has no presentation")
                 .isNull();
+    }
+
+    @Test
+    public void transportModesAreTakenFromTheLineAndFromTheJourneysOwnOverride() throws Exception {
+        PlannedDataset dataset = extract("fragment-line-file.xml");
+
+        assertThat(dataset.transportModeOf(null, "TST:Line:204")).isEqualTo(VehicleModeEnumeration.BUS);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:1", "TST:Line:204"))
+                .withFailMessage("the journey's own TransportMode (coach) overrides its line's (bus)")
+                .isEqualTo(VehicleModeEnumeration.COACH);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:2", null))
+                .withFailMessage("a journey without its own TransportMode takes its FlexibleLine's")
+                .isEqualTo(VehicleModeEnumeration.BUS);
     }
 
     @Test

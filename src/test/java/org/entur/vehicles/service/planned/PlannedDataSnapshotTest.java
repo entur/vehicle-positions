@@ -1,5 +1,6 @@
 package org.entur.vehicles.service.planned;
 
+import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.PointsOnLink;
 import org.entur.vehicles.data.model.Presentation;
@@ -95,7 +96,7 @@ public class PlannedDataSnapshotTest {
     // ---- v2 writer ----
 
     @Test
-    public void writeStartsWithMagicAndVersionThree(@TempDir Path dir) throws Exception {
+    public void writeStartsWithMagicAndVersionFour(@TempDir Path dir) throws Exception {
         PlannedDataset.Builder builder = new PlannedDataset.Builder();
         builder.addOperator("RUT:Operator:1", "One");
         builder.addOperator("RUT:Operator:2", "Two");
@@ -113,8 +114,8 @@ public class PlannedDataSnapshotTest {
         byte[] bytes = Files.readAllBytes(file);
         assertThat(bytes).startsWith('V', 'P', 'P', '2');
         int version = ((bytes[4] & 0xFF) << 24) | ((bytes[5] & 0xFF) << 16) | ((bytes[6] & 0xFF) << 8) | (bytes[7] & 0xFF);
-        assertThat(version).isEqualTo(3);
-        assertThat(PlannedDataSnapshot.FORMAT_VERSION).isEqualTo(3);
+        assertThat(version).isEqualTo(4);
+        assertThat(PlannedDataSnapshot.FORMAT_VERSION).isEqualTo(4);
     }
 
     @Test
@@ -226,8 +227,8 @@ public class PlannedDataSnapshotTest {
 
         original.addLine("RUT:Line:1", "Line One", "1");
         original.addLine("RUT:Line:2", null, null); // null name + null public code
-        original.addLine("RUT:Line:3", "Line Three", "3", "76A300", "FFFFFF"); // both colours
-        original.addLine("RUT:Line:4", "Line Four", "4", null, "000000"); // text colour only
+        original.addLine("RUT:Line:3", "Line Three", "3", "76A300", "FFFFFF", "water"); // both colours, a transport mode
+        original.addLine("RUT:Line:4", "Line Four", "4", null, "000000", null); // text colour only, no transport mode
 
         original.addServiceLink("RUT:ServiceLink:empty", new int[0]); // empty geometry
         original.addServiceLink("RUT:ServiceLink:odd", new int[]{10, 20, 5}); // odd-length geometry
@@ -238,6 +239,7 @@ public class PlannedDataSnapshotTest {
         original.addServiceJourney("RUT:ServiceJourney:1", "RUT:JourneyPattern:missing", "RUT:Line:dangling"); // dangling pattern + dangling line
         original.addServiceJourney("RUT:ServiceJourney:2", null, "RUT:Line:1"); // null pattern -> "" placeholder
         original.addServiceJourney("RUT:ServiceJourney:3", "RUT:JourneyPattern:1", null); // resolvable pattern, null line
+        original.addServiceJourney("RUT:ServiceJourney:4", null, "RUT:Line:3", "coach"); // own transport mode
 
         original.addOperatingDay("RUT:OperatingDay:1", "2026-09-02");
         original.addOperatingDay("RUT:OperatingDay:2", null); // null calendar date
@@ -275,6 +277,13 @@ public class PlannedDataSnapshotTest {
                 .isEqualTo(new Presentation("76A300", "FFFFFF"));
         assertThat(fromSnapshot.line("RUT:Line:4").getPresentation())
                 .isEqualTo(new Presentation(null, "000000"));
+        assertThat(fromSnapshot.transportModeOf(null, "RUT:Line:3")).isEqualTo(VehicleModeEnumeration.FERRY);
+        assertThat(fromSnapshot.transportModeOf(null, "RUT:Line:4")).isNull();
+        assertThat(fromSnapshot.transportModeOf("RUT:ServiceJourney:4", "RUT:Line:3"))
+                .withFailMessage("a journey's own transport mode must survive the snapshot")
+                .isEqualTo(fromOriginal.transportModeOf("RUT:ServiceJourney:4", "RUT:Line:3"))
+                .isEqualTo(VehicleModeEnumeration.COACH);
+        assertThat(fromSnapshot.transportModeOf("RUT:ServiceJourney:2", "RUT:Line:3")).isEqualTo(VehicleModeEnumeration.FERRY);
         assertThat(fromSnapshot.journeyPatternOf("RUT:ServiceJourney:1"))
                 .isEqualTo(fromOriginal.journeyPatternOf("RUT:ServiceJourney:1"))
                 .isEqualTo("RUT:JourneyPattern:missing"); // dangling ref kept

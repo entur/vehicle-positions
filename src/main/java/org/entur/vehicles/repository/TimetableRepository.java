@@ -143,11 +143,15 @@ public class TimetableRepository {
 
       CharSequence operatorRef = journeyRecord.getOperatorRef();
 
-      if (containsValues(journeyRecord.getVehicleModes())) {
-        v.setMode(VehicleModeEnumeration.fromValue( journeyRecord.getVehicleModes().get(0).toString()));
-      } else  {
-        v.setMode(VehicleModeEnumeration.BUS);
+      VehicleModeEnumeration mode = containsValues(journeyRecord.getVehicleModes())
+              ? VehicleModeEnumeration.fromValue(journeyRecord.getVehicleModes().get(0).toString())
+              : null;
+      if (mode == null) {
+        // getServiceJourney() is the dated journey's when there is one.
+        String planned = v.getServiceJourney() != null ? v.getServiceJourney().getId() : null;
+        mode = lineService.getTransportMode(planned, lineRef);
       }
+      v.setMode(mode != null ? mode : VehicleModeEnumeration.BUS);
 
       if (operatorRef != null) {
         v.setOperator(OperatorService.getOperator(operatorRef.toString()));

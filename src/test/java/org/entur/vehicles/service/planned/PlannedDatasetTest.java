@@ -1,5 +1,6 @@
 package org.entur.vehicles.service.planned;
 
+import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -28,6 +29,35 @@ public class PlannedDatasetTest {
         assertThat(dataset.datedServiceJourney("GOA:DatedServiceJourney:1"))
                 .isEqualTo(new DatedJourneyRef("GOA:ServiceJourney:1", "2024-01-20"));
         assertThat(dataset.serviceJourneyCount()).isEqualTo(1);
+    }
+
+    @Test
+    public void transportModeResolvesJourneyOverrideThenGivenLineThenTheJourneysOwnLine() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addLine("TST:Line:ferry", "Ferry", "F", null, null, "water")
+                .addLine("TST:Line:rail", "Rail", "R", null, null, "rail")
+                .addLine("TST:Line:cable", "Cable car", "C", null, null, "cableway")
+                .addLine("TST:Line:trolley", "Trolley", "T", null, null, "trolleyBus")
+                .addServiceJourney("TST:ServiceJourney:onFerry", "JP", "TST:Line:ferry", null)
+                .addServiceJourney("TST:ServiceJourney:replacementBus", "JP", "TST:Line:rail", "bus")
+                .build();
+
+        assertThat(dataset.transportModeOf(null, "TST:Line:ferry")).isEqualTo(VehicleModeEnumeration.FERRY);
+        assertThat(dataset.transportModeOf(null, "TST:Line:trolley")).isEqualTo(VehicleModeEnumeration.BUS);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:replacementBus", "TST:Line:rail"))
+                .withFailMessage("a journey's own mode overrides its line's")
+                .isEqualTo(VehicleModeEnumeration.BUS);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:onFerry", "TST:Line:rail"))
+                .withFailMessage("the line the vehicle reports wins over the journey's own line")
+                .isEqualTo(VehicleModeEnumeration.RAIL);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:onFerry", "SKA:Line:notInNetex"))
+                .withFailMessage("an unknown reported line falls back to the journey's own line")
+                .isEqualTo(VehicleModeEnumeration.FERRY);
+        assertThat(dataset.transportModeOf(null, "TST:Line:cable"))
+                .withFailMessage("a NeTEx mode with no VehicleModeEnumeration counterpart resolves nothing")
+                .isNull();
+        assertThat(dataset.transportModeOf("X:ServiceJourney:unknown", "X:Line:unknown")).isNull();
+        assertThat(dataset.transportModeOf(null, null)).isNull();
     }
 
     @Test
