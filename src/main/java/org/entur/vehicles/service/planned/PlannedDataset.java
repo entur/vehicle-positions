@@ -119,26 +119,27 @@ public final class PlannedDataset {
     }
 
     /**
-     * The planned mode of a vehicle on this journey and line: the journey's own TransportMode
-     * where it differs from its line's, else the reported line's, else the line the journey
-     * itself runs on - for a vehicle whose reported line the export does not know. Null when
-     * none of them has a mode this service can express.
+     * The planned mode of a vehicle on this journey and line: the journey's own TransportMode,
+     * else the mode of the line the journey runs on, else the reported line's. A known journey
+     * outranks the reported line because it is the more specific planned object: a replacement
+     * bus on its own bus line is still a bus when the producer reports the rail line it
+     * replaces. Null when none of them has a mode this service can express.
      */
     public VehicleModeEnumeration transportModeOf(String serviceJourneyId, String lineId) {
         if (serviceJourneyId != null) {
+            // Checked before the journey's line, so a journey mode dropped in build() for
+            // repeating its line's resolves to the very same value one step later.
             VehicleModeEnumeration own = serviceJourneyTransportMode.get(serviceJourneyId);
             if (own != null) {
                 return own;
             }
-        }
-        if (lineId != null) {
-            VehicleModeEnumeration line = lineTransportMode.get(lineId);
-            if (line != null) {
-                return line;
+            String journeyLine = lineOf(serviceJourneyId);
+            VehicleModeEnumeration journeyLineMode = journeyLine == null ? null : lineTransportMode.get(journeyLine);
+            if (journeyLineMode != null) {
+                return journeyLineMode;
             }
         }
-        String journeyLine = lineOf(serviceJourneyId);
-        return journeyLine == null ? null : lineTransportMode.get(journeyLine);
+        return lineId == null ? null : lineTransportMode.get(lineId);
     }
 
     /** Shared with every caller and never copied - callers must not mutate it. */
@@ -676,7 +677,8 @@ public final class PlannedDataset {
             Map<String, VehicleModeEnumeration> lineModes = toVehicleModes(lineTransportMode);
             // Kept only where the journey's mode differs from its own line's: a producer that
             // repeats the line's mode on every journey would otherwise fill this map with
-            // hundreds of thousands of entries that change no lookup.
+            // hundreds of thousands of entries. Lossless, because transportModeOf consults the
+            // journey's own line right after this map, before any reported line.
             Map<String, VehicleModeEnumeration> journeyModes = toVehicleModes(serviceJourneyTransportMode);
             journeyModes.entrySet().removeIf(e -> {
                 String lineId = serviceJourneyLine.get(e.getKey());
