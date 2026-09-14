@@ -161,6 +161,10 @@ class ApplicationGraphQlSchemaTests {
     private static final String WHOLE_JOURNEY_SITUATION = "TST:SituationNumber:whole-journey-probe";
     private static final String WHOLE_JOURNEY_DSJ = "TST:DatedServiceJourney:whole-journey-probe";
 
+    private static final String LINE_COLOUR_LINE = "TST:Line:line-colour-probe";
+    private static final String LINE_COLOUR_PLAIN_LINE = "TST:Line:line-colour-plain-probe";
+    private static final String LINE_COLOUR_VEHICLE = "TST:Vehicle:line-colour-probe";
+
     private static final String AFFECTED_LINE_GEOMETRY_SITUATION = "TST:SituationNumber:affected-line-geometry";
     private static final String AFFECTED_LINE_GEOMETRY_LINE = "TST:Line:affected-line-geometry";
     private static final String AFFECTED_LINE_GEOMETRY_LINK = "TST:ServiceLink:affected-line-geometry";
@@ -1419,6 +1423,50 @@ class ApplicationGraphQlSchemaTests {
         assertThat(pointsOnLink).isNotNull();
         assertThat(pointsOnLink.get("length")).isEqualTo(2.0);
         assertThat((String) pointsOnLink.get("points")).isNotEmpty();
+    }
+
+    /**
+     * Colours are passed through as published, placeholder {@code 000000} included, and a line
+     * that publishes neither has no presentation at all. A vehicle's line is the dataset's own
+     * instance, so it carries the same colours as the catalogue.
+     */
+    @Test
+    void lineColoursResolveOnTheCatalogueAndOnAVehiclesLine() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addLine(LINE_COLOUR_LINE, "Coloured", "C", "000000", "FFFFFF")
+                .addLine(LINE_COLOUR_PLAIN_LINE, "Plain", "P")
+                .build();
+        when(plannedDataService.current()).thenReturn(dataset);
+        when(plannedDataService.findLine(LINE_COLOUR_LINE)).thenReturn(dataset.line(LINE_COLOUR_LINE));
+
+        vehicleRepository.addAll(List.of(vehicleActivity(LINE_COLOUR_VEHICLE, LINE_COLOUR_LINE, 59.911491, 10.757933)));
+
+        String document = """
+                query {
+                  lines(codespaceId: "TST") { lineRef presentation { colour textColour } }
+                  vehicles(lineRef: "%s") { line { lineRef presentation { colour textColour } } }
+                }
+                """.formatted(LINE_COLOUR_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-line-colours", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        Map<String, String> colours = Map.of("colour", "000000", "textColour", "FFFFFF");
+        List<Map<String, Object>> lines = response.field("lines").getValue();
+        Map<String, Object> presentationByLine = new HashMap<>();
+        lines.forEach(line -> presentationByLine.put((String) line.get("lineRef"), line.get("presentation")));
+        assertThat(presentationByLine).containsEntry(LINE_COLOUR_LINE, colours);
+        assertThat(presentationByLine).containsKey(LINE_COLOUR_PLAIN_LINE);
+        assertThat(presentationByLine.get(LINE_COLOUR_PLAIN_LINE)).isNull();
+
+        List<Map<String, Object>> vehicles = response.field("vehicles").getValue();
+        assertThat(vehicles).singleElement()
+                .extracting(v -> v.get("line"))
+                .isEqualTo(Map.of("lineRef", LINE_COLOUR_LINE, "presentation", colours));
     }
 
     @Test

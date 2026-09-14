@@ -16,6 +16,10 @@
               <Presentation>
                 <Colour>76A300</Colour>
               </Presentation>
+              <AlternativePresentation>
+                <Colour>FFFFFF</Colour>
+                <TextColour>000000</TextColour>
+              </AlternativePresentation>
             </Line>
             <FlexibleLine version="0" id="TST:FlexibleLine:8202">
               <Name>Bestillingsrute</Name>

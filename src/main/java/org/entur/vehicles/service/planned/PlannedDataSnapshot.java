@@ -2,6 +2,7 @@ package org.entur.vehicles.service.planned;
 
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
+import org.entur.vehicles.data.model.Presentation;
 import org.entur.vehicles.service.snapshot.IdCodec;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
 import org.entur.vehicles.service.snapshot.SnapshotIo;
@@ -34,7 +35,8 @@ import java.util.Map;
 public final class PlannedDataSnapshot {
 
     public static final String DATASET = "planned-data";
-    public static final int FORMAT_VERSION = 2;
+    /** 3: a line record carries its presentation colour and text colour after the public code. */
+    public static final int FORMAT_VERSION = 3;
 
     private static final byte[] MAGIC = {'V', 'P', 'P', '2'};
     private static final byte TAG_END = (byte) 0xFF;
@@ -88,6 +90,9 @@ public final class PlannedDataSnapshot {
                 ids.writeId(out, e.getKey());
                 SnapshotIo.writeString(out, e.getValue().getLineName());
                 SnapshotIo.writeString(out, e.getValue().getPublicCode());
+                Presentation presentation = e.getValue().getPresentation();
+                SnapshotIo.writeString(out, presentation == null ? null : presentation.colour());
+                SnapshotIo.writeString(out, presentation == null ? null : presentation.textColour());
                 totalRecords++;
             }
 
@@ -281,7 +286,9 @@ public final class PlannedDataSnapshot {
                 lineIds[i] = id;
                 String name = SnapshotIo.readString(in);
                 String publicCode = SnapshotIo.readString(in);
-                sink.addLine(id, name, publicCode);
+                String colour = SnapshotIo.readString(in);
+                String textColour = SnapshotIo.readString(in);
+                sink.addLine(id, name, publicCode, colour, textColour);
                 totalRecords++;
             }
 

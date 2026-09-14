@@ -5,6 +5,7 @@ import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.PointsOnLink;
+import org.entur.vehicles.data.model.Presentation;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -353,10 +354,16 @@ public final class PlannedDataset {
             return this;
         }
 
-        @Override
+        /** A line that publishes no colours. */
         public Builder addLine(String id, String name, String publicCode) {
+            return addLine(id, name, publicCode, null, null);
+        }
+
+        @Override
+        public Builder addLine(String id, String name, String publicCode, String colour, String textColour) {
             Line line = new Line(id, name);
             line.setPublicCode(publicCode);
+            line.setPresentation(Presentation.of(colour, textColour));
             countDuplicate(lines.put(id, line));
             return this;
         }
