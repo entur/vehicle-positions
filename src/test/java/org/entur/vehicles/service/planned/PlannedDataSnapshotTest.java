@@ -95,7 +95,7 @@ public class PlannedDataSnapshotTest {
     // ---- v2 writer ----
 
     @Test
-    public void v2WriteStartsWithMagicAndVersionTwo(@TempDir Path dir) throws Exception {
+    public void writeStartsWithMagicAndVersionThree(@TempDir Path dir) throws Exception {
         PlannedDataset.Builder builder = new PlannedDataset.Builder();
         builder.addOperator("RUT:Operator:1", "One");
         builder.addOperator("RUT:Operator:2", "Two");
@@ -219,7 +219,7 @@ public class PlannedDataSnapshotTest {
     // ---- v2 reader ----
 
     @Test
-    public void aReplayedV2SnapshotBuildsTheSameDatasetAsTheBuilder(@TempDir Path dir) throws Exception {
+    public void aReplayedSnapshotBuildsTheSameDatasetAsTheBuilder(@TempDir Path dir) throws Exception {
         PlannedDataset.Builder original = new PlannedDataset.Builder();
         original.addOperator("RUT:Operator:1", "One");
         original.addOperator("RUT:Operator:1", "One again"); // duplicate id -> duplicateIds = 1

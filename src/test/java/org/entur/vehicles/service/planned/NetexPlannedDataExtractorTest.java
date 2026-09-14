@@ -52,7 +52,7 @@ public class NetexPlannedDataExtractorTest {
 
         assertThat(dataset.line("TST:Line:204").getPresentation())
                 .withFailMessage("AlternativePresentation's Colour/TextColour must not overwrite Presentation's")
-                .isEqualTo(new Presentation("76A300", null));
+                .isEqualTo(new Presentation("76A300", "FFFFFF"));
         assertThat(dataset.line("TST:FlexibleLine:8202").getPresentation())
                 .withFailMessage("a line publishing no colours has no presentation")
                 .isNull();

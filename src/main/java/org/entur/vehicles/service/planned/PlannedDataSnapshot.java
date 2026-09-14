@@ -47,8 +47,9 @@ public final class PlannedDataSnapshot {
     /**
      * Writes the snapshot from the builder's completed state (see the format doc:
      * {@code docs/superpowers/specs/2026-09-03-snapshot-v2-encoding-design.md}, "Snapshot
-     * format v2"). Reads the builder's maps directly, so it must run only after the parse (or
-     * a replay) has finished populating them.
+     * format v2"; format version 3 keeps that encoding and only appends the two presentation
+     * colours to each line record). Reads the builder's maps directly, so it must run only
+     * after the parse (or a replay) has finished populating them.
      */
     public static void write(PlannedDataset.Builder builder, Path file, String etag) throws IOException {
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file), 1 << 16))) {
