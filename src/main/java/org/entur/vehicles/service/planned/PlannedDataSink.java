@@ -11,7 +11,11 @@ public interface PlannedDataSink {
 
     PlannedDataSink addOperator(String id, String name);
 
-    PlannedDataSink addLine(String id, String name, String publicCode);
+    /**
+     * @param colour     {@code Line/Presentation/Colour}, as published
+     * @param textColour {@code Line/Presentation/TextColour}, as published
+     */
+    PlannedDataSink addLine(String id, String name, String publicCode, String colour, String textColour);
 
     /** @param geometry interleaved lat/lon microdegrees, or null when the link has no gis:posList */
     PlannedDataSink addServiceLink(String id, int[] geometry);

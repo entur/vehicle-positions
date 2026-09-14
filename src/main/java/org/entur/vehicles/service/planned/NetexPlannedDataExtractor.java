@@ -68,19 +68,29 @@ public final class NetexPlannedDataExtractor {
 
     private void readLine(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
-        String[] fields = new String[2]; // name, publicCode
+        String[] fields = new String[4]; // name, publicCode, colour, textColour
+        String[] child = new String[1]; // the direct child the scan is currently inside
         scan(r, (reader, localName, depth) -> {
-            if (depth != 1) {
-                return false;
+            if (depth == 1) {
+                child[0] = localName;
+                switch (localName) {
+                    case "Name" -> { fields[0] = reader.getElementText(); return true; }
+                    case "PublicCode" -> { fields[1] = reader.getElementText(); return true; }
+                    default -> { return false; }
+                }
             }
-            switch (localName) {
-                case "Name" -> { fields[0] = reader.getElementText(); return true; }
-                case "PublicCode" -> { fields[1] = reader.getElementText(); return true; }
-                default -> { return false; }
+            // AlternativePresentation has Colour and TextColour children too; only Presentation counts.
+            if (depth == 2 && "Presentation".equals(child[0])) {
+                switch (localName) {
+                    case "Colour" -> { fields[2] = reader.getElementText(); return true; }
+                    case "TextColour" -> { fields[3] = reader.getElementText(); return true; }
+                    default -> { return false; }
+                }
             }
+            return false;
         });
         if (id != null) {
-            sink.addLine(id, fields[0], fields[1]);
+            sink.addLine(id, fields[0], fields[1], fields[2], fields[3]);
         }
     }
 
