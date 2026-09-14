@@ -1,5 +1,6 @@
 package org.entur.vehicles.service.planned;
 
+import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -28,6 +29,46 @@ public class PlannedDatasetTest {
         assertThat(dataset.datedServiceJourney("GOA:DatedServiceJourney:1"))
                 .isEqualTo(new DatedJourneyRef("GOA:ServiceJourney:1", "2024-01-20"));
         assertThat(dataset.serviceJourneyCount()).isEqualTo(1);
+    }
+
+    @Test
+    public void transportModeResolvesTheJourneysOwnModeThenItsLineThenTheReportedLine() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addLine("TST:Line:ferry", "Ferry", "F", null, null, "water")
+                .addLine("TST:Line:rail", "Rail", "R", null, null, "rail")
+                .addLine("TST:Line:replacement", "Replacement", "RB", null, null, "bus")
+                .addLine("TST:Line:cable", "Cable car", "C", null, null, "cableway")
+                .addLine("TST:Line:trolley", "Trolley", "T", null, null, "trolleyBus")
+                .addServiceJourney("TST:ServiceJourney:onFerry", "JP", "TST:Line:ferry", null)
+                .addServiceJourney("TST:ServiceJourney:ferryRepeatsLine", "JP", "TST:Line:ferry", "water")
+                .addServiceJourney("TST:ServiceJourney:replacementBus", "JP", "TST:Line:rail", "bus")
+                .addServiceJourney("TST:ServiceJourney:onReplacementLine", "JP", "TST:Line:replacement", null)
+                .build();
+
+        assertThat(dataset.transportModeOf(null, "TST:Line:ferry")).isEqualTo(VehicleModeEnumeration.FERRY);
+        assertThat(dataset.transportModeOf(null, "TST:Line:trolley")).isEqualTo(VehicleModeEnumeration.BUS);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:replacementBus", "TST:Line:rail"))
+                .withFailMessage("a journey's own mode overrides its line's")
+                .isEqualTo(VehicleModeEnumeration.BUS);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:ferryRepeatsLine", "TST:Line:rail"))
+                .withFailMessage("a journey's own mode wins over a different reported line, even when it repeats its own line's")
+                .isEqualTo(VehicleModeEnumeration.FERRY);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:onFerry", "TST:Line:rail"))
+                .withFailMessage("a known journey's own line wins over the line the vehicle reports")
+                .isEqualTo(VehicleModeEnumeration.FERRY);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:onReplacementLine", "TST:Line:rail"))
+                .withFailMessage("a replacement journey reported on the rail line it replaces is still a bus")
+                .isEqualTo(VehicleModeEnumeration.BUS);
+        assertThat(dataset.transportModeOf("X:ServiceJourney:unknown", "TST:Line:rail"))
+                .withFailMessage("an unknown journey falls back to the reported line")
+                .isEqualTo(VehicleModeEnumeration.RAIL);
+        assertThat(dataset.transportModeOf("TST:ServiceJourney:onFerry", "SKA:Line:notInNetex"))
+                .isEqualTo(VehicleModeEnumeration.FERRY);
+        assertThat(dataset.transportModeOf(null, "TST:Line:cable"))
+                .withFailMessage("a NeTEx mode with no VehicleModeEnumeration counterpart resolves nothing")
+                .isNull();
+        assertThat(dataset.transportModeOf("X:ServiceJourney:unknown", "X:Line:unknown")).isNull();
+        assertThat(dataset.transportModeOf(null, null)).isNull();
     }
 
     @Test

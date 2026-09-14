@@ -177,13 +177,18 @@ public class VehicleRepository {
 
       CharSequence operatorRef = journey.getOperatorRef();
 
-      if (containsValues(journey.getVehicleModes())) {
-        v.setMode(VehicleModeEnumeration.fromValue( journey.getVehicleModes().get(0).toString()));
-      } else if (operatorRef != null) {
-          v.setMode(Util.resolveModeByOperator(operatorRef.toString()));
-      } else {
-        v.setMode(VehicleModeEnumeration.BUS);
+      VehicleModeEnumeration mode = containsValues(journey.getVehicleModes())
+              ? VehicleModeEnumeration.fromValue(journey.getVehicleModes().get(0).toString())
+              : null;
+      if (mode == null) {
+        // getServiceJourney() is the dated journey's when there is one.
+        String planned = v.getServiceJourney() != null ? v.getServiceJourney().getId() : null;
+        mode = lineService.getTransportMode(planned, lineRef);
       }
+      if (mode == null && operatorRef != null) {
+        mode = Util.resolveModeByOperator(operatorRef.toString());
+      }
+      v.setMode(mode != null ? mode : VehicleModeEnumeration.BUS);
 
       if (operatorRef != null) {
         v.setOperator(OperatorService.getOperator(operatorRef.toString()));

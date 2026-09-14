@@ -1,6 +1,7 @@
 package org.entur.vehicles.service.planned;
 
 import jakarta.annotation.PostConstruct;
+import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.PointsOnLink;
@@ -280,6 +281,14 @@ public class PlannedDataService {
             miss("line");
         }
         return line;
+    }
+
+    /**
+     * The planned mode for a journey and line (see {@link PlannedDataset#transportModeOf}), or
+     * null. Not miss-counted: the line and journey lookups beside it already are.
+     */
+    public VehicleModeEnumeration findTransportMode(String serviceJourneyId, String lineRef) {
+        return current.get().transportModeOf(serviceJourneyId, lineRef);
     }
 
     public Operator findOperator(String operatorRef) {

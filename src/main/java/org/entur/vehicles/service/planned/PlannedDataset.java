@@ -1,5 +1,6 @@
 package org.entur.vehicles.service.planned;
 
+import org.entur.vehicles.data.VehicleModeEnumeration;
 import org.entur.vehicles.data.model.Codespace;
 import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.Line;
@@ -44,6 +45,9 @@ public final class PlannedDataset {
     private final Map<String, String[]> patternLinks;
     private final Map<String, int[]> linkGeometry;
     private final Map<String, String> serviceJourneyLine;
+    private final Map<String, VehicleModeEnumeration> lineTransportMode;
+    /** Only journeys whose own TransportMode overrides their line's. */
+    private final Map<String, VehicleModeEnumeration> serviceJourneyTransportMode;
     /** Line id -> service journey ids on it, sorted. Only lines the export declares. */
     private final Map<String, String[]> lineServiceJourneys;
     /** Line id -> the distinct journey patterns of its journeys, most vertices first. */
@@ -59,6 +63,8 @@ public final class PlannedDataset {
                            Map<String, String[]> patternLinks,
                            Map<String, int[]> linkGeometry,
                            Map<String, String> serviceJourneyLine,
+                           Map<String, VehicleModeEnumeration> lineTransportMode,
+                           Map<String, VehicleModeEnumeration> serviceJourneyTransportMode,
                            Map<String, String[]> lineServiceJourneys,
                            Map<String, String[]> lineJourneyPatterns,
                            List<Codespace> codespaces,
@@ -70,6 +76,8 @@ public final class PlannedDataset {
         this.patternLinks = patternLinks;
         this.linkGeometry = linkGeometry;
         this.serviceJourneyLine = serviceJourneyLine;
+        this.lineTransportMode = lineTransportMode;
+        this.serviceJourneyTransportMode = serviceJourneyTransportMode;
         this.lineServiceJourneys = lineServiceJourneys;
         this.lineJourneyPatterns = lineJourneyPatterns;
         this.codespaces = codespaces;
@@ -108,6 +116,30 @@ public final class PlannedDataset {
     /** The line id a service journey runs on, or null if unknown. */
     public String lineOf(String serviceJourneyId) {
         return serviceJourneyId == null ? null : serviceJourneyLine.get(serviceJourneyId);
+    }
+
+    /**
+     * The planned mode of a vehicle on this journey and line: the journey's own TransportMode,
+     * else the mode of the line the journey runs on, else the reported line's. A known journey
+     * outranks the reported line because it is the more specific planned object: a replacement
+     * bus on its own bus line is still a bus when the producer reports the rail line it
+     * replaces. Null when none of them has a mode this service can express.
+     */
+    public VehicleModeEnumeration transportModeOf(String serviceJourneyId, String lineId) {
+        if (serviceJourneyId != null) {
+            // Checked before the journey's line, so a journey mode dropped in build() for
+            // repeating its line's resolves to the very same value one step later.
+            VehicleModeEnumeration own = serviceJourneyTransportMode.get(serviceJourneyId);
+            if (own != null) {
+                return own;
+            }
+            String journeyLine = lineOf(serviceJourneyId);
+            VehicleModeEnumeration journeyLineMode = journeyLine == null ? null : lineTransportMode.get(journeyLine);
+            if (journeyLineMode != null) {
+                return journeyLineMode;
+            }
+        }
+        return lineId == null ? null : lineTransportMode.get(lineId);
     }
 
     /** Shared with every caller and never copied - callers must not mutate it. */
@@ -344,6 +376,9 @@ public final class PlannedDataset {
         private final Map<String, int[]> linkGeometry = new HashMap<>();
         private final Map<String, String> operatingDays = new HashMap<>();
         private final Map<String, String> serviceJourneyLine = new HashMap<>();
+        // Raw NeTEx values, so a snapshot replays exactly what was parsed; mapped in build().
+        private final Map<String, String> lineTransportMode = new HashMap<>();
+        private final Map<String, String> serviceJourneyTransportMode = new HashMap<>();
         private int duplicateIds = 0;
 
         @Override
@@ -354,17 +389,18 @@ public final class PlannedDataset {
             return this;
         }
 
-        /** A line that publishes no colours. */
+        /** A line that publishes no colours and no transport mode. */
         public Builder addLine(String id, String name, String publicCode) {
-            return addLine(id, name, publicCode, null, null);
+            return addLine(id, name, publicCode, null, null, null);
         }
 
         @Override
-        public Builder addLine(String id, String name, String publicCode, String colour, String textColour) {
+        public Builder addLine(String id, String name, String publicCode, String colour, String textColour, String transportMode) {
             Line line = new Line(id, name);
             line.setPublicCode(publicCode);
             line.setPresentation(Presentation.of(colour, textColour));
             countDuplicate(lines.put(id, line));
+            putOrRemove(lineTransportMode, id, transportMode);
             return this;
         }
 
@@ -382,12 +418,16 @@ public final class PlannedDataset {
         }
 
         public Builder addServiceJourney(String id, String journeyPatternId) {
-            return addServiceJourney(id, journeyPatternId, null);
+            return addServiceJourney(id, journeyPatternId, null, null);
         }
 
         /** @param lineId the journey's LineRef/FlexibleLineRef; null when the element has none */
-        @Override
         public Builder addServiceJourney(String id, String journeyPatternId, String lineId) {
+            return addServiceJourney(id, journeyPatternId, lineId, null);
+        }
+
+        @Override
+        public Builder addServiceJourney(String id, String journeyPatternId, String lineId, String transportMode) {
             // Map.copyOf in build() rejects null values; "" is never a real pattern id, so it
             // still counts as unresolved there.
             countDuplicate(serviceJourneyPattern.put(id, journeyPatternId == null ? "" : journeyPatternId));
@@ -396,7 +436,18 @@ public final class PlannedDataset {
             } else {
                 serviceJourneyLine.remove(id);
             }
+            putOrRemove(serviceJourneyTransportMode, id, transportMode);
             return this;
+        }
+
+        /** A later declaration of the same id replaces an earlier one, absent value included. */
+        private static void putOrRemove(Map<String, String> map, String id, String value) {
+            if (value != null) {
+                // A handful of distinct values across the whole export; share one instance each.
+                map.put(id, value.intern());
+            } else {
+                map.remove(id);
+            }
         }
 
         @Override
@@ -458,6 +509,14 @@ public final class PlannedDataset {
 
         Map<String, String> serviceJourneyLine() {
             return Collections.unmodifiableMap(serviceJourneyLine);
+        }
+
+        Map<String, String> lineTransportMode() {
+            return Collections.unmodifiableMap(lineTransportMode);
+        }
+
+        Map<String, String> serviceJourneyTransportMode() {
+            return Collections.unmodifiableMap(serviceJourneyTransportMode);
         }
 
         Map<String, RawDatedServiceJourney> rawDatedServiceJourneys() {
@@ -615,6 +674,21 @@ public final class PlannedDataset {
                 datedServiceJourneys.put(e.getKey(), new DatedJourneyRef(serviceJourneyId, date));
             }
 
+            Map<String, VehicleModeEnumeration> lineModes = toVehicleModes(lineTransportMode);
+            // Kept only where the journey's mode differs from its own line's: a producer that
+            // repeats the line's mode on every journey would otherwise fill this map with
+            // hundreds of thousands of entries. Lossless, because transportModeOf consults the
+            // journey's own line right after this map, before any reported line.
+            Map<String, VehicleModeEnumeration> journeyModes = toVehicleModes(serviceJourneyTransportMode);
+            journeyModes.entrySet().removeIf(e -> {
+                String lineId = serviceJourneyLine.get(e.getKey());
+                return lineId != null && e.getValue() == lineModes.get(lineId);
+            });
+            if (!serviceJourneyTransportMode.isEmpty()) {
+                LOG.info("Planned data: {} of {} service journeys set their own transport mode, {} differ from their line's.",
+                        serviceJourneyTransportMode.size(), serviceJourneyPattern.size(), journeyModes.size());
+            }
+
             Stats stats = new Stats(
                     operators.size(), lines.size(), serviceJourneyPattern.size(), datedServiceJourneys.size(),
                     patternLinks.size(), linkGeometry.size(), duplicateIds,
@@ -634,10 +708,24 @@ public final class PlannedDataset {
                     Map.copyOf(patternLinks),
                     Map.copyOf(linkGeometry),
                     Map.copyOf(serviceJourneyLine),
+                    Map.copyOf(lineModes),
+                    Map.copyOf(journeyModes),
                     Map.copyOf(lineServiceJourneys),
                     Map.copyOf(lineJourneyPatterns),
                     List.copyOf(codespaces),
                     stats);
+        }
+
+        /** Drops values with no {@link VehicleModeEnumeration} counterpart, so a lookup falls through past them. */
+        private static Map<String, VehicleModeEnumeration> toVehicleModes(Map<String, String> transportModes) {
+            Map<String, VehicleModeEnumeration> result = new HashMap<>(transportModes.size() * 2);
+            for (Map.Entry<String, String> e : transportModes.entrySet()) {
+                VehicleModeEnumeration mode = VehicleModeEnumeration.fromNetexTransportMode(e.getValue());
+                if (mode != null) {
+                    result.put(e.getKey(), mode);
+                }
+            }
+            return result;
         }
     }
 }
