@@ -18,6 +18,8 @@ public class VehicleUpdate extends AbstractUpdate {
   private Location location;
   private Double speed;
   private Double bearing;
+  /** True when {@link #bearing} was calculated from consecutive positions rather than reported by the producer. */
+  private boolean bearingCalculated;
   private long delay;
   private OccupancyEnumeration occupancy;
   private VehicleStatusEnumeration vehicleStatus;
@@ -103,6 +105,14 @@ public class VehicleUpdate extends AbstractUpdate {
 
   public void setBearing(Double bearing) {
     this.bearing = bearing;
+  }
+
+  public boolean isBearingCalculated() {
+    return bearingCalculated;
+  }
+
+  public void setBearingCalculated(boolean bearingCalculated) {
+    this.bearingCalculated = bearingCalculated;
   }
 
   @Deprecated

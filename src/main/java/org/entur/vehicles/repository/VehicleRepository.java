@@ -88,8 +88,10 @@ public class VehicleRepository {
     try {
       MonitoredVehicleJourneyRecord journey = vehicleActivity.getMonitoredVehicleJourney();
 
-      if (journey.getVehicleLocation() == null) {
-        // No location set - ignoring
+      if (journey.getVehicleLocation() == null
+              || journey.getVehicleLocation().getLatitude() == null
+              || journey.getVehicleLocation().getLongitude() == null) {
+        // No usable location - ignoring
         return;
       }
 
@@ -124,21 +126,13 @@ public class VehicleRepository {
 
       v.setVehicleId(vehicleRef);
 
-      // The stored Location is updated in place below, so keep the previous position for the bearing
-      final Location previousLocation = v.getLocation() != null
-              ? new Location(v.getLocation().getLongitude(), v.getLocation().getLatitude())
-              : null;
+      final Location previousLocation = v.getLocation();
       final ZonedDateTime previousRecordedAt = v.getLastUpdated();
 
-      if (v.getLocation() != null) {
-        v.getLocation().setLongitude(journey.getVehicleLocation().getLongitude());
-        v.getLocation().setLatitude(journey.getVehicleLocation().getLatitude());
-      } else {
-        v.setLocation(new Location(
-                journey.getVehicleLocation().getLongitude(),
-                journey.getVehicleLocation().getLatitude()
-        ));
-      }
+      v.setLocation(new Location(
+              journey.getVehicleLocation().getLongitude(),
+              journey.getVehicleLocation().getLatitude()
+      ));
 
       if (vehicleActivity.getProgressBetweenStops() != null) {
         if (vehicleActivity.getProgressBetweenStops().getLinkDistance() != null &&
@@ -184,6 +178,7 @@ public class VehicleRepository {
 
       if (journey.getBearing() != null) {
         v.setBearing(journey.getBearing().doubleValue());
+        v.setBearingCalculated(false);
       } else if (bearingCalculationEnabled && previousLocation != null) {
         calculateBearing(v, previousLocation, previousRecordedAt);
       }
@@ -291,15 +286,12 @@ public class VehicleRepository {
   /**
    * Derives a bearing from the previous position to the current one, for producers that report none.
    * Keeps the previous bearing when the vehicle has barely moved (GPS jitter at a stop would point
-   * anywhere) or the update is not newer than the stored one; clears it when the positions are so far
-   * apart in time that the straight line between them says little about the current heading.
+   * anywhere) or the update is not newer than the stored one. When the positions are so far apart in
+   * time that the straight line between them says little about the current heading, a bearing this
+   * service calculated earlier is cleared; one the producer reported is kept, as it always has been.
    */
   private static void calculateBearing(VehicleUpdate v, Location previous, ZonedDateTime previousRecordedAt) {
     if (previousRecordedAt == null || !v.getLastUpdated().isAfter(previousRecordedAt)) {
-      return;
-    }
-    if (Duration.between(previousRecordedAt, v.getLastUpdated()).compareTo(MAX_BEARING_CALCULATION_GAP) > 0) {
-      v.setBearing(null);
       return;
     }
     final Location current = v.getLocation();
@@ -307,8 +299,16 @@ public class VehicleRepository {
             current.getLatitude(), current.getLongitude()) < MIN_BEARING_CALCULATION_DISTANCE_METERS) {
       return;
     }
+    if (Duration.between(previousRecordedAt, v.getLastUpdated()).compareTo(MAX_BEARING_CALCULATION_GAP) > 0) {
+      if (v.isBearingCalculated()) {
+        v.setBearing(null);
+        v.setBearingCalculated(false);
+      }
+      return;
+    }
     v.setBearing(Bearing.initialBearing(previous.getLatitude(), previous.getLongitude(),
             current.getLatitude(), current.getLongitude()));
+    v.setBearingCalculated(true);
   }
 
   public Collection<VehicleUpdate> getVehicles(QueryFilter filter) {

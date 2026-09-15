@@ -20,6 +20,7 @@ import java.time.ZonedDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Producers that report no bearing get one calculated from the previous position to the current.
@@ -142,6 +143,42 @@ public class VehicleRepositoryBearingTest {
         repository.add(position(LAT, LON, T0.plusSeconds(10)));
 
         assertEquals(0, stored().getBearing(), DELTA);
+    }
+
+    @Test
+    public void testSmallMovementAfterLongGapKeepsPreviousBearing() {
+        repository.add(position(LAT, LON, T0));
+        repository.add(position(HUNDRED_METERS_NORTH, LON, T0.plusSeconds(20)));
+        // Parked at a stop, reported by a producer that sends less often than every three minutes
+        repository.add(position(HUNDRED_METERS_NORTH - 0.0001, LON, T0.plusMinutes(10)));
+
+        assertEquals(0, stored().getBearing(), DELTA);
+    }
+
+    @Test
+    public void testReportedBearingSurvivesLongGapWithoutBearing() {
+        repository.add(position(LAT, LON, T0, 90f));
+        // Only bearings this service calculated are cleared; a reported one stays as it always has
+        repository.add(position(HUNDRED_METERS_NORTH, LON + 0.01, T0.plusMinutes(10)));
+
+        assertEquals(90, stored().getBearing(), DELTA);
+    }
+
+    @Test
+    public void testPositionWithoutCoordinatesIsIgnoredAndLaterUpdatesStillApply() {
+        repository.add(position(LAT, LON, T0));
+
+        VehicleActivityRecord noCoordinates = position(LAT, LON, T0.plusSeconds(10));
+        noCoordinates.getMonitoredVehicleJourney().getVehicleLocation().setLatitude(null);
+        repository.add(noCoordinates);
+
+        assertEquals(LAT, stored().getLocation().getLatitude(), DELTA);
+
+        repository.add(position(HUNDRED_METERS_NORTH, LON, T0.plusSeconds(20)));
+
+        assertEquals(HUNDRED_METERS_NORTH, stored().getLocation().getLatitude(), DELTA);
+        assertEquals(0, stored().getBearing(), DELTA);
+        assertTrue(stored().getLastUpdated().isEqual(T0.plusSeconds(20)));
     }
 
     @Test
