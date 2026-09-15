@@ -17,6 +17,8 @@ PodDisruptionBudget:
 
 configMap:
   graphiqlEnabled: false
+  # Calculate a bearing from consecutive positions when the producer reports none
+  bearingCalculationEnabled: false
   topicName:
     vm: siri.vehicle_monitoring
     et: siri.estimated_timetables

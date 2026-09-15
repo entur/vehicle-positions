@@ -4,6 +4,8 @@ ingress:
 configMap:
   subscriptionProjectId: ent-vpos-prd
   topicProjectId: ent-anshar-prd
+  # Disabled in prd for now
+  bearingCalculationEnabled: false
   etEnabled: true
   sxEnabled: true
   sxSnapshotUrl: https://api.entur.io/realtime/v1/rest/sx?SIRI_VERSION=2.1
