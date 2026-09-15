@@ -9,6 +9,7 @@ import java.util.StringJoiner;
 public class Line extends ObjectRef {
     private String lineName;
     private String publicCode;
+    private Presentation presentation;
 
     public static final Line DEFAULT = new Line();
 
@@ -47,6 +48,15 @@ public class Line extends ObjectRef {
 
     public void setPublicCode(String publicCode) {
         this.publicCode = publicCode;
+    }
+
+    /** Null when the line publishes no colours. */
+    public Presentation getPresentation() {
+        return presentation;
+    }
+
+    public void setPresentation(Presentation presentation) {
+        this.presentation = presentation;
     }
 
     @Override

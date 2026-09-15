@@ -15,7 +15,12 @@
               <OperatorRef ref="TST:Operator:1"></OperatorRef>
               <Presentation>
                 <Colour>76A300</Colour>
+                <TextColour>FFFFFF</TextColour>
               </Presentation>
+              <AlternativePresentation>
+                <Colour>000000</Colour>
+                <TextColour>E60000</TextColour>
+              </AlternativePresentation>
             </Line>
             <FlexibleLine version="0" id="TST:FlexibleLine:8202">
               <Name>Bestillingsrute</Name>
@@ -63,7 +68,7 @@
                 </KeyValue>
               </keyList>
               <PrivateCode>1001</PrivateCode>
-              <TransportMode>bus</TransportMode>
+              <TransportMode>coach</TransportMode>
               <dayTypes>
                 <DayTypeRef ref="TST:DayType:1"></DayTypeRef>
               </dayTypes>

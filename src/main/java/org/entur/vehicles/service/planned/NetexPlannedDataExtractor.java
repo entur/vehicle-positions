@@ -68,19 +68,30 @@ public final class NetexPlannedDataExtractor {
 
     private void readLine(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
-        String[] fields = new String[2]; // name, publicCode
+        String[] fields = new String[5]; // name, publicCode, colour, textColour, transportMode
+        String[] child = new String[1]; // the direct child the scan is currently inside
         scan(r, (reader, localName, depth) -> {
-            if (depth != 1) {
-                return false;
+            if (depth == 1) {
+                child[0] = localName;
+                switch (localName) {
+                    case "Name" -> { fields[0] = reader.getElementText(); return true; }
+                    case "PublicCode" -> { fields[1] = reader.getElementText(); return true; }
+                    case "TransportMode" -> { fields[4] = reader.getElementText(); return true; }
+                    default -> { return false; }
+                }
             }
-            switch (localName) {
-                case "Name" -> { fields[0] = reader.getElementText(); return true; }
-                case "PublicCode" -> { fields[1] = reader.getElementText(); return true; }
-                default -> { return false; }
+            // AlternativePresentation has Colour and TextColour children too; only Presentation counts.
+            if (depth == 2 && "Presentation".equals(child[0])) {
+                switch (localName) {
+                    case "Colour" -> { fields[2] = reader.getElementText(); return true; }
+                    case "TextColour" -> { fields[3] = reader.getElementText(); return true; }
+                    default -> { return false; }
+                }
             }
+            return false;
         });
         if (id != null) {
-            sink.addLine(id, fields[0], fields[1]);
+            sink.addLine(id, fields[0], fields[1], fields[2], fields[3], fields[4]);
         }
     }
 
@@ -118,12 +129,14 @@ public final class NetexPlannedDataExtractor {
 
     private void readServiceJourney(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
-        String[] refs = new String[2]; // journeyPatternId, lineId
+        String[] refs = new String[3]; // journeyPatternId, lineId, transportMode
         scan(r, (reader, localName, depth) -> {
             if (depth != 1) {
                 return false;
             }
             switch (localName) {
+                // Optional; when set it takes precedence over the line's, e.g. a replacement bus.
+                case "TransportMode" -> { refs[2] = reader.getElementText(); return true; }
                 case "JourneyPatternRef" -> refs[0] = ref(reader);
                 // Only the journey's own line ref: Route elements carry a LineRef too, but
                 // they are never nested inside a ServiceJourney, and depth 1 excludes them anyway.
@@ -133,7 +146,7 @@ public final class NetexPlannedDataExtractor {
             return false;
         });
         if (id != null) {
-            sink.addServiceJourney(id, refs[0], refs[1]);
+            sink.addServiceJourney(id, refs[0], refs[1], refs[2]);
         }
     }
 

@@ -161,6 +161,20 @@ class ApplicationGraphQlSchemaTests {
     private static final String WHOLE_JOURNEY_SITUATION = "TST:SituationNumber:whole-journey-probe";
     private static final String WHOLE_JOURNEY_DSJ = "TST:DatedServiceJourney:whole-journey-probe";
 
+    private static final String LINE_COLOUR_LINE = "TST:Line:line-colour-probe";
+    private static final String LINE_COLOUR_PLAIN_LINE = "TST:Line:line-colour-plain-probe";
+    private static final String LINE_COLOUR_VEHICLE = "TST:Vehicle:line-colour-probe";
+
+    private static final String MODE_FERRY_LINE = "TST:Line:mode-ferry-probe";
+    private static final String MODE_RAIL_LINE = "TST:Line:mode-rail-probe";
+    private static final String MODE_REPLACEMENT_SJ = "TST:ServiceJourney:mode-replacement-probe";
+    private static final String MODE_REPLACEMENT_DSJ = "TST:DatedServiceJourney:mode-replacement-probe";
+    private static final String MODE_RAIL_SJ = "TST:ServiceJourney:mode-rail-probe";
+    private static final String MODE_RAIL_DSJ = "TST:DatedServiceJourney:mode-rail-probe";
+    private static final String MODE_NO_MODE_VEHICLE = "TST:Vehicle:mode-none-probe";
+    private static final String MODE_UNKNOWN_MODE_VEHICLE = "TST:Vehicle:mode-unknown-probe";
+    private static final String MODE_SAYS_BUS_VEHICLE = "TST:Vehicle:mode-bus-probe";
+
     private static final String AFFECTED_LINE_GEOMETRY_SITUATION = "TST:SituationNumber:affected-line-geometry";
     private static final String AFFECTED_LINE_GEOMETRY_LINE = "TST:Line:affected-line-geometry";
     private static final String AFFECTED_LINE_GEOMETRY_LINK = "TST:ServiceLink:affected-line-geometry";
@@ -1419,6 +1433,113 @@ class ApplicationGraphQlSchemaTests {
         assertThat(pointsOnLink).isNotNull();
         assertThat(pointsOnLink.get("length")).isEqualTo(2.0);
         assertThat((String) pointsOnLink.get("points")).isNotEmpty();
+    }
+
+    /**
+     * Colours are passed through as published, placeholder {@code 000000} included, and a line
+     * that publishes neither has no presentation at all. A vehicle's line is the dataset's own
+     * instance, so it carries the same colours as the catalogue.
+     */
+    @Test
+    void lineColoursResolveOnTheCatalogueAndOnAVehiclesLine() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addLine(LINE_COLOUR_LINE, "Coloured", "C", "000000", "FFFFFF", null)
+                .addLine(LINE_COLOUR_PLAIN_LINE, "Plain", "P")
+                .build();
+        when(plannedDataService.current()).thenReturn(dataset);
+        when(plannedDataService.findLine(LINE_COLOUR_LINE)).thenReturn(dataset.line(LINE_COLOUR_LINE));
+
+        vehicleRepository.addAll(List.of(vehicleActivity(LINE_COLOUR_VEHICLE, LINE_COLOUR_LINE, 59.911491, 10.757933)));
+
+        String document = """
+                query {
+                  lines(codespaceId: "TST") { lineRef presentation { colour textColour } }
+                  vehicles(lineRef: "%s") { line { lineRef presentation { colour textColour } } }
+                }
+                """.formatted(LINE_COLOUR_LINE);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-line-colours", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        Map<String, String> colours = Map.of("colour", "000000", "textColour", "FFFFFF");
+        List<Map<String, Object>> lines = response.field("lines").getValue();
+        Map<String, Object> presentationByLine = new HashMap<>();
+        lines.forEach(line -> presentationByLine.put((String) line.get("lineRef"), line.get("presentation")));
+        assertThat(presentationByLine).containsEntry(LINE_COLOUR_LINE, colours);
+        assertThat(presentationByLine).containsKey(LINE_COLOUR_PLAIN_LINE);
+        assertThat(presentationByLine.get(LINE_COLOUR_PLAIN_LINE)).isNull();
+
+        List<Map<String, Object>> vehicles = response.field("vehicles").getValue();
+        assertThat(vehicles).singleElement()
+                .extracting(v -> v.get("line"))
+                .isEqualTo(Map.of("lineRef", LINE_COLOUR_LINE, "presentation", colours));
+    }
+
+    /**
+     * A producer that sends no VehicleMode (or one we cannot map) no longer makes every vehicle a
+     * bus: the mode falls back to NeTEx, the journey's own TransportMode before its line's. A
+     * producer that does send a mode is still believed, even when NeTEx disagrees.
+     */
+    @Test
+    void aVehicleWithoutAModeTakesItsModeFromNetex() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addLine(MODE_FERRY_LINE, "Ferry", "F", null, null, "water")
+                .addLine(MODE_RAIL_LINE, "Rail", "R", null, null, "rail")
+                .addServiceJourney(MODE_REPLACEMENT_SJ, "JP", MODE_RAIL_LINE, "bus")
+                .addOperatingDay("TST:OperatingDay:mode-probe", "2026-09-14")
+                .addDatedServiceJourney(MODE_REPLACEMENT_DSJ, MODE_REPLACEMENT_SJ, "TST:OperatingDay:mode-probe")
+                .addServiceJourney(MODE_RAIL_SJ, "JP", MODE_RAIL_LINE, null)
+                .addDatedServiceJourney(MODE_RAIL_DSJ, MODE_RAIL_SJ, "TST:OperatingDay:mode-probe")
+                .build();
+        when(plannedDataService.current()).thenReturn(dataset);
+        when(plannedDataService.findTransportMode(any(), any()))
+                .thenAnswer(i -> dataset.transportModeOf(i.getArgument(0), i.getArgument(1)));
+        when(plannedDataService.findDatedServiceJourney(anyString()))
+                .thenAnswer(i -> dataset.datedServiceJourney(i.getArgument(0)));
+
+        VehicleActivityRecord noMode = vehicleActivity(MODE_NO_MODE_VEHICLE, MODE_FERRY_LINE, 62.47, 6.15);
+        VehicleActivityRecord unknownMode = vehicleActivity(MODE_UNKNOWN_MODE_VEHICLE, MODE_FERRY_LINE, 62.47, 6.16);
+        unknownMode.getMonitoredVehicleJourney().setVehicleModes(List.of("UNKNOWN"));
+        VehicleActivityRecord saysBus = vehicleActivity(MODE_SAYS_BUS_VEHICLE, MODE_FERRY_LINE, 62.47, 6.17);
+        saysBus.getMonitoredVehicleJourney().setVehicleModes(List.of("BUS"));
+        vehicleRepository.addAll(List.of(noMode, unknownMode, saysBus));
+
+        timetableRepository.add(journeyCallingAt(MODE_RAIL_LINE, MODE_REPLACEMENT_DSJ, "NSR:Quay:mode-probe"));
+        timetableRepository.add(journeyCallingAt(MODE_RAIL_LINE, MODE_RAIL_DSJ, "NSR:Quay:mode-probe"));
+
+        String document = """
+                query {
+                  vehicles(lineRef: "%s") { vehicleId mode }
+                  timetables(datedServiceJourneyIds: ["%s", "%s"]) { datedServiceJourney { id } mode }
+                }
+                """.formatted(MODE_FERRY_LINE, MODE_REPLACEMENT_DSJ, MODE_RAIL_DSJ);
+
+        ExecutionGraphQlResponse response = graphQlService.execute(
+                new DefaultExecutionGraphQlRequest(document, null, Map.of(), Map.of(), "test-netex-mode", Locale.ENGLISH)
+        ).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getErrors()).isEmpty();
+
+        List<Map<String, Object>> vehicles = response.field("vehicles").getValue();
+        Map<String, Object> vehicleModes = new HashMap<>();
+        vehicles.forEach(v -> vehicleModes.put((String) v.get("vehicleId"), v.get("mode")));
+        assertThat(vehicleModes).isEqualTo(Map.of(
+                MODE_NO_MODE_VEHICLE, "FERRY",
+                MODE_UNKNOWN_MODE_VEHICLE, "FERRY",
+                MODE_SAYS_BUS_VEHICLE, "BUS"));
+
+        List<Map<String, Object>> timetables = response.field("timetables").getValue();
+        Map<String, Object> timetableModes = new HashMap<>();
+        timetables.forEach(t -> timetableModes.put(
+                (String) ((Map<String, Object>) t.get("datedServiceJourney")).get("id"), t.get("mode")));
+        assertThat(timetableModes)
+                .withFailMessage("the replacement journey's own bus must override its rail line; got %s", timetableModes)
+                .isEqualTo(Map.of(MODE_REPLACEMENT_DSJ, "BUS", MODE_RAIL_DSJ, "RAIL"));
     }
 
     @Test

@@ -275,6 +275,16 @@ type Line {
     lineRef: String
     lineName: String
     publicCode: String
+    "The line's colours from NeTEx. Null when the line publishes none."
+    presentation: Presentation
+}
+
+"A line's colours as published in NeTEx, with no defaulting or normalisation. Mirrors Journey Planner's Line.presentation."
+type Presentation {
+    "Six hex digits without '#', e.g. 76A300. Null when the line publishes none."
+    colour: String
+    "Six hex digits without '#'. Null when the line publishes none."
+    textColour: String
 }
 
 type Codespace {
