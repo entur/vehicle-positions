@@ -8,6 +8,7 @@ import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.data.model.PointsOnLink;
 import org.entur.vehicles.data.model.Presentation;
 import org.entur.vehicles.data.model.ServiceJourney;
+import org.entur.vehicles.service.planned.PlannedDataSink.StopDestinationDisplay;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +53,11 @@ public final class PlannedDataset {
     private final Map<String, String[]> lineServiceJourneys;
     /** Line id -> the distinct journey patterns of its journeys, most vertices first. */
     private final Map<String, String[]> lineJourneyPatterns;
+    /**
+     * Journey pattern id -> its destination: the FrontText when it never changes along the
+     * pattern (nearly all of them), else a {@link DestinationChanges}. Only patterns with one.
+     */
+    private final Map<String, Object> patternDestinations;
     private final List<Codespace> codespaces;
     private final ConcurrentHashMap<String, PointsOnLink> patternPolylines = new ConcurrentHashMap<>();
     private final Stats stats;
@@ -67,6 +73,7 @@ public final class PlannedDataset {
                            Map<String, VehicleModeEnumeration> serviceJourneyTransportMode,
                            Map<String, String[]> lineServiceJourneys,
                            Map<String, String[]> lineJourneyPatterns,
+                           Map<String, Object> patternDestinations,
                            List<Codespace> codespaces,
                            Stats stats) {
         this.operators = operators;
@@ -80,6 +87,7 @@ public final class PlannedDataset {
         this.serviceJourneyTransportMode = serviceJourneyTransportMode;
         this.lineServiceJourneys = lineServiceJourneys;
         this.lineJourneyPatterns = lineJourneyPatterns;
+        this.patternDestinations = patternDestinations;
         this.codespaces = codespaces;
         this.stats = stats;
     }
@@ -140,6 +148,35 @@ public final class PlannedDataset {
             }
         }
         return lineId == null ? null : lineTransportMode.get(lineId);
+    }
+
+    /**
+     * The FrontText of the destination display a service journey shows at the stop with the
+     * given order in its journey pattern: the one set there or at the nearest stop before it,
+     * else the pattern's first. With no order, the pattern's first. Null when the journey, its
+     * pattern or any destination display on it is unknown.
+     */
+    public String destinationDisplayOf(String serviceJourneyId, Integer order) {
+        String patternId = journeyPatternOf(serviceJourneyId);
+        Object destination = patternId == null ? null : patternDestinations.get(patternId);
+        if (destination instanceof DestinationChanges changes) {
+            return changes.at(order);
+        }
+        return (String) destination;
+    }
+
+    /** Where the destination changes along a journey pattern: parallel arrays, ascending by stop order. */
+    private record DestinationChanges(int[] orders, String[] frontTexts) {
+
+        String at(Integer order) {
+            int i = 0;
+            if (order != null) {
+                while (i + 1 < orders.length && orders[i + 1] <= order) {
+                    i++;
+                }
+            }
+            return frontTexts[i];
+        }
     }
 
     /** Shared with every caller and never copied - callers must not mutate it. */
@@ -357,7 +394,9 @@ public final class PlannedDataset {
                         int unresolvedLinkRefs,
                         int unresolvedServiceJourneyRefs,
                         int unresolvedOperatingDayRefs,
-                        int unresolvedLineRefs) {
+                        int unresolvedLineRefs,
+                        int destinationDisplays,
+                        int unresolvedDestinationDisplayRefs) {
     }
 
     /**
@@ -379,6 +418,9 @@ public final class PlannedDataset {
         // Raw NeTEx values, so a snapshot replays exactly what was parsed; mapped in build().
         private final Map<String, String> lineTransportMode = new HashMap<>();
         private final Map<String, String> serviceJourneyTransportMode = new HashMap<>();
+        private final Map<String, String> destinationDisplays = new HashMap<>();
+        /** Only patterns with at least one ref; consecutive refs to the same display collapsed. */
+        private final Map<String, StopDestinationDisplay[]> patternDestinationDisplays = new HashMap<>();
         private int duplicateIds = 0;
 
         @Override
@@ -411,9 +453,32 @@ public final class PlannedDataset {
             return this;
         }
 
-        @Override
+        /** A journey pattern that sets no destination display. */
         public Builder addJourneyPattern(String id, List<String> serviceLinkIds) {
+            return addJourneyPattern(id, serviceLinkIds, List.of());
+        }
+
+        @Override
+        public Builder addJourneyPattern(String id, List<String> serviceLinkIds, List<StopDestinationDisplay> destinationDisplays) {
             countDuplicate(patternLinks.put(id, serviceLinkIds.toArray(new String[0])));
+            List<StopDestinationDisplay> changes = new ArrayList<>(destinationDisplays.size());
+            for (StopDestinationDisplay display : destinationDisplays) {
+                // Most producers repeat the ref on every stop; only a change is worth keeping.
+                if (changes.isEmpty() || !changes.get(changes.size() - 1).destinationDisplayId().equals(display.destinationDisplayId())) {
+                    changes.add(display);
+                }
+            }
+            if (changes.isEmpty()) {
+                patternDestinationDisplays.remove(id);
+            } else {
+                patternDestinationDisplays.put(id, changes.toArray(new StopDestinationDisplay[0]));
+            }
+            return this;
+        }
+
+        @Override
+        public Builder addDestinationDisplay(String id, String frontText) {
+            countDuplicate(destinationDisplays.put(id, frontText));
             return this;
         }
 
@@ -517,6 +582,14 @@ public final class PlannedDataset {
 
         Map<String, String> serviceJourneyTransportMode() {
             return Collections.unmodifiableMap(serviceJourneyTransportMode);
+        }
+
+        Map<String, String> destinationDisplays() {
+            return Collections.unmodifiableMap(destinationDisplays);
+        }
+
+        Map<String, StopDestinationDisplay[]> patternDestinationDisplays() {
+            return Collections.unmodifiableMap(patternDestinationDisplays);
         }
 
         Map<String, RawDatedServiceJourney> rawDatedServiceJourneys() {
@@ -689,14 +762,46 @@ public final class PlannedDataset {
                         serviceJourneyTransportMode.size(), serviceJourneyPattern.size(), journeyModes.size());
             }
 
+            int unresolvedDestinationDisplayRefs = 0;
+            Map<String, Object> patternDestinations = new HashMap<>(patternDestinationDisplays.size() * 2);
+            for (Map.Entry<String, StopDestinationDisplay[]> e : patternDestinationDisplays.entrySet()) {
+                List<StopDestinationDisplay> resolved = new ArrayList<>(e.getValue().length);
+                List<String> frontTexts = new ArrayList<>(e.getValue().length);
+                for (StopDestinationDisplay display : e.getValue()) {
+                    String frontText = destinationDisplays.get(display.destinationDisplayId());
+                    if (frontText == null) {
+                        // Dangling, or a display without text: the previous one stays in effect.
+                        if (!destinationDisplays.containsKey(display.destinationDisplayId())) {
+                            unresolvedDestinationDisplayRefs++;
+                        }
+                        continue;
+                    }
+                    // Two displays with the same text are no change for someone reading it.
+                    if (frontTexts.isEmpty() || !frontTexts.get(frontTexts.size() - 1).equals(frontText)) {
+                        resolved.add(display);
+                        frontTexts.add(frontText);
+                    }
+                }
+                if (resolved.size() == 1) {
+                    patternDestinations.put(e.getKey(), frontTexts.get(0));
+                } else if (resolved.size() > 1) {
+                    int[] orders = new int[resolved.size()];
+                    for (int i = 0; i < orders.length; i++) {
+                        orders[i] = resolved.get(i).order();
+                    }
+                    patternDestinations.put(e.getKey(), new DestinationChanges(orders, frontTexts.toArray(new String[0])));
+                }
+            }
+
             Stats stats = new Stats(
                     operators.size(), lines.size(), serviceJourneyPattern.size(), datedServiceJourneys.size(),
                     patternLinks.size(), linkGeometry.size(), duplicateIds,
                     unresolvedPatternRefs, unresolvedLinkRefs, unresolvedServiceJourneyRefs, unresolvedOperatingDayRefs,
-                    unresolvedLineRefs);
+                    unresolvedLineRefs, destinationDisplays.size(), unresolvedDestinationDisplayRefs);
 
             if (duplicateIds + unresolvedPatternRefs + unresolvedLinkRefs
-                    + unresolvedServiceJourneyRefs + unresolvedOperatingDayRefs + unresolvedLineRefs > 0) {
+                    + unresolvedServiceJourneyRefs + unresolvedOperatingDayRefs + unresolvedLineRefs
+                    + unresolvedDestinationDisplayRefs > 0) {
                 LOG.info("Planned data build summary: {}", stats);
             }
 
@@ -712,6 +817,7 @@ public final class PlannedDataset {
                     Map.copyOf(journeyModes),
                     Map.copyOf(lineServiceJourneys),
                     Map.copyOf(lineJourneyPatterns),
+                    Map.copyOf(patternDestinations),
                     List.copyOf(codespaces),
                     stats);
         }

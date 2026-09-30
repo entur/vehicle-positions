@@ -291,6 +291,14 @@ public class PlannedDataService {
         return current.get().transportModeOf(serviceJourneyId, lineRef);
     }
 
+    /**
+     * The destination a journey shows at the stop with this order (see {@link
+     * PlannedDataset#destinationDisplayOf}), or null. Not miss-counted: the journey lookup is.
+     */
+    public String findDestinationDisplay(String serviceJourneyId, Integer stopOrder) {
+        return current.get().destinationDisplayOf(serviceJourneyId, stopOrder);
+    }
+
     public Operator findOperator(String operatorRef) {
         Operator operator = current.get().operator(operatorRef);
         if (operator == null) {

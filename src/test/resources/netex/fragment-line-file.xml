@@ -36,6 +36,19 @@
               <DirectionType>outbound</DirectionType>
             </Route>
           </routes>
+          <destinationDisplays>
+            <DestinationDisplay version="1" id="TST:DestinationDisplay:Kolsas">
+              <FrontText>Kolsås</FrontText>
+              <variants>
+                <DestinationDisplayVariant version="1" id="TST:DestinationDisplayVariant:1">
+                  <FrontText>Decoy</FrontText>
+                </DestinationDisplayVariant>
+              </variants>
+            </DestinationDisplay>
+            <DestinationDisplay version="1" id="TST:DestinationDisplay:Sandvika">
+              <FrontText>Sandvika</FrontText>
+            </DestinationDisplay>
+          </destinationDisplays>
           <journeyPatterns>
             <JourneyPattern version="0" id="TST:JourneyPattern:1">
               <Name>Outbound</Name>
@@ -44,6 +57,18 @@
                 <StopPointInJourneyPattern version="0" id="TST:StopPointInJourneyPattern:1" order="1">
                   <ScheduledStopPointRef ref="TST:ScheduledStopPoint:A" version="0"></ScheduledStopPointRef>
                   <ForAlighting>false</ForAlighting>
+                  <DestinationDisplayRef ref="TST:DestinationDisplay:Kolsas" version="1"></DestinationDisplayRef>
+                </StopPointInJourneyPattern>
+                <StopPointInJourneyPattern version="0" id="TST:StopPointInJourneyPattern:2" order="2">
+                  <ScheduledStopPointRef ref="TST:ScheduledStopPoint:B" version="0"></ScheduledStopPointRef>
+                </StopPointInJourneyPattern>
+                <StopPointInJourneyPattern version="0" id="TST:StopPointInJourneyPattern:3" order="3">
+                  <ScheduledStopPointRef ref="TST:ScheduledStopPoint:C" version="0"></ScheduledStopPointRef>
+                  <DestinationDisplayRef ref="TST:DestinationDisplay:Sandvika" version="1"></DestinationDisplayRef>
+                </StopPointInJourneyPattern>
+                <StopPointInJourneyPattern version="0" id="TST:StopPointInJourneyPattern:4" order="4">
+                  <ScheduledStopPointRef ref="TST:ScheduledStopPoint:D" version="0"></ScheduledStopPointRef>
+                  <ForBoarding>false</ForBoarding>
                 </StopPointInJourneyPattern>
               </pointsInSequence>
               <linksInSequence>

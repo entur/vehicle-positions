@@ -221,6 +221,13 @@ public class VehicleRepository {
 
       if (containsValues(journey.getDestinationNames())) {
         v.setDestinationName(journey.getDestinationNames().get(0).getValue().toString());
+      } else if (v.getServiceJourney() != null) {
+        // Optional in SIRI VM; fall back to what NeTEx plans for the monitored stop.
+        Integer stopOrder = journey.getMonitoredCall() != null ? journey.getMonitoredCall().getOrder() : null;
+        String destination = serviceJourneyService.getDestinationDisplay(v.getServiceJourney().getId(), stopOrder);
+        if (destination != null) {
+          v.setDestinationName(destination);
+        }
       }
 
       if (journey.getDestinationRef() != null) {

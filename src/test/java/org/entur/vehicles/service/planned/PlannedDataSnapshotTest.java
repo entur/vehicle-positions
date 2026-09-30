@@ -65,7 +65,15 @@ public class PlannedDataSnapshotTest {
         for (String id : parsedBuilder.serviceJourneyPattern().keySet()) {
             assertThat(fromSnapshot.journeyPatternOf(id)).as("journeyPatternOf %s", id).isEqualTo(fromParse.journeyPatternOf(id));
             assertThat(fromSnapshot.lineOf(id)).as("lineOf %s", id).isEqualTo(fromParse.lineOf(id));
+            for (Integer order : new Integer[]{null, 1, 2, 3, 5, 8, 13, 21, 34}) {
+                assertThat(fromSnapshot.destinationDisplayOf(id, order))
+                        .as("destinationDisplayOf %s at %s", id, order)
+                        .isEqualTo(fromParse.destinationDisplayOf(id, order));
+            }
         }
+        assertThat(fromParse.destinationDisplayOf(parsedBuilder.serviceJourneyPattern().keySet().iterator().next(), null))
+                .as("the GOA export sets a destination display on its journey patterns")
+                .isNotNull();
 
         for (String id : parsedBuilder.rawDatedServiceJourneys().keySet()) {
             assertThat(fromSnapshot.datedServiceJourney(id)).as("datedServiceJourney %s", id).isEqualTo(fromParse.datedServiceJourney(id));
@@ -96,7 +104,7 @@ public class PlannedDataSnapshotTest {
     // ---- v2 writer ----
 
     @Test
-    public void writeStartsWithMagicAndVersionFour(@TempDir Path dir) throws Exception {
+    public void writeStartsWithMagicAndVersionFive(@TempDir Path dir) throws Exception {
         PlannedDataset.Builder builder = new PlannedDataset.Builder();
         builder.addOperator("RUT:Operator:1", "One");
         builder.addOperator("RUT:Operator:2", "Two");
@@ -114,8 +122,8 @@ public class PlannedDataSnapshotTest {
         byte[] bytes = Files.readAllBytes(file);
         assertThat(bytes).startsWith('V', 'P', 'P', '2');
         int version = ((bytes[4] & 0xFF) << 24) | ((bytes[5] & 0xFF) << 16) | ((bytes[6] & 0xFF) << 8) | (bytes[7] & 0xFF);
-        assertThat(version).isEqualTo(4);
-        assertThat(PlannedDataSnapshot.FORMAT_VERSION).isEqualTo(4);
+        assertThat(version).isEqualTo(5);
+        assertThat(PlannedDataSnapshot.FORMAT_VERSION).isEqualTo(5);
     }
 
     @Test
@@ -198,16 +206,18 @@ public class PlannedDataSnapshotTest {
                 0x00,
                 // section 3: operatingDays, count=0
                 0x00,
-                // section 4: serviceLinks, count=1
+                // section 4: destinationDisplays, count=0
+                0x00,
+                // section 5: serviceLinks, count=1
                 0x01,
                 // record: prefixIdx=1, kind=DIGITS(4), local="1" -> varint 1,
                 // intCount=3, then zigzag(10-0)=20, zigzag(20-0)=40, zigzag(5-10)=zigzag(-5)=9
                 0x01, 0x04, 0x01, 0x03, 20, 40, 9,
-                // section 5: journeyPatterns, count=0
+                // section 6: journeyPatterns, count=0
                 0x00,
-                // section 6: serviceJourneys, count=0
+                // section 7: serviceJourneys, count=0
                 0x00,
-                // section 7: datedServiceJourneys, count=0
+                // section 8: datedServiceJourneys, count=0
                 0x00,
                 // trailer: 0xFF, total record count = 2
                 (byte) 0xFF, 0x02,
@@ -235,6 +245,13 @@ public class PlannedDataSnapshotTest {
 
         original.addJourneyPattern("RUT:JourneyPattern:1", List.of("RUT:ServiceLink:odd", "RUT:ServiceLink:dangling")); // dangling link ref
         original.addJourneyPattern("RUT:JourneyPattern:2", List.of()); // empty link list
+        original.addDestinationDisplay("RUT:DestinationDisplay:1", "Majorstuen");
+        original.addDestinationDisplay("RUT:DestinationDisplay:2", null); // no front text
+        original.addJourneyPattern("RUT:JourneyPattern:3", List.of(), List.of(
+                new PlannedDataSink.StopDestinationDisplay(1, "RUT:DestinationDisplay:1"),
+                new PlannedDataSink.StopDestinationDisplay(4, "RUT:DestinationDisplay:dangling"),
+                new PlannedDataSink.StopDestinationDisplay(6, "RUT:DestinationDisplay:1")));
+        original.addServiceJourney("RUT:ServiceJourney:5", "RUT:JourneyPattern:3", null);
 
         original.addServiceJourney("RUT:ServiceJourney:1", "RUT:JourneyPattern:missing", "RUT:Line:dangling"); // dangling pattern + dangling line
         original.addServiceJourney("RUT:ServiceJourney:2", null, "RUT:Line:1"); // null pattern -> "" placeholder
@@ -300,6 +317,13 @@ public class PlannedDataSnapshotTest {
         assertThat(fromSnapshot.datedServiceJourney("RUT:DatedServiceJourney:3"))
                 .isEqualTo(fromOriginal.datedServiceJourney("RUT:DatedServiceJourney:3"))
                 .isEqualTo(new DatedJourneyRef("RUT:ServiceJourney:3", null));
+
+        for (Integer order : new Integer[]{null, 1, 4, 6}) {
+            assertThat(fromSnapshot.destinationDisplayOf("RUT:ServiceJourney:5", order))
+                    .as("destinationDisplayOf at %s", order)
+                    .isEqualTo(fromOriginal.destinationDisplayOf("RUT:ServiceJourney:5", order))
+                    .isEqualTo("Majorstuen");
+        }
 
         assertThat(fromSnapshot.pointsOnLink("RUT:JourneyPattern:2"))
                 .isEqualTo(fromOriginal.pointsOnLink("RUT:JourneyPattern:2"));

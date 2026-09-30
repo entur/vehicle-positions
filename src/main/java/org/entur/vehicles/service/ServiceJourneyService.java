@@ -31,6 +31,14 @@ public class ServiceJourneyService {
     }
 
     /**
+     * The NeTEx destination display a journey shows at the stop with this order in its journey
+     * pattern (its first when the order is null or before any), or null if unknown.
+     */
+    public String getDestinationDisplay(String serviceJourneyId, Integer stopOrder) {
+        return plannedData.findDestinationDisplay(serviceJourneyId, stopOrder);
+    }
+
+    /**
      * A fresh DatedServiceJourney per call, with the operating day and a ServiceJourney
      * dated to it - the same shape the JourneyPlanner lookup used to build.
      */
