@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * One StAX pass over a NeTEx XML stream, feeding the seven element types the service needs
+ * One StAX pass over a NeTEx XML stream, feeding the eight element types the service needs
  * into a {@link PlannedDataSink}. Everything else is skipped at the token level, so memory
  * is bounded by what is kept, not by the size of the file.
  * <p>
@@ -40,6 +40,7 @@ public final class NetexPlannedDataExtractor {
                     case "Line", "FlexibleLine" -> readLine(r, sink);
                     case "ServiceLink" -> readServiceLink(r, sink);
                     case "JourneyPattern", "ServiceJourneyPattern" -> readJourneyPattern(r, sink);
+                    case "DestinationDisplay" -> readDestinationDisplay(r, sink);
                     case "ServiceJourney" -> readServiceJourney(r, sink);
                     case "DatedServiceJourney" -> readDatedServiceJourney(r, sink);
                     case "OperatingDay" -> readOperatingDay(r, sink);
@@ -113,17 +114,49 @@ public final class NetexPlannedDataExtractor {
     private void readJourneyPattern(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
         String id = id(r);
         List<String> links = new ArrayList<>();
+        List<PlannedDataSink.StopDestinationDisplay> destinationDisplays = new ArrayList<>();
+        String[] point = new String[1]; // the pointsInSequence entry the scan is currently inside
+        int[] stop = new int[2]; // order of the current StopPointInJourneyPattern, stops seen so far
         scan(r, (reader, localName, depth) -> {
+            if (depth == 2) {
+                point[0] = localName;
+                if (localName.equals("StopPointInJourneyPattern")) {
+                    stop[1]++;
+                    stop[0] = order(reader, stop[1]);
+                }
+            }
             if (localName.equals("ServiceLinkRef")) {
                 String ref = ref(reader);
                 if (ref != null) {
                     links.add(ref);
                 }
+            } else if (depth == 3 && localName.equals("DestinationDisplayRef")
+                    && "StopPointInJourneyPattern".equals(point[0])) {
+                String ref = ref(reader);
+                if (ref != null) {
+                    destinationDisplays.add(new PlannedDataSink.StopDestinationDisplay(stop[0], ref));
+                }
             }
             return false;
         });
         if (id != null) {
-            sink.addJourneyPattern(id, links);
+            sink.addJourneyPattern(id, links, destinationDisplays);
+        }
+    }
+
+    private void readDestinationDisplay(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
+        String id = id(r);
+        String[] frontText = new String[1];
+        scan(r, (reader, localName, depth) -> {
+            // Variants carry a FrontText of their own further down; only the display's counts.
+            if (depth == 1 && localName.equals("FrontText")) {
+                frontText[0] = reader.getElementText();
+                return true;
+            }
+            return false;
+        });
+        if (id != null) {
+            sink.addDestinationDisplay(id, frontText[0]);
         }
     }
 
@@ -223,5 +256,18 @@ public final class NetexPlannedDataExtractor {
 
     private static String ref(XMLStreamReader r) {
         return r.getAttributeValue(null, "ref");
+    }
+
+    /** The element's {@code order} attribute, or its position in the sequence when that is absent or not a number. */
+    private static int order(XMLStreamReader r, int position) {
+        String order = r.getAttributeValue(null, "order");
+        if (order != null) {
+            try {
+                return Integer.parseInt(order.trim());
+            } catch (NumberFormatException e) {
+                // fall through
+            }
+        }
+        return position;
     }
 }

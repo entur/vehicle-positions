@@ -77,6 +77,20 @@ public class TimetableRepository {
     }
   }
 
+  /**
+   * The order of the stop the journey is at or heading for: its first estimated call, else its
+   * last recorded call when it has no stops left, else null.
+   */
+  private static Integer nextStopOrder(EstimatedVehicleJourneyRecord journeyRecord) {
+    if (containsValues(journeyRecord.getEstimatedCalls())) {
+      return journeyRecord.getEstimatedCalls().get(0).getOrder();
+    }
+    if (containsValues(journeyRecord.getRecordedCalls())) {
+      return journeyRecord.getRecordedCalls().get(journeyRecord.getRecordedCalls().size() - 1).getOrder();
+    }
+    return null;
+  }
+
   public void add(EstimatedVehicleJourneyRecord journeyRecord) {
     try {
 
@@ -173,6 +187,12 @@ public class TimetableRepository {
 
       if (containsValues(journeyRecord.getDestinationNames())) {
         v.setDestinationName(journeyRecord.getDestinationNames().get(0).getValue().toString());
+      } else if (v.getServiceJourney() != null) {
+        // Optional in SIRI ET; fall back to what NeTEx plans for the journey's next stop.
+        String destination = serviceJourneyService.getDestinationDisplay(v.getServiceJourney().getId(), nextStopOrder(journeyRecord));
+        if (destination != null) {
+          v.setDestinationName(destination);
+        }
       }
 
       if (journeyRecord.getDestinationRef() != null) {

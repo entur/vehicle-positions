@@ -21,7 +21,14 @@ public interface PlannedDataSink {
     /** @param geometry interleaved lat/lon microdegrees, or null when the link has no gis:posList */
     PlannedDataSink addServiceLink(String id, int[] geometry);
 
-    PlannedDataSink addJourneyPattern(String id, List<String> serviceLinkIds);
+    /**
+     * @param destinationDisplays the DestinationDisplayRef of each StopPointInJourneyPattern that
+     *                            has one, in sequence order; a stop without one keeps the previous
+     */
+    PlannedDataSink addJourneyPattern(String id, List<String> serviceLinkIds, List<StopDestinationDisplay> destinationDisplays);
+
+    /** @param frontText {@code DestinationDisplay/FrontText}, as published */
+    PlannedDataSink addDestinationDisplay(String id, String frontText);
 
     /** @param transportMode the journey's own NeTEx {@code TransportMode}; null when it inherits its line's */
     PlannedDataSink addServiceJourney(String id, String journeyPatternId, String lineId, String transportMode);
@@ -29,6 +36,10 @@ public interface PlannedDataSink {
     PlannedDataSink addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId);
 
     PlannedDataSink addOperatingDay(String id, String calendarDate);
+
+    /** A journey pattern's stop, by its {@code order}, and the destination display it sets. */
+    record StopDestinationDisplay(int order, String destinationDisplayId) {
+    }
 
     /**
      * Seeds the duplicate-id count a snapshot's header carries, so a replay can hand it to any

@@ -146,4 +146,50 @@ public class PlannedDatasetTest {
         assertThat(dataset.stats().duplicateIds()).isEqualTo(1);
         assertThat(dataset.stats().lines()).isEqualTo(1);
     }
+
+    private static PlannedDataSink.StopDestinationDisplay at(int order, String destinationDisplayId) {
+        return new PlannedDataSink.StopDestinationDisplay(order, destinationDisplayId);
+    }
+
+    @Test
+    public void destinationDisplayFollowsTheStopOrder() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addDestinationDisplay("RUT:DestinationDisplay:A", "Majorstuen")
+                .addDestinationDisplay("RUT:DestinationDisplay:B", "Jernbanetorget")
+                .addDestinationDisplay("RUT:DestinationDisplay:B2", "Jernbanetorget")
+                // Order 4 repeats B's text under another id: no change there.
+                .addJourneyPattern("RUT:JourneyPattern:1", List.of(),
+                        List.of(at(2, "RUT:DestinationDisplay:A"), at(3, "RUT:DestinationDisplay:B"), at(4, "RUT:DestinationDisplay:B2")))
+                .addServiceJourney("RUT:ServiceJourney:1", "RUT:JourneyPattern:1")
+                .build();
+
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:1", null)).isEqualTo("Majorstuen");
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:1", 1))
+                .withFailMessage("a stop before the first ref shows the first destination")
+                .isEqualTo("Majorstuen");
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:1", 2)).isEqualTo("Majorstuen");
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:1", 3)).isEqualTo("Jernbanetorget");
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:1", 99)).isEqualTo("Jernbanetorget");
+    }
+
+    @Test
+    public void destinationDisplayIsNullWhenNothingResolves() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addDestinationDisplay("RUT:DestinationDisplay:empty", null)
+                .addJourneyPattern("RUT:JourneyPattern:none", List.of())
+                .addJourneyPattern("RUT:JourneyPattern:dangling", List.of(), List.of(at(1, "RUT:DestinationDisplay:missing")))
+                .addJourneyPattern("RUT:JourneyPattern:noText", List.of(), List.of(at(1, "RUT:DestinationDisplay:empty")))
+                .addServiceJourney("RUT:ServiceJourney:none", "RUT:JourneyPattern:none")
+                .addServiceJourney("RUT:ServiceJourney:dangling", "RUT:JourneyPattern:dangling")
+                .addServiceJourney("RUT:ServiceJourney:noText", "RUT:JourneyPattern:noText")
+                .addServiceJourney("RUT:ServiceJourney:noPattern", null)
+                .build();
+
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:none", 1)).isNull();
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:dangling", 1)).isNull();
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:noText", 1)).isNull();
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:noPattern", 1)).isNull();
+        assertThat(dataset.destinationDisplayOf("RUT:ServiceJourney:unknown", 1)).isNull();
+        assertThat(dataset.destinationDisplayOf(null, 1)).isNull();
+    }
 }

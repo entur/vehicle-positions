@@ -73,6 +73,20 @@ public class NetexPlannedDataExtractorTest {
     }
 
     @Test
+    public void destinationDisplayIsTheOneInEffectAtTheStop() throws Exception {
+        PlannedDataset dataset = extract("fragment-line-file.xml");
+
+        // Stop 1 sets Kolsås, stop 2 has no ref and keeps it, stop 3 changes to Sandvika.
+        assertThat(dataset.destinationDisplayOf("TST:ServiceJourney:1", 1)).isEqualTo("Kolsås");
+        assertThat(dataset.destinationDisplayOf("TST:ServiceJourney:1", 2)).isEqualTo("Kolsås");
+        assertThat(dataset.destinationDisplayOf("TST:ServiceJourney:1", 3)).isEqualTo("Sandvika");
+        assertThat(dataset.destinationDisplayOf("TST:ServiceJourney:1", 4)).isEqualTo("Sandvika");
+        assertThat(dataset.destinationDisplayOf("TST:ServiceJourney:1", null))
+                .withFailMessage("without a stop, the journey's first destination display")
+                .isEqualTo("Kolsås");
+    }
+
+    @Test
     public void crossFileRefsResolveRegardlessOfFileOrder() throws Exception {
         PlannedDataset dataset = extract("fragment-line-file.xml", "fragment-shared-data.xml");
 

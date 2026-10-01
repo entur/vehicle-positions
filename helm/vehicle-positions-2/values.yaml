@@ -2,7 +2,7 @@ default_replicas: 4
 
 resources:
   memLimit: 8G
-  cpuRequest: '2'
+  cpuRequest: '3'
   memRequest: 6G
   xmx: 5G
   # The NeTEx zip (280 MB) and the raw planned-data snapshot (about 250 MB) coexist briefly on disk.

@@ -90,6 +90,17 @@ public class PlannedLookupServicesTest {
     }
 
     @Test
+    public void destinationDisplayIsResolvedFromTheJourneysPattern() throws Exception {
+        ServiceJourneyService service = new ServiceJourneyService(loaded());
+
+        // Shared-data DestinationDisplay, referenced from a line file's journey pattern.
+        assertThat(service.getDestinationDisplay("GOA:ServiceJourney:B3008-AA_30082-R", 1)).isEqualTo("Skeiane");
+        assertThat(service.getDestinationDisplay("GOA:ServiceJourney:unknown", 1)).isNull();
+        assertThat(new ServiceJourneyService(PlannedDataService.disabled())
+                .getDestinationDisplay("GOA:ServiceJourney:B3008-AA_30082-R", 1)).isNull();
+    }
+
+    @Test
     public void datedServiceJourneyResolvesToItsJourneyAndDate() throws Exception {
         ServiceJourneyService service = new ServiceJourneyService(loaded());
 
