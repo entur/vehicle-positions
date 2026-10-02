@@ -34,15 +34,15 @@ public class PlannedDatasetTest {
     @Test
     public void transportModeResolvesTheJourneysOwnModeThenItsLineThenTheReportedLine() {
         PlannedDataset dataset = new PlannedDataset.Builder()
-                .addLine("TST:Line:ferry", "Ferry", "F", null, null, "water")
-                .addLine("TST:Line:rail", "Rail", "R", null, null, "rail")
-                .addLine("TST:Line:replacement", "Replacement", "RB", null, null, "bus")
-                .addLine("TST:Line:cable", "Cable car", "C", null, null, "cableway")
-                .addLine("TST:Line:trolley", "Trolley", "T", null, null, "trolleyBus")
-                .addServiceJourney("TST:ServiceJourney:onFerry", "JP", "TST:Line:ferry", null)
-                .addServiceJourney("TST:ServiceJourney:ferryRepeatsLine", "JP", "TST:Line:ferry", "water")
-                .addServiceJourney("TST:ServiceJourney:replacementBus", "JP", "TST:Line:rail", "bus")
-                .addServiceJourney("TST:ServiceJourney:onReplacementLine", "JP", "TST:Line:replacement", null)
+                .addLine(new LineRecord("TST:Line:ferry", "Ferry", "F", null, null, "water"))
+                .addLine(new LineRecord("TST:Line:rail", "Rail", "R", null, null, "rail"))
+                .addLine(new LineRecord("TST:Line:replacement", "Replacement", "RB", null, null, "bus"))
+                .addLine(new LineRecord("TST:Line:cable", "Cable car", "C", null, null, "cableway"))
+                .addLine(new LineRecord("TST:Line:trolley", "Trolley", "T", null, null, "trolleyBus"))
+                .addServiceJourney(new ServiceJourneyRecord("TST:ServiceJourney:onFerry", "JP", "TST:Line:ferry", null))
+                .addServiceJourney(new ServiceJourneyRecord("TST:ServiceJourney:ferryRepeatsLine", "JP", "TST:Line:ferry", "water"))
+                .addServiceJourney(new ServiceJourneyRecord("TST:ServiceJourney:replacementBus", "JP", "TST:Line:rail", "bus"))
+                .addServiceJourney(new ServiceJourneyRecord("TST:ServiceJourney:onReplacementLine", "JP", "TST:Line:replacement", null))
                 .build();
 
         assertThat(dataset.transportModeOf(null, "TST:Line:ferry")).isEqualTo(VehicleModeEnumeration.FERRY);
@@ -135,6 +135,55 @@ public class PlannedDatasetTest {
                 .isSameAs(declaredId);
     }
 
+    /**
+     * A load keeps the builder until it returns; records still holding the parser's own copy
+     * of every ref would keep those alive next to the dataset's shared ones.
+     */
+    @Test
+    public void afterBuildTheBuildersRecordsShareTheDeclaredIdInstances() {
+        String linkId = new String("X:ServiceLink:1");
+        String patternId = new String("X:JourneyPattern:1");
+        String lineId = new String("X:Line:1");
+        PlannedDataset.Builder builder = new PlannedDataset.Builder()
+                .addServiceLink(linkId, new int[]{1, 2})
+                .addJourneyPattern(patternId, List.of(new String("X:ServiceLink:1")))
+                .addLine(lineId, "One", "1")
+                .addServiceJourney("X:ServiceJourney:1", new String("X:JourneyPattern:1"), new String("X:Line:1"));
+
+        builder.build();
+
+        assertThat(builder.journeyPatterns().get("X:JourneyPattern:1").serviceLinkIds()[0]).isSameAs(linkId);
+        ServiceJourneyRecord journey = builder.serviceJourneys().get("X:ServiceJourney:1");
+        assertThat(journey.journeyPatternId()).isSameAs(patternId);
+        assertThat(journey.lineId()).isSameAs(lineId);
+    }
+
+    /**
+     * A snapshot replay hands the builder records whose refs already are the declared
+     * instances; build() must not copy hundreds of thousands of them for nothing.
+     */
+    @Test
+    public void buildKeepsRecordsWhoseRefsAreAlreadyShared() {
+        String linkId = "X:ServiceLink:1";
+        String patternId = "X:JourneyPattern:1";
+        String lineId = "X:Line:1";
+        PlannedDataset.Builder builder = new PlannedDataset.Builder()
+                .addServiceLink(linkId, new int[]{1, 2})
+                .addJourneyPattern(patternId, List.of(linkId))
+                .addLine(lineId, "One", "1")
+                .addServiceJourney("X:ServiceJourney:1", patternId, lineId)
+                .addServiceJourney("X:ServiceJourney:2", null, null);
+        JourneyPatternRecord pattern = builder.journeyPatterns().get(patternId);
+        ServiceJourneyRecord journey = builder.serviceJourneys().get("X:ServiceJourney:1");
+        ServiceJourneyRecord journeyWithoutRefs = builder.serviceJourneys().get("X:ServiceJourney:2");
+
+        builder.build();
+
+        assertThat(builder.journeyPatterns().get(patternId)).isSameAs(pattern);
+        assertThat(builder.serviceJourneys().get("X:ServiceJourney:1")).isSameAs(journey);
+        assertThat(builder.serviceJourneys().get("X:ServiceJourney:2")).isSameAs(journeyWithoutRefs);
+    }
+
     @Test
     public void duplicateIdsLastOneWinsAndAreCounted() {
         PlannedDataset dataset = new PlannedDataset.Builder()
@@ -145,6 +194,18 @@ public class PlannedDatasetTest {
         assertThat(dataset.line("X:Line:1").getLineName()).isEqualTo("second");
         assertThat(dataset.stats().duplicateIds()).isEqualTo(1);
         assertThat(dataset.stats().lines()).isEqualTo(1);
+    }
+
+    @Test
+    public void aRedeclaredIdIsCountedEvenWhenItsFirstDeclarationHadNoText() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addDestinationDisplay("X:DestinationDisplay:1", null)
+                .addDestinationDisplay("X:DestinationDisplay:1", "Sentrum")
+                .addOperatingDay("X:OperatingDay:1", null)
+                .addOperatingDay("X:OperatingDay:1", "2026-10-02")
+                .build();
+
+        assertThat(dataset.stats().duplicateIds()).isEqualTo(2);
     }
 
     private static PlannedDataSink.StopDestinationDisplay at(int order, String destinationDisplayId) {

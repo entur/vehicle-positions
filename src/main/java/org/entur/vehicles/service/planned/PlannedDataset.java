@@ -405,51 +405,46 @@ public final class PlannedDataset {
      */
     public static final class Builder implements PlannedDataSink {
 
-        record RawDatedServiceJourney(String serviceJourneyId, String operatingDayId) {}
-
-        private final Map<String, Operator> operators = new HashMap<>();
-        private final Map<String, Line> lines = new HashMap<>();
-        private final Map<String, String> serviceJourneyPattern = new HashMap<>();
-        private final Map<String, RawDatedServiceJourney> rawDatedServiceJourneys = new HashMap<>();
-        private final Map<String, String[]> patternLinks = new HashMap<>();
-        private final Map<String, int[]> linkGeometry = new HashMap<>();
-        private final Map<String, String> operatingDays = new HashMap<>();
-        private final Map<String, String> serviceJourneyLine = new HashMap<>();
-        // Raw NeTEx values, so a snapshot replays exactly what was parsed; mapped in build().
-        private final Map<String, String> lineTransportMode = new HashMap<>();
-        private final Map<String, String> serviceJourneyTransportMode = new HashMap<>();
-        private final Map<String, String> destinationDisplays = new HashMap<>();
-        /** Only patterns with at least one ref; consecutive refs to the same display collapsed. */
-        private final Map<String, StopDestinationDisplay[]> patternDestinationDisplays = new HashMap<>();
+        private final Map<String, OperatorRecord> operators = new HashMap<>();
+        private final Map<String, LineRecord> lines = new HashMap<>();
+        private final Map<String, ServiceJourneyRecord> serviceJourneys = new HashMap<>();
+        /** Their refs unresolved until build(). */
+        private final Map<String, DatedServiceJourneyRecord> rawDatedServiceJourneys = new HashMap<>();
+        private final Map<String, JourneyPatternRecord> journeyPatterns = new HashMap<>();
+        private final Map<String, ServiceLinkRecord> serviceLinks = new HashMap<>();
+        private final Map<String, OperatingDayRecord> operatingDays = new HashMap<>();
+        private final Map<String, DestinationDisplayRecord> destinationDisplays = new HashMap<>();
         private int duplicateIds = 0;
 
-        @Override
         public Builder addOperator(String id, String name) {
-            Operator operator = new Operator(id);
-            operator.setName(name);
-            countDuplicate(operators.put(id, operator));
+            return addOperator(new OperatorRecord(id, name));
+        }
+
+        @Override
+        public Builder addOperator(OperatorRecord operator) {
+            countDuplicate(operators.put(operator.id(), operator));
             return this;
         }
 
         /** A line that publishes no colours and no transport mode. */
         public Builder addLine(String id, String name, String publicCode) {
-            return addLine(id, name, publicCode, null, null, null);
+            return addLine(new LineRecord(id, name, publicCode, null, null, null));
         }
 
         @Override
-        public Builder addLine(String id, String name, String publicCode, String colour, String textColour, String transportMode) {
-            Line line = new Line(id, name);
-            line.setPublicCode(publicCode);
-            line.setPresentation(Presentation.of(colour, textColour));
-            countDuplicate(lines.put(id, line));
-            putOrRemove(lineTransportMode, id, transportMode);
+        public Builder addLine(LineRecord line) {
+            countDuplicate(lines.put(line.id(), line));
             return this;
         }
 
         /** @param geometry interleaved lat/lon microdegrees; null when the link has no gis:posList */
-        @Override
         public Builder addServiceLink(String id, int[] geometry) {
-            countDuplicate(linkGeometry.put(id, geometry == null ? new int[0] : geometry));
+            return addServiceLink(new ServiceLinkRecord(id, geometry));
+        }
+
+        @Override
+        public Builder addServiceLink(ServiceLinkRecord link) {
+            countDuplicate(serviceLinks.put(link.id(), link));
             return this;
         }
 
@@ -458,72 +453,60 @@ public final class PlannedDataset {
             return addJourneyPattern(id, serviceLinkIds, List.of());
         }
 
-        @Override
         public Builder addJourneyPattern(String id, List<String> serviceLinkIds, List<StopDestinationDisplay> destinationDisplays) {
-            countDuplicate(patternLinks.put(id, serviceLinkIds.toArray(new String[0])));
-            List<StopDestinationDisplay> changes = new ArrayList<>(destinationDisplays.size());
-            for (StopDestinationDisplay display : destinationDisplays) {
-                // Most producers repeat the ref on every stop; only a change is worth keeping.
-                if (changes.isEmpty() || !changes.get(changes.size() - 1).destinationDisplayId().equals(display.destinationDisplayId())) {
-                    changes.add(display);
-                }
-            }
-            if (changes.isEmpty()) {
-                patternDestinationDisplays.remove(id);
-            } else {
-                patternDestinationDisplays.put(id, changes.toArray(new StopDestinationDisplay[0]));
-            }
-            return this;
+            return addJourneyPattern(new JourneyPatternRecord(id, serviceLinkIds.toArray(new String[0]),
+                    destinationDisplays.toArray(new StopDestinationDisplay[0])));
         }
 
         @Override
+        public Builder addJourneyPattern(JourneyPatternRecord pattern) {
+            countDuplicate(journeyPatterns.put(pattern.id(), pattern));
+            return this;
+        }
+
         public Builder addDestinationDisplay(String id, String frontText) {
-            countDuplicate(destinationDisplays.put(id, frontText));
+            return addDestinationDisplay(new DestinationDisplayRecord(id, frontText));
+        }
+
+        @Override
+        public Builder addDestinationDisplay(DestinationDisplayRecord display) {
+            countDuplicate(destinationDisplays.put(display.id(), display));
             return this;
         }
 
         public Builder addServiceJourney(String id, String journeyPatternId) {
-            return addServiceJourney(id, journeyPatternId, null, null);
+            return addServiceJourney(id, journeyPatternId, null);
         }
 
-        /** @param lineId the journey's LineRef/FlexibleLineRef; null when the element has none */
+        /** A journey that sets no transport mode of its own. */
         public Builder addServiceJourney(String id, String journeyPatternId, String lineId) {
-            return addServiceJourney(id, journeyPatternId, lineId, null);
+            return addServiceJourney(new ServiceJourneyRecord(id, journeyPatternId, lineId, null));
         }
 
+        /** A later declaration of the same id replaces an earlier one, absent fields included. */
         @Override
-        public Builder addServiceJourney(String id, String journeyPatternId, String lineId, String transportMode) {
-            // Map.copyOf in build() rejects null values; "" is never a real pattern id, so it
-            // still counts as unresolved there.
-            countDuplicate(serviceJourneyPattern.put(id, journeyPatternId == null ? "" : journeyPatternId));
-            if (lineId != null) {
-                serviceJourneyLine.put(id, lineId);
-            } else {
-                serviceJourneyLine.remove(id);
-            }
-            putOrRemove(serviceJourneyTransportMode, id, transportMode);
+        public Builder addServiceJourney(ServiceJourneyRecord journey) {
+            countDuplicate(serviceJourneys.put(journey.id(), journey));
             return this;
         }
 
-        /** A later declaration of the same id replaces an earlier one, absent value included. */
-        private static void putOrRemove(Map<String, String> map, String id, String value) {
-            if (value != null) {
-                // A handful of distinct values across the whole export; share one instance each.
-                map.put(id, value.intern());
-            } else {
-                map.remove(id);
-            }
-        }
-
-        @Override
         public Builder addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId) {
-            countDuplicate(rawDatedServiceJourneys.put(id, new RawDatedServiceJourney(serviceJourneyId, operatingDayId)));
-            return this;
+            return addDatedServiceJourney(new DatedServiceJourneyRecord(id, serviceJourneyId, operatingDayId));
         }
 
         @Override
+        public Builder addDatedServiceJourney(DatedServiceJourneyRecord dated) {
+            countDuplicate(rawDatedServiceJourneys.put(dated.id(), dated));
+            return this;
+        }
+
         public Builder addOperatingDay(String id, String calendarDate) {
-            countDuplicate(operatingDays.put(id, calendarDate));
+            return addOperatingDay(new OperatingDayRecord(id, calendarDate));
+        }
+
+        @Override
+        public Builder addOperatingDay(OperatingDayRecord day) {
+            countDuplicate(operatingDays.put(day.id(), day));
             return this;
         }
 
@@ -548,51 +531,35 @@ public final class PlannedDataset {
         // ---- snapshot writer. Views, not copies: these maps can hold millions of entries and
         // ---- a defensive copy would double the peak heap during a snapshot write.
 
-        Map<String, Operator> operators() {
+        Map<String, OperatorRecord> operators() {
             return Collections.unmodifiableMap(operators);
         }
 
-        Map<String, Line> lines() {
+        Map<String, LineRecord> lines() {
             return Collections.unmodifiableMap(lines);
         }
 
-        Map<String, String> operatingDays() {
+        Map<String, OperatingDayRecord> operatingDays() {
             return Collections.unmodifiableMap(operatingDays);
         }
 
-        Map<String, int[]> linkGeometry() {
-            return Collections.unmodifiableMap(linkGeometry);
+        Map<String, ServiceLinkRecord> serviceLinks() {
+            return Collections.unmodifiableMap(serviceLinks);
         }
 
-        Map<String, String[]> patternLinks() {
-            return Collections.unmodifiableMap(patternLinks);
+        Map<String, JourneyPatternRecord> journeyPatterns() {
+            return Collections.unmodifiableMap(journeyPatterns);
         }
 
-        Map<String, String> serviceJourneyPattern() {
-            return Collections.unmodifiableMap(serviceJourneyPattern);
+        Map<String, ServiceJourneyRecord> serviceJourneys() {
+            return Collections.unmodifiableMap(serviceJourneys);
         }
 
-        Map<String, String> serviceJourneyLine() {
-            return Collections.unmodifiableMap(serviceJourneyLine);
-        }
-
-        Map<String, String> lineTransportMode() {
-            return Collections.unmodifiableMap(lineTransportMode);
-        }
-
-        Map<String, String> serviceJourneyTransportMode() {
-            return Collections.unmodifiableMap(serviceJourneyTransportMode);
-        }
-
-        Map<String, String> destinationDisplays() {
+        Map<String, DestinationDisplayRecord> destinationDisplays() {
             return Collections.unmodifiableMap(destinationDisplays);
         }
 
-        Map<String, StopDestinationDisplay[]> patternDestinationDisplays() {
-            return Collections.unmodifiableMap(patternDestinationDisplays);
-        }
-
-        Map<String, RawDatedServiceJourney> rawDatedServiceJourneys() {
+        Map<String, DatedServiceJourneyRecord> rawDatedServiceJourneys() {
             return Collections.unmodifiableMap(rawDatedServiceJourneys);
         }
 
@@ -602,6 +569,36 @@ public final class PlannedDataset {
         }
 
         public PlannedDataset build() {
+            Map<String, int[]> linkGeometry = new HashMap<>(serviceLinks.size() * 4 / 3 + 1);
+            for (ServiceLinkRecord link : serviceLinks.values()) {
+                linkGeometry.put(link.id(), link.geometry());
+            }
+            Map<String, String[]> patternLinks = new HashMap<>(journeyPatterns.size() * 4 / 3 + 1);
+            // Only patterns with at least one display ref.
+            Map<String, StopDestinationDisplay[]> patternDestinationDisplays = new HashMap<>();
+            for (JourneyPatternRecord pattern : journeyPatterns.values()) {
+                patternLinks.put(pattern.id(), pattern.serviceLinkIds());
+                if (pattern.destinationDisplays().length > 0) {
+                    patternDestinationDisplays.put(pattern.id(), pattern.destinationDisplays());
+                }
+            }
+            int journeyCapacity = serviceJourneys.size() * 4 / 3 + 1;
+            Map<String, String> serviceJourneyPattern = new HashMap<>(journeyCapacity);
+            Map<String, String> serviceJourneyLine = new HashMap<>(journeyCapacity);
+            Map<String, String> serviceJourneyTransportMode = new HashMap<>();
+            for (ServiceJourneyRecord journey : serviceJourneys.values()) {
+                // Map.copyOf below rejects null values; "" is never a real pattern id, so it
+                // still counts as unresolved.
+                String patternId = journey.journeyPatternId();
+                serviceJourneyPattern.put(journey.id(), patternId == null ? "" : patternId);
+                if (journey.lineId() != null) {
+                    serviceJourneyLine.put(journey.id(), journey.lineId());
+                }
+                if (journey.transportMode() != null) {
+                    serviceJourneyTransportMode.put(journey.id(), journey.transportMode());
+                }
+            }
+
             // Canonicalise duplicate id Strings: every ref string comes fresh from the XML
             // reader, so the same logical id declared once (e.g. a JourneyPattern) but
             // referenced many times (e.g. from every ServiceJourney on it) is otherwise a
@@ -623,11 +620,19 @@ public final class PlannedDataset {
 
             serviceJourneyPattern.replaceAll((sj, patternId) -> canonPattern.getOrDefault(patternId, patternId));
             patternLinks.replaceAll((patternId, links) -> {
-                String[] canonicalised = new String[links.length];
+                // Copied only on the first ref that is not already the shared instance: a
+                // snapshot replay's refs all are, and the array is shared with the record.
+                String[] canonicalised = null;
                 for (int i = 0; i < links.length; i++) {
-                    canonicalised[i] = canonLink.getOrDefault(links[i], links[i]);
+                    String canonical = canonLink.getOrDefault(links[i], links[i]);
+                    if (canonical != links[i]) {
+                        if (canonicalised == null) {
+                            canonicalised = links.clone();
+                        }
+                        canonicalised[i] = canonical;
+                    }
                 }
-                return canonicalised;
+                return canonicalised == null ? links : canonicalised;
             });
 
             Map<String, String> canonLine = new HashMap<>(lines.size());
@@ -645,6 +650,25 @@ public final class PlannedDataset {
                 e.setValue(lineId);
                 journeysByLine.computeIfAbsent(lineId, k -> new ArrayList<>()).add(e.getKey());
             }
+
+            // Hand the shared instances back to the records: a load keeps the builder until it
+            // returns, and records holding the parser's own copy of every ref would keep those
+            // alive next to the dataset's shared ones. A record whose refs already are the
+            // shared instances, as after a snapshot replay, is kept rather than copied.
+            journeyPatterns.replaceAll((id, pattern) -> {
+                String[] links = patternLinks.get(id);
+                return links == pattern.serviceLinkIds() ? pattern
+                        : new JourneyPatternRecord(id, links, pattern.destinationDisplays());
+            });
+            serviceJourneys.replaceAll((id, journey) -> {
+                String patternId = serviceJourneyPattern.get(id);
+                if (patternId.isEmpty()) {
+                    patternId = null;
+                }
+                String lineId = serviceJourneyLine.get(id);
+                return patternId == journey.journeyPatternId() && lineId == journey.lineId() ? journey
+                        : new ServiceJourneyRecord(id, patternId, lineId, journey.transportMode());
+            });
             Map<String, String[]> lineServiceJourneys = new HashMap<>(journeysByLine.size());
             for (Map.Entry<String, List<String>> e : journeysByLine.entrySet()) {
                 String[] ids = e.getValue().toArray(new String[0]);
@@ -734,19 +758,38 @@ public final class PlannedDataset {
             }
 
             Map<String, DatedJourneyRef> datedServiceJourneys = new HashMap<>(rawDatedServiceJourneys.size());
-            for (Map.Entry<String, RawDatedServiceJourney> e : rawDatedServiceJourneys.entrySet()) {
-                RawDatedServiceJourney raw = e.getValue();
+            for (Map.Entry<String, DatedServiceJourneyRecord> e : rawDatedServiceJourneys.entrySet()) {
+                DatedServiceJourneyRecord raw = e.getValue();
                 String serviceJourneyId = canonSj.getOrDefault(raw.serviceJourneyId(), raw.serviceJourneyId());
                 if (serviceJourneyId == null || !serviceJourneyPattern.containsKey(serviceJourneyId)) {
                     unresolvedServiceJourneyRefs++;
                 }
-                String date = raw.operatingDayId() == null ? null : operatingDays.get(raw.operatingDayId());
+                OperatingDayRecord day = raw.operatingDayId() == null ? null : operatingDays.get(raw.operatingDayId());
+                String date = day == null ? null : day.calendarDate();
                 if (date == null) {
                     unresolvedOperatingDayRefs++;
                 }
                 datedServiceJourneys.put(e.getKey(), new DatedJourneyRef(serviceJourneyId, date));
             }
 
+            Map<String, Operator> operatorModels = new HashMap<>(operators.size() * 2);
+            for (OperatorRecord record : operators.values()) {
+                Operator operator = new Operator(record.id());
+                operator.setName(record.name());
+                operatorModels.put(record.id(), operator);
+            }
+
+            Map<String, Line> lineModels = new HashMap<>(lines.size() * 2);
+            Map<String, String> lineTransportMode = new HashMap<>();
+            for (LineRecord record : lines.values()) {
+                Line line = new Line(record.id(), record.name());
+                line.setPublicCode(record.publicCode());
+                line.setPresentation(Presentation.of(record.colour(), record.textColour()));
+                lineModels.put(record.id(), line);
+                if (record.transportMode() != null) {
+                    lineTransportMode.put(record.id(), record.transportMode());
+                }
+            }
             Map<String, VehicleModeEnumeration> lineModes = toVehicleModes(lineTransportMode);
             // Kept only where the journey's mode differs from its own line's: a producer that
             // repeats the line's mode on every journey would otherwise fill this map with
@@ -768,10 +811,11 @@ public final class PlannedDataset {
                 List<StopDestinationDisplay> resolved = new ArrayList<>(e.getValue().length);
                 List<String> frontTexts = new ArrayList<>(e.getValue().length);
                 for (StopDestinationDisplay display : e.getValue()) {
-                    String frontText = destinationDisplays.get(display.destinationDisplayId());
+                    DestinationDisplayRecord declared = destinationDisplays.get(display.destinationDisplayId());
+                    String frontText = declared == null ? null : declared.frontText();
                     if (frontText == null) {
                         // Dangling, or a display without text: the previous one stays in effect.
-                        if (!destinationDisplays.containsKey(display.destinationDisplayId())) {
+                        if (declared == null) {
                             unresolvedDestinationDisplayRefs++;
                         }
                         continue;
@@ -806,8 +850,8 @@ public final class PlannedDataset {
             }
 
             return new PlannedDataset(
-                    Map.copyOf(operators),
-                    Map.copyOf(lines),
+                    Map.copyOf(operatorModels),
+                    Map.copyOf(lineModels),
                     Map.copyOf(serviceJourneyPattern),
                     Map.copyOf(datedServiceJourneys),
                     Map.copyOf(patternLinks),

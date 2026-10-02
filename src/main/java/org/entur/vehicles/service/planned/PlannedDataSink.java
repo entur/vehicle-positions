@@ -1,41 +1,27 @@
 package org.entur.vehicles.service.planned;
 
-import java.util.List;
-
 /**
  * Where {@link NetexPlannedDataExtractor} puts what it finds during a full parse, and what a
- * snapshot replay feeds into on a hit. Ids are never null (the extractor skips elements
- * without one); every other argument may be.
+ * snapshot replay feeds into on a hit. A record's id is never null (the codecs skip elements
+ * without one); its other fields may be, unless the record says otherwise.
  */
 public interface PlannedDataSink {
 
-    PlannedDataSink addOperator(String id, String name);
+    PlannedDataSink addOperator(OperatorRecord operator);
 
-    /**
-     * @param colour     {@code Line/Presentation/Colour}, as published
-     * @param textColour {@code Line/Presentation/TextColour}, as published
-     * @param transportMode the line's NeTEx {@code TransportMode}, as published
-     */
-    PlannedDataSink addLine(String id, String name, String publicCode, String colour, String textColour, String transportMode);
+    PlannedDataSink addLine(LineRecord line);
 
-    /** @param geometry interleaved lat/lon microdegrees, or null when the link has no gis:posList */
-    PlannedDataSink addServiceLink(String id, int[] geometry);
+    PlannedDataSink addServiceLink(ServiceLinkRecord link);
 
-    /**
-     * @param destinationDisplays the DestinationDisplayRef of each StopPointInJourneyPattern that
-     *                            has one, in sequence order; a stop without one keeps the previous
-     */
-    PlannedDataSink addJourneyPattern(String id, List<String> serviceLinkIds, List<StopDestinationDisplay> destinationDisplays);
+    PlannedDataSink addJourneyPattern(JourneyPatternRecord pattern);
 
-    /** @param frontText {@code DestinationDisplay/FrontText}, as published */
-    PlannedDataSink addDestinationDisplay(String id, String frontText);
+    PlannedDataSink addDestinationDisplay(DestinationDisplayRecord display);
 
-    /** @param transportMode the journey's own NeTEx {@code TransportMode}; null when it inherits its line's */
-    PlannedDataSink addServiceJourney(String id, String journeyPatternId, String lineId, String transportMode);
+    PlannedDataSink addServiceJourney(ServiceJourneyRecord journey);
 
-    PlannedDataSink addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId);
+    PlannedDataSink addDatedServiceJourney(DatedServiceJourneyRecord dated);
 
-    PlannedDataSink addOperatingDay(String id, String calendarDate);
+    PlannedDataSink addOperatingDay(OperatingDayRecord day);
 
     /** A journey pattern's stop, by its {@code order}, and the destination display it sets. */
     record StopDestinationDisplay(int order, String destinationDisplayId) {

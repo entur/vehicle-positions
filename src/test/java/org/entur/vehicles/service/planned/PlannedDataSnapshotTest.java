@@ -1,7 +1,6 @@
 package org.entur.vehicles.service.planned;
 
 import org.entur.vehicles.data.VehicleModeEnumeration;
-import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.PointsOnLink;
 import org.entur.vehicles.data.model.Presentation;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
@@ -49,29 +48,24 @@ public class PlannedDataSnapshotTest {
 
         assertThat(fromSnapshot.stats()).isEqualTo(fromParse.stats());
 
-        for (String id : parsedBuilder.operators().keySet()) {
-            assertThat(fromSnapshot.operator(id).getName())
-                    .as("operator %s name", id)
-                    .isEqualTo(fromParse.operator(id).getName());
-        }
+        // Records compare every field, so this covers e.g. line colours and transport modes too.
+        assertThat(replayedBuilder.operators()).isEqualTo(parsedBuilder.operators());
+        assertThat(replayedBuilder.lines()).isEqualTo(parsedBuilder.lines());
+        assertThat(replayedBuilder.operatingDays()).isEqualTo(parsedBuilder.operatingDays());
+        assertThat(replayedBuilder.destinationDisplays()).isEqualTo(parsedBuilder.destinationDisplays());
+        assertThat(replayedBuilder.serviceLinks()).isEqualTo(parsedBuilder.serviceLinks());
+        assertThat(replayedBuilder.journeyPatterns()).isEqualTo(parsedBuilder.journeyPatterns());
+        assertThat(replayedBuilder.serviceJourneys()).isEqualTo(parsedBuilder.serviceJourneys());
+        assertThat(replayedBuilder.rawDatedServiceJourneys()).isEqualTo(parsedBuilder.rawDatedServiceJourneys());
 
-        for (String id : parsedBuilder.lines().keySet()) {
-            Line parsedLine = fromParse.line(id);
-            Line snapshotLine = fromSnapshot.line(id);
-            assertThat(snapshotLine.getLineName()).as("line %s name", id).isEqualTo(parsedLine.getLineName());
-            assertThat(snapshotLine.getPublicCode()).as("line %s publicCode", id).isEqualTo(parsedLine.getPublicCode());
-        }
-
-        for (String id : parsedBuilder.serviceJourneyPattern().keySet()) {
-            assertThat(fromSnapshot.journeyPatternOf(id)).as("journeyPatternOf %s", id).isEqualTo(fromParse.journeyPatternOf(id));
-            assertThat(fromSnapshot.lineOf(id)).as("lineOf %s", id).isEqualTo(fromParse.lineOf(id));
+        for (String id : parsedBuilder.serviceJourneys().keySet()) {
             for (Integer order : new Integer[]{null, 1, 2, 3, 5, 8, 13, 21, 34}) {
                 assertThat(fromSnapshot.destinationDisplayOf(id, order))
                         .as("destinationDisplayOf %s at %s", id, order)
                         .isEqualTo(fromParse.destinationDisplayOf(id, order));
             }
         }
-        assertThat(fromParse.destinationDisplayOf(parsedBuilder.serviceJourneyPattern().keySet().iterator().next(), null))
+        assertThat(fromParse.destinationDisplayOf(parsedBuilder.serviceJourneys().keySet().iterator().next(), null))
                 .as("the GOA export sets a destination display on its journey patterns")
                 .isNotNull();
 
@@ -82,7 +76,7 @@ public class PlannedDataSnapshotTest {
         // pointsOnLink is where an off-by-one in the delta-encoded geometry, or geometry
         // attached to the wrong link, would hide - so every journey pattern the parse
         // produced is checked, not a sample.
-        for (String id : parsedBuilder.patternLinks().keySet()) {
+        for (String id : parsedBuilder.journeyPatterns().keySet()) {
             PointsOnLink parsedPoints = fromParse.pointsOnLink(id);
             PointsOnLink snapshotPoints = fromSnapshot.pointsOnLink(id);
             if (parsedPoints == null) {
@@ -227,6 +221,204 @@ public class PlannedDataSnapshotTest {
         assertThat(actualTail).containsExactly(expectedTail);
     }
 
+    /** Pins the line record layout, so moving it between classes cannot change a byte. */
+    @Test
+    public void v5ExactBytesOfALineRecord(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addLine(new LineRecord("N:1", "Ab", "7", "FF0000", null, "bus"));
+
+        Path file = dir.resolve("planned-line.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] bytes = Files.readAllBytes(file);
+
+        int offset = 4 + 4 + (2 + 1) + 8; // magic, version, writeUTF("e"), createdAt
+
+        byte[] expectedTail = {
+                // duplicateIds = 0
+                0x00, 0x00, 0x00, 0x00,
+                // prefix table: count=1, "N:"
+                0x01,
+                0x03, 'N', ':',
+                // section 1: operators, count=0
+                0x00,
+                // section 2: lines, count=1
+                0x01,
+                // id: prefixIdx=0, kind=DIGITS(4), local 1
+                0x00, 0x04, 0x01,
+                // name "Ab", publicCode "7", colour "FF0000", textColour null, transportMode "bus"
+                0x03, 'A', 'b',
+                0x02, '7',
+                0x07, 'F', 'F', '0', '0', '0', '0',
+                0x00,
+                0x04, 'b', 'u', 's',
+                // sections 3-8 empty: operatingDays, destinationDisplays, serviceLinks,
+                // journeyPatterns, serviceJourneys, datedServiceJourneys
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                // trailer: 0xFF, total record count = 1
+                (byte) 0xFF, 0x01,
+        };
+
+        byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
+        assertThat(actualTail).containsExactly(expectedTail);
+    }
+
+    /**
+     * Pins the service journey record layout and every kind of reference it carries: a null
+     * ref, a ref by position, a dangling ref written as a literal, and a dated service journey
+     * referring back to a journey by position.
+     */
+    @Test
+    public void v5ExactBytesOfServiceJourneyRecords(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addLine("L:1", "A", null);
+        builder.addJourneyPattern("P:1", List.of());
+        builder.addServiceJourney(new ServiceJourneyRecord("S:1", "P:1", "L:1", "bus"));
+        builder.addServiceJourney("S:2", null, "X:9");
+        builder.addDatedServiceJourney("D:1", "S:2", "O:1");
+
+        Path file = dir.resolve("planned-journeys.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] bytes = Files.readAllBytes(file);
+
+        int offset = 4 + 4 + (2 + 1) + 8; // magic, version, writeUTF("e"), createdAt
+
+        byte[] expectedTail = {
+                // duplicateIds = 0
+                0x00, 0x00, 0x00, 0x00,
+                // prefix table, in first-interned order: "L:", "P:", "S:", "X:", "D:", "O:"
+                0x06,
+                0x03, 'L', ':', 0x03, 'P', ':', 0x03, 'S', ':',
+                0x03, 'X', ':', 0x03, 'D', ':', 0x03, 'O', ':',
+                // section 1: operators, count=0
+                0x00,
+                // section 2: lines, count=1: L:1, name "A", then four nulls
+                0x01,
+                0x00, 0x04, 0x01, 0x02, 'A', 0x00, 0x00, 0x00, 0x00,
+                // sections 3-5 empty: operatingDays, destinationDisplays, serviceLinks
+                0x00, 0x00, 0x00,
+                // section 6: journeyPatterns, count=1: P:1, no links, no displays
+                0x01,
+                0x01, 0x04, 0x01, 0x00, 0x00,
+                // section 7: serviceJourneys, count=2, in hash order (S:2 first)
+                0x02,
+                // S:2: pattern null; line dangling (lines size 1, so 2) then literal X:9; mode null
+                0x02, 0x04, 0x02, 0x00, 0x02, 0x03, 0x04, 0x09, 0x00,
+                // S:1: pattern at position 0; line at position 0; mode "bus"
+                0x02, 0x04, 0x01, 0x01, 0x01, 0x04, 'b', 'u', 's',
+                // section 8: datedServiceJourneys, count=1
+                0x01,
+                // D:1: journey S:2 at position 0; operating day dangling (size 0, so 1) then literal O:1
+                0x04, 0x04, 0x01, 0x01, 0x01, 0x05, 0x04, 0x01,
+                // trailer: 0xFF, total record count = 5
+                (byte) 0xFF, 0x05,
+        };
+
+        byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
+        assertThat(actualTail).containsExactly(expectedTail);
+    }
+
+    /**
+     * Pins the operating day and destination display record layouts, and a reference by
+     * position into each: from a journey pattern's stop and from a dated service journey.
+     */
+    @Test
+    public void v5ExactBytesOfOperatingDayAndDestinationDisplayRecords(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addOperatingDay("O:1", "2026-10-02");
+        builder.addDestinationDisplay("V:1", "Sentrum");
+        builder.addDestinationDisplay("V:2", null);
+        builder.addJourneyPattern("P:1", List.of(), List.of(new PlannedDataSink.StopDestinationDisplay(1, "V:1")));
+        builder.addDatedServiceJourney("D:1", null, "O:1");
+
+        Path file = dir.resolve("planned-days-displays.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] bytes = Files.readAllBytes(file);
+
+        int offset = 4 + 4 + (2 + 1) + 8; // magic, version, writeUTF("e"), createdAt
+
+        byte[] expectedTail = {
+                // duplicateIds = 0
+                0x00, 0x00, 0x00, 0x00,
+                // prefix table, in first-interned order: "O:", "V:", "P:", "D:"
+                0x04,
+                0x03, 'O', ':', 0x03, 'V', ':', 0x03, 'P', ':', 0x03, 'D', ':',
+                // sections 1-2 empty: operators, lines
+                0x00, 0x00,
+                // section 3: operatingDays, count=1: O:1, "2026-10-02"
+                0x01,
+                0x00, 0x04, 0x01, 0x0B, '2', '0', '2', '6', '-', '1', '0', '-', '0', '2',
+                // section 4: destinationDisplays, count=2: V:1 "Sentrum", V:2 with no front text
+                0x02,
+                0x01, 0x04, 0x01, 0x08, 'S', 'e', 'n', 't', 'r', 'u', 'm',
+                0x01, 0x04, 0x02, 0x00,
+                // section 5: serviceLinks, count=0
+                0x00,
+                // section 6: journeyPatterns, count=1: P:1, no links, one display: order zigzag(1), V:1 at position 0
+                0x01,
+                0x02, 0x04, 0x01, 0x00, 0x01, 0x02, 0x01,
+                // section 7: serviceJourneys, count=0
+                0x00,
+                // section 8: datedServiceJourneys, count=1: D:1, no journey, O:1 at position 0
+                0x01,
+                0x03, 0x04, 0x01, 0x00, 0x01,
+                // trailer: 0xFF, total record count = 5
+                (byte) 0xFF, 0x05,
+        };
+
+        byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
+        assertThat(actualTail).containsExactly(expectedTail);
+    }
+
+    /**
+     * Pins the service link and journey pattern record layouts: a link without geometry, link
+     * refs by position and dangling, and a stop display repeated on the next stop collapsed.
+     */
+    @Test
+    public void v5ExactBytesOfServiceLinkAndJourneyPatternRecords(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addServiceLink("L:1", new int[]{1, 2});
+        builder.addServiceLink("L:2", null);
+        builder.addJourneyPattern("P:1", List.of("L:1", "L:9"), List.of(
+                new PlannedDataSink.StopDestinationDisplay(1, "V:1"),
+                new PlannedDataSink.StopDestinationDisplay(2, "V:1")));
+
+        Path file = dir.resolve("planned-links-patterns.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] bytes = Files.readAllBytes(file);
+
+        int offset = 4 + 4 + (2 + 1) + 8; // magic, version, writeUTF("e"), createdAt
+
+        byte[] expectedTail = {
+                // duplicateIds = 0
+                0x00, 0x00, 0x00, 0x00,
+                // prefix table, in first-interned order: "L:", "P:", "V:"
+                0x03,
+                0x03, 'L', ':', 0x03, 'P', ':', 0x03, 'V', ':',
+                // sections 1-4 empty: operators, lines, operatingDays, destinationDisplays
+                0x00, 0x00, 0x00, 0x00,
+                // section 5: serviceLinks, count=2
+                0x02,
+                // L:1: two values, zigzag(1-0)=2, zigzag(2-0)=4
+                0x00, 0x04, 0x01, 0x02, 0x02, 0x04,
+                // L:2: no geometry, written as zero values
+                0x00, 0x04, 0x02, 0x00,
+                // section 6: journeyPatterns, count=1: P:1
+                0x01,
+                0x01, 0x04, 0x01,
+                // two links: L:1 at position 0, L:9 dangling (links size 2, so 3) then literal L:9
+                0x02, 0x01, 0x03, 0x00, 0x04, 0x09,
+                // one display, the repeat collapsed: order zigzag(1), V:1 dangling (size 0, so 1) then literal V:1
+                0x01, 0x02, 0x01, 0x02, 0x04, 0x01,
+                // sections 7-8 empty: serviceJourneys, datedServiceJourneys
+                0x00, 0x00,
+                // trailer: 0xFF, total record count = 3
+                (byte) 0xFF, 0x03,
+        };
+
+        byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
+        assertThat(actualTail).containsExactly(expectedTail);
+    }
+
     // ---- v2 reader ----
 
     @Test
@@ -237,8 +429,8 @@ public class PlannedDataSnapshotTest {
 
         original.addLine("RUT:Line:1", "Line One", "1");
         original.addLine("RUT:Line:2", null, null); // null name + null public code
-        original.addLine("RUT:Line:3", "Line Three", "3", "76A300", "FFFFFF", "water"); // both colours, a transport mode
-        original.addLine("RUT:Line:4", "Line Four", "4", null, "000000", null); // text colour only, no transport mode
+        original.addLine(new LineRecord("RUT:Line:3", "Line Three", "3", "76A300", "FFFFFF", "water")); // both colours, a transport mode
+        original.addLine(new LineRecord("RUT:Line:4", "Line Four", "4", null, "000000", null)); // text colour only, no transport mode
 
         original.addServiceLink("RUT:ServiceLink:empty", new int[0]); // empty geometry
         original.addServiceLink("RUT:ServiceLink:odd", new int[]{10, 20, 5}); // odd-length geometry
@@ -256,7 +448,7 @@ public class PlannedDataSnapshotTest {
         original.addServiceJourney("RUT:ServiceJourney:1", "RUT:JourneyPattern:missing", "RUT:Line:dangling"); // dangling pattern + dangling line
         original.addServiceJourney("RUT:ServiceJourney:2", null, "RUT:Line:1"); // null pattern -> "" placeholder
         original.addServiceJourney("RUT:ServiceJourney:3", "RUT:JourneyPattern:1", null); // resolvable pattern, null line
-        original.addServiceJourney("RUT:ServiceJourney:4", null, "RUT:Line:3", "coach"); // own transport mode
+        original.addServiceJourney(new ServiceJourneyRecord("RUT:ServiceJourney:4", null, "RUT:Line:3", "coach")); // own transport mode
 
         original.addOperatingDay("RUT:OperatingDay:1", "2026-09-02");
         original.addOperatingDay("RUT:OperatingDay:2", null); // null calendar date

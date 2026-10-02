@@ -5,17 +5,16 @@ import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * One StAX pass over a NeTEx XML stream, feeding the eight element types the service needs
  * into a {@link PlannedDataSink}. Everything else is skipped at the token level, so memory
  * is bounded by what is kept, not by the size of the file.
  * <p>
- * Each handled element is read by a method that consumes exactly that element (from its
- * START_ELEMENT to its END_ELEMENT) and only looks at the children it needs, tracking depth
- * so a nested {@code <Name>} several levels down never masquerades as the element's own.
+ * Each handled element is read by its codec (e.g. {@link LineCodec}), which consumes exactly
+ * that element (from its START_ELEMENT to its END_ELEMENT) and only looks at the children it
+ * needs, tracking depth so a nested {@code <Name>} several levels down never masquerades as
+ * the element's own.
  */
 public final class NetexPlannedDataExtractor {
 
@@ -53,221 +52,58 @@ public final class NetexPlannedDataExtractor {
     }
 
     private void readOperator(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] name = new String[1];
-        scan(r, (reader, localName, depth) -> {
-            if (depth == 1 && localName.equals("Name")) {
-                name[0] = reader.getElementText();
-                return true;
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addOperator(id, name[0]);
+        OperatorRecord operator = OperatorCodec.read(r);
+        if (operator != null) {
+            sink.addOperator(operator);
         }
     }
 
     private void readLine(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] fields = new String[5]; // name, publicCode, colour, textColour, transportMode
-        String[] child = new String[1]; // the direct child the scan is currently inside
-        scan(r, (reader, localName, depth) -> {
-            if (depth == 1) {
-                child[0] = localName;
-                switch (localName) {
-                    case "Name" -> { fields[0] = reader.getElementText(); return true; }
-                    case "PublicCode" -> { fields[1] = reader.getElementText(); return true; }
-                    case "TransportMode" -> { fields[4] = reader.getElementText(); return true; }
-                    default -> { return false; }
-                }
-            }
-            // AlternativePresentation has Colour and TextColour children too; only Presentation counts.
-            if (depth == 2 && "Presentation".equals(child[0])) {
-                switch (localName) {
-                    case "Colour" -> { fields[2] = reader.getElementText(); return true; }
-                    case "TextColour" -> { fields[3] = reader.getElementText(); return true; }
-                    default -> { return false; }
-                }
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addLine(id, fields[0], fields[1], fields[2], fields[3], fields[4]);
+        LineRecord line = LineCodec.read(r);
+        if (line != null) {
+            sink.addLine(line);
         }
     }
 
     private void readServiceLink(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        int[][] geometry = new int[1][];
-        scan(r, (reader, localName, depth) -> {
-            if (localName.equals("posList")) {
-                geometry[0] = PosListParser.parse(reader.getElementText());
-                return true;
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addServiceLink(id, geometry[0]);
+        ServiceLinkRecord link = ServiceLinkCodec.read(r);
+        if (link != null) {
+            sink.addServiceLink(link);
         }
     }
 
     private void readJourneyPattern(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        List<String> links = new ArrayList<>();
-        List<PlannedDataSink.StopDestinationDisplay> destinationDisplays = new ArrayList<>();
-        String[] point = new String[1]; // the pointsInSequence entry the scan is currently inside
-        int[] stop = new int[2]; // order of the current StopPointInJourneyPattern, stops seen so far
-        scan(r, (reader, localName, depth) -> {
-            if (depth == 2) {
-                point[0] = localName;
-                if (localName.equals("StopPointInJourneyPattern")) {
-                    stop[1]++;
-                    stop[0] = order(reader, stop[1]);
-                }
-            }
-            if (localName.equals("ServiceLinkRef")) {
-                String ref = ref(reader);
-                if (ref != null) {
-                    links.add(ref);
-                }
-            } else if (depth == 3 && localName.equals("DestinationDisplayRef")
-                    && "StopPointInJourneyPattern".equals(point[0])) {
-                String ref = ref(reader);
-                if (ref != null) {
-                    destinationDisplays.add(new PlannedDataSink.StopDestinationDisplay(stop[0], ref));
-                }
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addJourneyPattern(id, links, destinationDisplays);
+        JourneyPatternRecord pattern = JourneyPatternCodec.read(r);
+        if (pattern != null) {
+            sink.addJourneyPattern(pattern);
         }
     }
 
     private void readDestinationDisplay(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] frontText = new String[1];
-        scan(r, (reader, localName, depth) -> {
-            // Variants carry a FrontText of their own further down; only the display's counts.
-            if (depth == 1 && localName.equals("FrontText")) {
-                frontText[0] = reader.getElementText();
-                return true;
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addDestinationDisplay(id, frontText[0]);
+        DestinationDisplayRecord display = DestinationDisplayCodec.read(r);
+        if (display != null) {
+            sink.addDestinationDisplay(display);
         }
     }
 
     private void readServiceJourney(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] refs = new String[3]; // journeyPatternId, lineId, transportMode
-        scan(r, (reader, localName, depth) -> {
-            if (depth != 1) {
-                return false;
-            }
-            switch (localName) {
-                // Optional; when set it takes precedence over the line's, e.g. a replacement bus.
-                case "TransportMode" -> { refs[2] = reader.getElementText(); return true; }
-                case "JourneyPatternRef" -> refs[0] = ref(reader);
-                // Only the journey's own line ref: Route elements carry a LineRef too, but
-                // they are never nested inside a ServiceJourney, and depth 1 excludes them anyway.
-                case "LineRef", "FlexibleLineRef" -> refs[1] = ref(reader);
-                default -> { /* ignore */ }
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addServiceJourney(id, refs[0], refs[1], refs[2]);
+        ServiceJourneyRecord journey = ServiceJourneyCodec.read(r);
+        if (journey != null) {
+            sink.addServiceJourney(journey);
         }
     }
 
     private void readDatedServiceJourney(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] refs = new String[2]; // serviceJourneyId, operatingDayId
-        scan(r, (reader, localName, depth) -> {
-            if (depth != 1) {
-                return false;
-            }
-            switch (localName) {
-                case "ServiceJourneyRef" -> refs[0] = ref(reader);
-                case "OperatingDayRef" -> refs[1] = ref(reader);
-                default -> { /* DatedServiceJourneyRef and others are ignored */ }
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addDatedServiceJourney(id, refs[0], refs[1]);
+        DatedServiceJourneyRecord dated = DatedServiceJourneyCodec.read(r);
+        if (dated != null) {
+            sink.addDatedServiceJourney(dated);
         }
     }
 
     private void readOperatingDay(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] date = new String[1];
-        scan(r, (reader, localName, depth) -> {
-            if (depth == 1 && localName.equals("CalendarDate")) {
-                date[0] = reader.getElementText();
-                return true;
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addOperatingDay(id, date[0]);
+        OperatingDayRecord day = OperatingDayCodec.read(r);
+        if (day != null) {
+            sink.addOperatingDay(day);
         }
-    }
-
-    /**
-     * Invoked at every START_ELEMENT below the element being read, with the depth relative
-     * to it (direct children are depth 1). Return true if the handler consumed the child
-     * (i.e. called {@code getElementText()}, which leaves the reader on the child's
-     * END_ELEMENT); return false if the reader is still positioned on the START_ELEMENT.
-     */
-    @FunctionalInterface
-    private interface ChildHandler {
-        boolean handle(XMLStreamReader reader, String localName, int depth) throws XMLStreamException;
-    }
-
-    /**
-     * Walks from the current START_ELEMENT to its matching END_ELEMENT, calling the handler
-     * for every nested START_ELEMENT. Leaves the reader on the matching END_ELEMENT.
-     */
-    private static void scan(XMLStreamReader r, ChildHandler handler) throws XMLStreamException {
-        int depth = 0;
-        while (r.hasNext()) {
-            int event = r.next();
-            if (event == XMLStreamConstants.START_ELEMENT) {
-                depth++;
-                if (handler.handle(r, r.getLocalName(), depth)) {
-                    depth--; // handler consumed through the child's END_ELEMENT
-                }
-            } else if (event == XMLStreamConstants.END_ELEMENT) {
-                if (depth == 0) {
-                    return;
-                }
-                depth--;
-            }
-        }
-    }
-
-    private static String id(XMLStreamReader r) {
-        return r.getAttributeValue(null, "id");
-    }
-
-    private static String ref(XMLStreamReader r) {
-        return r.getAttributeValue(null, "ref");
-    }
-
-    /** The element's {@code order} attribute, or its position in the sequence when that is absent or not a number. */
-    private static int order(XMLStreamReader r, int position) {
-        String order = r.getAttributeValue(null, "order");
-        if (order != null) {
-            try {
-                return Integer.parseInt(order.trim());
-            } catch (NumberFormatException e) {
-                // fall through
-            }
-        }
-        return position;
     }
 }

@@ -1,9 +1,5 @@
 package org.entur.vehicles.service.planned;
 
-import org.entur.vehicles.data.model.Line;
-import org.entur.vehicles.data.model.Operator;
-import org.entur.vehicles.data.model.Presentation;
-import org.entur.vehicles.service.planned.PlannedDataSink.StopDestinationDisplay;
 import org.entur.vehicles.service.snapshot.IdCodec;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
 import org.entur.vehicles.service.snapshot.SnapshotIo;
@@ -16,11 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -46,7 +38,6 @@ public final class PlannedDataSnapshot {
 
     private static final byte[] MAGIC = {'V', 'P', 'P', '2'};
     private static final byte TAG_END = (byte) 0xFF;
-    private static final StopDestinationDisplay[] NO_DISPLAYS = new StopDestinationDisplay[0];
 
     private PlannedDataSnapshot() {
     }
@@ -66,122 +57,87 @@ public final class PlannedDataSnapshot {
             out.writeLong(System.currentTimeMillis());
             out.writeInt(builder.duplicateIds());
 
-            Map<String, Operator> operators = builder.operators();
-            Map<String, Line> lines = builder.lines();
-            Map<String, String> operatingDays = builder.operatingDays();
-            Map<String, int[]> linkGeometry = builder.linkGeometry();
-            Map<String, String[]> patternLinks = builder.patternLinks();
-            Map<String, String> serviceJourneyPattern = builder.serviceJourneyPattern();
-            Map<String, String> serviceJourneyLine = builder.serviceJourneyLine();
-            Map<String, String> lineTransportMode = builder.lineTransportMode();
-            Map<String, String> serviceJourneyTransportMode = builder.serviceJourneyTransportMode();
-            Map<String, String> destinationDisplays = builder.destinationDisplays();
-            Map<String, StopDestinationDisplay[]> patternDestinationDisplays = builder.patternDestinationDisplays();
-            Map<String, PlannedDataset.Builder.RawDatedServiceJourney> rawDatedServiceJourneys = builder.rawDatedServiceJourneys();
+            Map<String, OperatorRecord> operators = builder.operators();
+            Map<String, LineRecord> lines = builder.lines();
+            Map<String, OperatingDayRecord> operatingDays = builder.operatingDays();
+            Map<String, ServiceLinkRecord> serviceLinks = builder.serviceLinks();
+            Map<String, JourneyPatternRecord> journeyPatterns = builder.journeyPatterns();
+            Map<String, ServiceJourneyRecord> serviceJourneys = builder.serviceJourneys();
+            Map<String, DestinationDisplayRecord> destinationDisplays = builder.destinationDisplays();
+            Map<String, DatedServiceJourneyRecord> datedServiceJourneys = builder.rawDatedServiceJourneys();
 
             IdCodec.Writer ids = new IdCodec.Writer();
-            internIds(ids, operators, lines, operatingDays, destinationDisplays, linkGeometry, patternLinks,
-                    patternDestinationDisplays, serviceJourneyPattern, serviceJourneyLine, rawDatedServiceJourneys);
+            internIds(ids, operators, lines, operatingDays, destinationDisplays, serviceLinks, journeyPatterns,
+                    serviceJourneys, datedServiceJourneys);
             ids.writeTable(out);
 
             int totalRecords = 0;
 
             // 1. operators - no references
             SnapshotIo.writeVarInt(out, operators.size());
-            for (Map.Entry<String, Operator> e : operators.entrySet()) {
-                ids.writeId(out, e.getKey());
-                SnapshotIo.writeString(out, e.getValue().getName());
+            for (OperatorRecord operator : operators.values()) {
+                OperatorCodec.write(out, ids, operator);
                 totalRecords++;
             }
 
             // 2. lines - no references
-            Map<String, Integer> lineIndex = new HashMap<>(lines.size() * 2);
+            SectionIndex.Writer lineIndex = new SectionIndex.Writer(lines.size());
             SnapshotIo.writeVarInt(out, lines.size());
-            for (Map.Entry<String, Line> e : lines.entrySet()) {
-                lineIndex.put(e.getKey(), lineIndex.size());
-                ids.writeId(out, e.getKey());
-                SnapshotIo.writeString(out, e.getValue().getLineName());
-                SnapshotIo.writeString(out, e.getValue().getPublicCode());
-                Presentation presentation = e.getValue().getPresentation();
-                SnapshotIo.writeString(out, presentation == null ? null : presentation.colour());
-                SnapshotIo.writeString(out, presentation == null ? null : presentation.textColour());
-                SnapshotIo.writeString(out, lineTransportMode.get(e.getKey()));
+            for (LineRecord line : lines.values()) {
+                lineIndex.add(line.id());
+                LineCodec.write(out, ids, line);
                 totalRecords++;
             }
 
             // 3. operatingDays - no references
-            Map<String, Integer> operatingDayIndex = new HashMap<>(operatingDays.size() * 2);
+            SectionIndex.Writer operatingDayIndex = new SectionIndex.Writer(operatingDays.size());
             SnapshotIo.writeVarInt(out, operatingDays.size());
-            for (Map.Entry<String, String> e : operatingDays.entrySet()) {
-                operatingDayIndex.put(e.getKey(), operatingDayIndex.size());
-                ids.writeId(out, e.getKey());
-                SnapshotIo.writeString(out, e.getValue());
+            for (OperatingDayRecord day : operatingDays.values()) {
+                operatingDayIndex.add(day.id());
+                OperatingDayCodec.write(out, ids, day);
                 totalRecords++;
             }
 
             // 4. destinationDisplays - no references
-            Map<String, Integer> destinationDisplayIndex = new HashMap<>(destinationDisplays.size() * 2);
+            SectionIndex.Writer destinationDisplayIndex = new SectionIndex.Writer(destinationDisplays.size());
             SnapshotIo.writeVarInt(out, destinationDisplays.size());
-            for (Map.Entry<String, String> e : destinationDisplays.entrySet()) {
-                destinationDisplayIndex.put(e.getKey(), destinationDisplayIndex.size());
-                ids.writeId(out, e.getKey());
-                SnapshotIo.writeString(out, e.getValue());
+            for (DestinationDisplayRecord display : destinationDisplays.values()) {
+                destinationDisplayIndex.add(display.id());
+                DestinationDisplayCodec.write(out, ids, display);
                 totalRecords++;
             }
 
             // 5. serviceLinks - no references, delta-encoded geometry
-            Map<String, Integer> linkIndex = new HashMap<>(linkGeometry.size() * 2);
-            SnapshotIo.writeVarInt(out, linkGeometry.size());
-            for (Map.Entry<String, int[]> e : linkGeometry.entrySet()) {
-                linkIndex.put(e.getKey(), linkIndex.size());
-                ids.writeId(out, e.getKey());
-                writeGeometry(out, e.getValue());
+            SectionIndex.Writer linkIndex = new SectionIndex.Writer(serviceLinks.size());
+            SnapshotIo.writeVarInt(out, serviceLinks.size());
+            for (ServiceLinkRecord link : serviceLinks.values()) {
+                linkIndex.add(link.id());
+                ServiceLinkCodec.write(out, ids, link);
                 totalRecords++;
             }
 
             // 6. journeyPatterns - refs into serviceLinks and destinationDisplays
-            Map<String, Integer> patternIndex = new HashMap<>(patternLinks.size() * 2);
-            SnapshotIo.writeVarInt(out, patternLinks.size());
-            for (Map.Entry<String, String[]> e : patternLinks.entrySet()) {
-                patternIndex.put(e.getKey(), patternIndex.size());
-                ids.writeId(out, e.getKey());
-                String[] linkIds = e.getValue();
-                SnapshotIo.writeVarInt(out, linkIds.length);
-                for (String linkId : linkIds) {
-                    writeRef(out, ids, linkId, linkIndex, linkGeometry.size());
-                }
-                StopDestinationDisplay[] displays = patternDestinationDisplays.getOrDefault(e.getKey(), NO_DISPLAYS);
-                SnapshotIo.writeVarInt(out, displays.length);
-                for (StopDestinationDisplay display : displays) {
-                    SnapshotIo.writeZigZag(out, display.order());
-                    writeRef(out, ids, display.destinationDisplayId(), destinationDisplayIndex, destinationDisplays.size());
-                }
+            SectionIndex.Writer patternIndex = new SectionIndex.Writer(journeyPatterns.size());
+            SnapshotIo.writeVarInt(out, journeyPatterns.size());
+            for (JourneyPatternRecord pattern : journeyPatterns.values()) {
+                patternIndex.add(pattern.id());
+                JourneyPatternCodec.write(out, ids, pattern, linkIndex, destinationDisplayIndex);
                 totalRecords++;
             }
 
             // 7. serviceJourneys - refs into journeyPatterns and lines
-            Map<String, Integer> journeyIndex = new HashMap<>(serviceJourneyPattern.size() * 2);
-            SnapshotIo.writeVarInt(out, serviceJourneyPattern.size());
-            for (Map.Entry<String, String> e : serviceJourneyPattern.entrySet()) {
-                String id = e.getKey();
-                journeyIndex.put(id, journeyIndex.size());
-                ids.writeId(out, id);
-                // The builder stores "" (not null) for an absent pattern ref; write that as a
-                // null reference rather than interning and writing the empty string.
-                String patternId = e.getValue().isEmpty() ? null : e.getValue();
-                writeRef(out, ids, patternId, patternIndex, patternLinks.size());
-                writeRef(out, ids, serviceJourneyLine.get(id), lineIndex, lines.size());
-                SnapshotIo.writeString(out, serviceJourneyTransportMode.get(id));
+            SectionIndex.Writer journeyIndex = new SectionIndex.Writer(serviceJourneys.size());
+            SnapshotIo.writeVarInt(out, serviceJourneys.size());
+            for (ServiceJourneyRecord journey : serviceJourneys.values()) {
+                journeyIndex.add(journey.id());
+                ServiceJourneyCodec.write(out, ids, journey, patternIndex, lineIndex);
                 totalRecords++;
             }
 
             // 8. datedServiceJourneys - refs into serviceJourneys and operatingDays.
-            SnapshotIo.writeVarInt(out, rawDatedServiceJourneys.size());
-            for (Map.Entry<String, PlannedDataset.Builder.RawDatedServiceJourney> e : rawDatedServiceJourneys.entrySet()) {
-                ids.writeId(out, e.getKey());
-                PlannedDataset.Builder.RawDatedServiceJourney raw = e.getValue();
-                writeRef(out, ids, raw.serviceJourneyId(), journeyIndex, serviceJourneyPattern.size());
-                writeRef(out, ids, raw.operatingDayId(), operatingDayIndex, operatingDays.size());
+            SnapshotIo.writeVarInt(out, datedServiceJourneys.size());
+            for (DatedServiceJourneyRecord dated : datedServiceJourneys.values()) {
+                DatedServiceJourneyCodec.write(out, ids, dated, journeyIndex, operatingDayIndex);
                 totalRecords++;
             }
 
@@ -197,87 +153,37 @@ public final class PlannedDataSnapshot {
      * the resulting prefix table.
      */
     private static void internIds(IdCodec.Writer ids,
-                                   Map<String, Operator> operators,
-                                   Map<String, Line> lines,
-                                   Map<String, String> operatingDays,
-                                   Map<String, String> destinationDisplays,
-                                   Map<String, int[]> linkGeometry,
-                                   Map<String, String[]> patternLinks,
-                                   Map<String, StopDestinationDisplay[]> patternDestinationDisplays,
-                                   Map<String, String> serviceJourneyPattern,
-                                   Map<String, String> serviceJourneyLine,
-                                   Map<String, PlannedDataset.Builder.RawDatedServiceJourney> rawDatedServiceJourneys) {
-        internAll(ids, operators.keySet());
-        internAll(ids, lines.keySet());
-        internAll(ids, operatingDays.keySet());
-        internAll(ids, destinationDisplays.keySet());
-        internAll(ids, linkGeometry.keySet());
-        for (Map.Entry<String, String[]> e : patternLinks.entrySet()) {
-            ids.intern(e.getKey());
-            for (String linkId : e.getValue()) {
-                ids.intern(linkId);
-            }
+                                   Map<String, OperatorRecord> operators,
+                                   Map<String, LineRecord> lines,
+                                   Map<String, OperatingDayRecord> operatingDays,
+                                   Map<String, DestinationDisplayRecord> destinationDisplays,
+                                   Map<String, ServiceLinkRecord> serviceLinks,
+                                   Map<String, JourneyPatternRecord> journeyPatterns,
+                                   Map<String, ServiceJourneyRecord> serviceJourneys,
+                                   Map<String, DatedServiceJourneyRecord> datedServiceJourneys) {
+        for (OperatorRecord operator : operators.values()) {
+            OperatorCodec.intern(ids, operator);
         }
-        for (StopDestinationDisplay[] displays : patternDestinationDisplays.values()) {
-            for (StopDestinationDisplay display : displays) {
-                ids.intern(display.destinationDisplayId());
-            }
+        for (LineRecord line : lines.values()) {
+            LineCodec.intern(ids, line);
         }
-        for (Map.Entry<String, String> e : serviceJourneyPattern.entrySet()) {
-            ids.intern(e.getKey());
-            if (!e.getValue().isEmpty()) {
-                ids.intern(e.getValue());
-            }
+        for (OperatingDayRecord day : operatingDays.values()) {
+            OperatingDayCodec.intern(ids, day);
         }
-        internAll(ids, serviceJourneyLine.values());
-        for (Map.Entry<String, PlannedDataset.Builder.RawDatedServiceJourney> e : rawDatedServiceJourneys.entrySet()) {
-            ids.intern(e.getKey());
-            PlannedDataset.Builder.RawDatedServiceJourney raw = e.getValue();
-            if (raw.serviceJourneyId() != null) {
-                ids.intern(raw.serviceJourneyId());
-            }
-            if (raw.operatingDayId() != null) {
-                ids.intern(raw.operatingDayId());
-            }
+        for (DestinationDisplayRecord display : destinationDisplays.values()) {
+            DestinationDisplayCodec.intern(ids, display);
         }
-    }
-
-    private static void internAll(IdCodec.Writer ids, Collection<String> values) {
-        for (String id : values) {
-            ids.intern(id);
+        for (ServiceLinkRecord link : serviceLinks.values()) {
+            ServiceLinkCodec.intern(ids, link);
         }
-    }
-
-    /**
-     * Writes a reference: varint 0 for null, {@code index + 1} for a hit in {@code index},
-     * or {@code sectionSize + 1} followed by the literal id when {@code id} is not in
-     * {@code index} - a dangling reference, kept instead of dropped so it survives the round
-     * trip exactly as {@code Stats.unresolved*Refs} found it.
-     */
-    private static void writeRef(DataOutputStream out, IdCodec.Writer ids, String id, Map<String, Integer> index, int sectionSize) throws IOException {
-        if (id == null) {
-            SnapshotIo.writeVarInt(out, 0);
-            return;
+        for (JourneyPatternRecord pattern : journeyPatterns.values()) {
+            JourneyPatternCodec.intern(ids, pattern);
         }
-        Integer position = index.get(id);
-        if (position != null) {
-            SnapshotIo.writeVarInt(out, position + 1L);
-        } else {
-            SnapshotIo.writeVarInt(out, sectionSize + 1L);
-            ids.writeId(out, id);
+        for (ServiceJourneyRecord journey : serviceJourneys.values()) {
+            ServiceJourneyCodec.intern(ids, journey);
         }
-    }
-
-    /**
-     * Writes interleaved lat/lon microdegrees as a count followed by one zigzag varint per
-     * value, each delta-encoded against the value two positions back (0 for the first two
-     * entries) - the two-back rule needs no special case for an odd-length array.
-     */
-    private static void writeGeometry(DataOutputStream out, int[] geometry) throws IOException {
-        SnapshotIo.writeVarInt(out, geometry.length);
-        for (int i = 0; i < geometry.length; i++) {
-            long previous = i >= 2 ? geometry[i - 2] : 0;
-            SnapshotIo.writeZigZag(out, geometry[i] - previous);
+        for (DatedServiceJourneyRecord dated : datedServiceJourneys.values()) {
+            DatedServiceJourneyCodec.intern(ids, dated);
         }
     }
 
@@ -311,97 +217,74 @@ public final class PlannedDataSnapshot {
             // 1. operators - no references
             int operatorCount = (int) SnapshotIo.readVarInt(in);
             for (int i = 0; i < operatorCount; i++) {
-                String id = ids.readId(in);
-                sink.addOperator(id, SnapshotIo.readString(in));
+                sink.addOperator(OperatorCodec.read(in, ids));
                 totalRecords++;
             }
 
             // 2. lines - no references
             int lineCount = (int) SnapshotIo.readVarInt(in);
-            String[] lineIds = new String[lineCount];
+            SectionIndex.Reader lineIds = new SectionIndex.Reader(lineCount);
             for (int i = 0; i < lineCount; i++) {
-                String id = ids.readId(in);
-                lineIds[i] = id;
-                String name = SnapshotIo.readString(in);
-                String publicCode = SnapshotIo.readString(in);
-                String colour = SnapshotIo.readString(in);
-                String textColour = SnapshotIo.readString(in);
-                String transportMode = SnapshotIo.readString(in);
-                sink.addLine(id, name, publicCode, colour, textColour, transportMode);
+                LineRecord line = LineCodec.read(in, ids);
+                lineIds.add(line.id());
+                sink.addLine(line);
                 totalRecords++;
             }
 
             // 3. operatingDays - no references
             int operatingDayCount = (int) SnapshotIo.readVarInt(in);
-            String[] operatingDayIds = new String[operatingDayCount];
+            SectionIndex.Reader operatingDayIds = new SectionIndex.Reader(operatingDayCount);
             for (int i = 0; i < operatingDayCount; i++) {
-                String id = ids.readId(in);
-                operatingDayIds[i] = id;
-                sink.addOperatingDay(id, SnapshotIo.readString(in));
+                OperatingDayRecord day = OperatingDayCodec.read(in, ids);
+                operatingDayIds.add(day.id());
+                sink.addOperatingDay(day);
                 totalRecords++;
             }
 
             // 4. destinationDisplays - no references
             int destinationDisplayCount = (int) SnapshotIo.readVarInt(in);
-            String[] destinationDisplayIds = new String[destinationDisplayCount];
+            SectionIndex.Reader destinationDisplayIds = new SectionIndex.Reader(destinationDisplayCount);
             for (int i = 0; i < destinationDisplayCount; i++) {
-                String id = ids.readId(in);
-                destinationDisplayIds[i] = id;
-                sink.addDestinationDisplay(id, SnapshotIo.readString(in));
+                DestinationDisplayRecord display = DestinationDisplayCodec.read(in, ids);
+                destinationDisplayIds.add(display.id());
+                sink.addDestinationDisplay(display);
                 totalRecords++;
             }
 
             // 5. serviceLinks - no references, delta-encoded geometry
             int linkCount = (int) SnapshotIo.readVarInt(in);
-            String[] linkIds = new String[linkCount];
+            SectionIndex.Reader linkIds = new SectionIndex.Reader(linkCount);
             for (int i = 0; i < linkCount; i++) {
-                String id = ids.readId(in);
-                linkIds[i] = id;
-                sink.addServiceLink(id, readGeometry(in));
+                ServiceLinkRecord link = ServiceLinkCodec.read(in, ids);
+                linkIds.add(link.id());
+                sink.addServiceLink(link);
                 totalRecords++;
             }
 
             // 6. journeyPatterns - refs into serviceLinks and destinationDisplays
             int patternCount = (int) SnapshotIo.readVarInt(in);
-            String[] patternIds = new String[patternCount];
+            SectionIndex.Reader patternIds = new SectionIndex.Reader(patternCount);
             for (int i = 0; i < patternCount; i++) {
-                String id = ids.readId(in);
-                patternIds[i] = id;
-                int linkRefCount = (int) SnapshotIo.readVarInt(in);
-                List<String> links = new ArrayList<>(linkRefCount);
-                for (int j = 0; j < linkRefCount; j++) {
-                    links.add(readRef(in, ids, linkIds));
-                }
-                int displayCount = (int) SnapshotIo.readVarInt(in);
-                List<StopDestinationDisplay> displays = new ArrayList<>(displayCount);
-                for (int j = 0; j < displayCount; j++) {
-                    int order = (int) SnapshotIo.readZigZag(in);
-                    displays.add(new StopDestinationDisplay(order, readRef(in, ids, destinationDisplayIds)));
-                }
-                sink.addJourneyPattern(id, links, displays);
+                JourneyPatternRecord pattern = JourneyPatternCodec.read(in, ids, linkIds, destinationDisplayIds);
+                patternIds.add(pattern.id());
+                sink.addJourneyPattern(pattern);
                 totalRecords++;
             }
 
             // 7. serviceJourneys - refs into journeyPatterns and lines
             int journeyCount = (int) SnapshotIo.readVarInt(in);
-            String[] journeyIds = new String[journeyCount];
+            SectionIndex.Reader journeyIds = new SectionIndex.Reader(journeyCount);
             for (int i = 0; i < journeyCount; i++) {
-                String id = ids.readId(in);
-                journeyIds[i] = id;
-                String patternRef = readRef(in, ids, patternIds);
-                String lineRef = readRef(in, ids, lineIds);
-                String transportMode = SnapshotIo.readString(in);
-                sink.addServiceJourney(id, patternRef, lineRef, transportMode);
+                ServiceJourneyRecord journey = ServiceJourneyCodec.read(in, ids, patternIds, lineIds);
+                journeyIds.add(journey.id());
+                sink.addServiceJourney(journey);
                 totalRecords++;
             }
 
             // 8. datedServiceJourneys - refs into serviceJourneys and operatingDays
             int datedCount = (int) SnapshotIo.readVarInt(in);
             for (int i = 0; i < datedCount; i++) {
-                String id = ids.readId(in);
-                String journeyRef = readRef(in, ids, journeyIds);
-                String operatingDayRef = readRef(in, ids, operatingDayIds);
-                sink.addDatedServiceJourney(id, journeyRef, operatingDayRef);
+                sink.addDatedServiceJourney(DatedServiceJourneyCodec.read(in, ids, journeyIds, operatingDayIds));
                 totalRecords++;
             }
 
@@ -416,37 +299,6 @@ public final class PlannedDataSnapshot {
         } catch (java.io.EOFException e) {
             throw new SnapshotFormatException("Truncated planned-data snapshot");
         }
-    }
-
-    /**
-     * Reads a reference written by the v2 writer's {@code writeRef}: varint 0 is null,
-     * {@code 1..N} is a 1-based index into {@code section} (already fully read), and
-     * {@code N+1} introduces a literal id - a dangling reference, kept as-is so it survives
-     * the round trip exactly as {@code Stats.unresolved*Refs} found it.
-     */
-    private static String readRef(DataInputStream in, IdCodec.Reader ids, String[] section) throws IOException {
-        long v = SnapshotIo.readVarInt(in);
-        if (v == 0) {
-            return null;
-        }
-        int index = (int) (v - 1);
-        return index < section.length ? section[index] : ids.readId(in);
-    }
-
-    /**
-     * Reads geometry written by the v2 writer's {@code writeGeometry}: a count followed by
-     * one zigzag varint per value, each delta-decoded against the value two positions back
-     * (0 for the first two entries).
-     */
-    private static int[] readGeometry(DataInputStream in) throws IOException {
-        int length = (int) SnapshotIo.readVarInt(in);
-        int[] geometry = new int[length];
-        for (int i = 0; i < length; i++) {
-            long delta = SnapshotIo.readZigZag(in);
-            long previous = i >= 2 ? geometry[i - 2] : 0;
-            geometry[i] = (int) (delta + previous);
-        }
-        return geometry;
     }
 
 }
