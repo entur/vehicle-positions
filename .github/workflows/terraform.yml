@@ -27,7 +27,7 @@ jobs:
   tf-plan-dev:
     if: github.event_name != 'push'
     needs: [terraform-lint]
-    uses: entur/gha-terraform/.github/workflows/plan.yml@v2
+    uses: entur/gha-terraform/.github/workflows/plan.yml@v3
     permissions:
       contents: read
       id-token: write
@@ -49,7 +49,7 @@ jobs:
 
   tf-plan-tst:
     needs: [terraform-lint]
-    uses: entur/gha-terraform/.github/workflows/plan.yml@v2
+    uses: entur/gha-terraform/.github/workflows/plan.yml@v3
     permissions:
       contents: read
       id-token: write
@@ -59,7 +59,7 @@ jobs:
 
   tf-plan-prd:
     needs: [terraform-lint]
-    uses: entur/gha-terraform/.github/workflows/plan.yml@v2
+    uses: entur/gha-terraform/.github/workflows/plan.yml@v3
     permissions:
       contents: read
       id-token: write
