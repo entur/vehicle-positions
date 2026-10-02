@@ -408,7 +408,7 @@ public final class PlannedDataset {
         record RawDatedServiceJourney(String serviceJourneyId, String operatingDayId) {}
 
         private final Map<String, Operator> operators = new HashMap<>();
-        private final Map<String, Line> lines = new HashMap<>();
+        private final Map<String, LineRecord> lines = new HashMap<>();
         private final Map<String, String> serviceJourneyPattern = new HashMap<>();
         private final Map<String, RawDatedServiceJourney> rawDatedServiceJourneys = new HashMap<>();
         private final Map<String, String[]> patternLinks = new HashMap<>();
@@ -416,7 +416,6 @@ public final class PlannedDataset {
         private final Map<String, String> operatingDays = new HashMap<>();
         private final Map<String, String> serviceJourneyLine = new HashMap<>();
         // Raw NeTEx values, so a snapshot replays exactly what was parsed; mapped in build().
-        private final Map<String, String> lineTransportMode = new HashMap<>();
         private final Map<String, String> serviceJourneyTransportMode = new HashMap<>();
         private final Map<String, String> destinationDisplays = new HashMap<>();
         /** Only patterns with at least one ref; consecutive refs to the same display collapsed. */
@@ -433,16 +432,12 @@ public final class PlannedDataset {
 
         /** A line that publishes no colours and no transport mode. */
         public Builder addLine(String id, String name, String publicCode) {
-            return addLine(id, name, publicCode, null, null, null);
+            return addLine(new LineRecord(id, name, publicCode, null, null, null));
         }
 
         @Override
-        public Builder addLine(String id, String name, String publicCode, String colour, String textColour, String transportMode) {
-            Line line = new Line(id, name);
-            line.setPublicCode(publicCode);
-            line.setPresentation(Presentation.of(colour, textColour));
-            countDuplicate(lines.put(id, line));
-            putOrRemove(lineTransportMode, id, transportMode);
+        public Builder addLine(LineRecord line) {
+            countDuplicate(lines.put(line.id(), line));
             return this;
         }
 
@@ -552,7 +547,7 @@ public final class PlannedDataset {
             return Collections.unmodifiableMap(operators);
         }
 
-        Map<String, Line> lines() {
+        Map<String, LineRecord> lines() {
             return Collections.unmodifiableMap(lines);
         }
 
@@ -574,10 +569,6 @@ public final class PlannedDataset {
 
         Map<String, String> serviceJourneyLine() {
             return Collections.unmodifiableMap(serviceJourneyLine);
-        }
-
-        Map<String, String> lineTransportMode() {
-            return Collections.unmodifiableMap(lineTransportMode);
         }
 
         Map<String, String> serviceJourneyTransportMode() {
@@ -747,6 +738,17 @@ public final class PlannedDataset {
                 datedServiceJourneys.put(e.getKey(), new DatedJourneyRef(serviceJourneyId, date));
             }
 
+            Map<String, Line> lineModels = new HashMap<>(lines.size() * 2);
+            Map<String, String> lineTransportMode = new HashMap<>();
+            for (LineRecord record : lines.values()) {
+                Line line = new Line(record.id(), record.name());
+                line.setPublicCode(record.publicCode());
+                line.setPresentation(Presentation.of(record.colour(), record.textColour()));
+                lineModels.put(record.id(), line);
+                if (record.transportMode() != null) {
+                    lineTransportMode.put(record.id(), record.transportMode());
+                }
+            }
             Map<String, VehicleModeEnumeration> lineModes = toVehicleModes(lineTransportMode);
             // Kept only where the journey's mode differs from its own line's: a producer that
             // repeats the line's mode on every journey would otherwise fill this map with
@@ -807,7 +809,7 @@ public final class PlannedDataset {
 
             return new PlannedDataset(
                     Map.copyOf(operators),
-                    Map.copyOf(lines),
+                    Map.copyOf(lineModels),
                     Map.copyOf(serviceJourneyPattern),
                     Map.copyOf(datedServiceJourneys),
                     Map.copyOf(patternLinks),

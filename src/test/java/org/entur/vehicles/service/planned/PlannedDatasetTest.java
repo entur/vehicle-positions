@@ -34,11 +34,11 @@ public class PlannedDatasetTest {
     @Test
     public void transportModeResolvesTheJourneysOwnModeThenItsLineThenTheReportedLine() {
         PlannedDataset dataset = new PlannedDataset.Builder()
-                .addLine("TST:Line:ferry", "Ferry", "F", null, null, "water")
-                .addLine("TST:Line:rail", "Rail", "R", null, null, "rail")
-                .addLine("TST:Line:replacement", "Replacement", "RB", null, null, "bus")
-                .addLine("TST:Line:cable", "Cable car", "C", null, null, "cableway")
-                .addLine("TST:Line:trolley", "Trolley", "T", null, null, "trolleyBus")
+                .addLine(new LineRecord("TST:Line:ferry", "Ferry", "F", null, null, "water"))
+                .addLine(new LineRecord("TST:Line:rail", "Rail", "R", null, null, "rail"))
+                .addLine(new LineRecord("TST:Line:replacement", "Replacement", "RB", null, null, "bus"))
+                .addLine(new LineRecord("TST:Line:cable", "Cable car", "C", null, null, "cableway"))
+                .addLine(new LineRecord("TST:Line:trolley", "Trolley", "T", null, null, "trolleyBus"))
                 .addServiceJourney("TST:ServiceJourney:onFerry", "JP", "TST:Line:ferry", null)
                 .addServiceJourney("TST:ServiceJourney:ferryRepeatsLine", "JP", "TST:Line:ferry", "water")
                 .addServiceJourney("TST:ServiceJourney:replacementBus", "JP", "TST:Line:rail", "bus")

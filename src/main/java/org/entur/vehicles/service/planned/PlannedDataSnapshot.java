@@ -1,8 +1,6 @@
 package org.entur.vehicles.service.planned;
 
-import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Operator;
-import org.entur.vehicles.data.model.Presentation;
 import org.entur.vehicles.service.planned.PlannedDataSink.StopDestinationDisplay;
 import org.entur.vehicles.service.snapshot.IdCodec;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
@@ -67,13 +65,12 @@ public final class PlannedDataSnapshot {
             out.writeInt(builder.duplicateIds());
 
             Map<String, Operator> operators = builder.operators();
-            Map<String, Line> lines = builder.lines();
+            Map<String, LineRecord> lines = builder.lines();
             Map<String, String> operatingDays = builder.operatingDays();
             Map<String, int[]> linkGeometry = builder.linkGeometry();
             Map<String, String[]> patternLinks = builder.patternLinks();
             Map<String, String> serviceJourneyPattern = builder.serviceJourneyPattern();
             Map<String, String> serviceJourneyLine = builder.serviceJourneyLine();
-            Map<String, String> lineTransportMode = builder.lineTransportMode();
             Map<String, String> serviceJourneyTransportMode = builder.serviceJourneyTransportMode();
             Map<String, String> destinationDisplays = builder.destinationDisplays();
             Map<String, StopDestinationDisplay[]> patternDestinationDisplays = builder.patternDestinationDisplays();
@@ -97,15 +94,9 @@ public final class PlannedDataSnapshot {
             // 2. lines - no references
             Map<String, Integer> lineIndex = new HashMap<>(lines.size() * 2);
             SnapshotIo.writeVarInt(out, lines.size());
-            for (Map.Entry<String, Line> e : lines.entrySet()) {
-                lineIndex.put(e.getKey(), lineIndex.size());
-                ids.writeId(out, e.getKey());
-                SnapshotIo.writeString(out, e.getValue().getLineName());
-                SnapshotIo.writeString(out, e.getValue().getPublicCode());
-                Presentation presentation = e.getValue().getPresentation();
-                SnapshotIo.writeString(out, presentation == null ? null : presentation.colour());
-                SnapshotIo.writeString(out, presentation == null ? null : presentation.textColour());
-                SnapshotIo.writeString(out, lineTransportMode.get(e.getKey()));
+            for (LineRecord line : lines.values()) {
+                lineIndex.put(line.id(), lineIndex.size());
+                LineCodec.write(out, ids, line);
                 totalRecords++;
             }
 
@@ -198,7 +189,7 @@ public final class PlannedDataSnapshot {
      */
     private static void internIds(IdCodec.Writer ids,
                                    Map<String, Operator> operators,
-                                   Map<String, Line> lines,
+                                   Map<String, LineRecord> lines,
                                    Map<String, String> operatingDays,
                                    Map<String, String> destinationDisplays,
                                    Map<String, int[]> linkGeometry,
@@ -320,14 +311,9 @@ public final class PlannedDataSnapshot {
             int lineCount = (int) SnapshotIo.readVarInt(in);
             String[] lineIds = new String[lineCount];
             for (int i = 0; i < lineCount; i++) {
-                String id = ids.readId(in);
-                lineIds[i] = id;
-                String name = SnapshotIo.readString(in);
-                String publicCode = SnapshotIo.readString(in);
-                String colour = SnapshotIo.readString(in);
-                String textColour = SnapshotIo.readString(in);
-                String transportMode = SnapshotIo.readString(in);
-                sink.addLine(id, name, publicCode, colour, textColour, transportMode);
+                LineRecord line = LineCodec.read(in, ids);
+                lineIds[i] = line.id();
+                sink.addLine(line);
                 totalRecords++;
             }
 

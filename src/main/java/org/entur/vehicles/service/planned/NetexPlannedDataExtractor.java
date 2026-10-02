@@ -8,6 +8,11 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.entur.vehicles.service.planned.Stax.id;
+import static org.entur.vehicles.service.planned.Stax.order;
+import static org.entur.vehicles.service.planned.Stax.ref;
+import static org.entur.vehicles.service.planned.Stax.scan;
+
 /**
  * One StAX pass over a NeTEx XML stream, feeding the eight element types the service needs
  * into a {@link PlannedDataSink}. Everything else is skipped at the token level, so memory
@@ -68,31 +73,9 @@ public final class NetexPlannedDataExtractor {
     }
 
     private void readLine(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] fields = new String[5]; // name, publicCode, colour, textColour, transportMode
-        String[] child = new String[1]; // the direct child the scan is currently inside
-        scan(r, (reader, localName, depth) -> {
-            if (depth == 1) {
-                child[0] = localName;
-                switch (localName) {
-                    case "Name" -> { fields[0] = reader.getElementText(); return true; }
-                    case "PublicCode" -> { fields[1] = reader.getElementText(); return true; }
-                    case "TransportMode" -> { fields[4] = reader.getElementText(); return true; }
-                    default -> { return false; }
-                }
-            }
-            // AlternativePresentation has Colour and TextColour children too; only Presentation counts.
-            if (depth == 2 && "Presentation".equals(child[0])) {
-                switch (localName) {
-                    case "Colour" -> { fields[2] = reader.getElementText(); return true; }
-                    case "TextColour" -> { fields[3] = reader.getElementText(); return true; }
-                    default -> { return false; }
-                }
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addLine(id, fields[0], fields[1], fields[2], fields[3], fields[4]);
+        LineRecord line = LineCodec.read(r);
+        if (line != null) {
+            sink.addLine(line);
         }
     }
 
@@ -215,59 +198,5 @@ public final class NetexPlannedDataExtractor {
         if (id != null) {
             sink.addOperatingDay(id, date[0]);
         }
-    }
-
-    /**
-     * Invoked at every START_ELEMENT below the element being read, with the depth relative
-     * to it (direct children are depth 1). Return true if the handler consumed the child
-     * (i.e. called {@code getElementText()}, which leaves the reader on the child's
-     * END_ELEMENT); return false if the reader is still positioned on the START_ELEMENT.
-     */
-    @FunctionalInterface
-    private interface ChildHandler {
-        boolean handle(XMLStreamReader reader, String localName, int depth) throws XMLStreamException;
-    }
-
-    /**
-     * Walks from the current START_ELEMENT to its matching END_ELEMENT, calling the handler
-     * for every nested START_ELEMENT. Leaves the reader on the matching END_ELEMENT.
-     */
-    private static void scan(XMLStreamReader r, ChildHandler handler) throws XMLStreamException {
-        int depth = 0;
-        while (r.hasNext()) {
-            int event = r.next();
-            if (event == XMLStreamConstants.START_ELEMENT) {
-                depth++;
-                if (handler.handle(r, r.getLocalName(), depth)) {
-                    depth--; // handler consumed through the child's END_ELEMENT
-                }
-            } else if (event == XMLStreamConstants.END_ELEMENT) {
-                if (depth == 0) {
-                    return;
-                }
-                depth--;
-            }
-        }
-    }
-
-    private static String id(XMLStreamReader r) {
-        return r.getAttributeValue(null, "id");
-    }
-
-    private static String ref(XMLStreamReader r) {
-        return r.getAttributeValue(null, "ref");
-    }
-
-    /** The element's {@code order} attribute, or its position in the sequence when that is absent or not a number. */
-    private static int order(XMLStreamReader r, int position) {
-        String order = r.getAttributeValue(null, "order");
-        if (order != null) {
-            try {
-                return Integer.parseInt(order.trim());
-            } catch (NumberFormatException e) {
-                // fall through
-            }
-        }
-        return position;
     }
 }

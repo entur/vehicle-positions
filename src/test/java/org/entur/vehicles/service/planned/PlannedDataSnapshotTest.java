@@ -1,7 +1,6 @@
 package org.entur.vehicles.service.planned;
 
 import org.entur.vehicles.data.VehicleModeEnumeration;
-import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.PointsOnLink;
 import org.entur.vehicles.data.model.Presentation;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
@@ -55,12 +54,8 @@ public class PlannedDataSnapshotTest {
                     .isEqualTo(fromParse.operator(id).getName());
         }
 
-        for (String id : parsedBuilder.lines().keySet()) {
-            Line parsedLine = fromParse.line(id);
-            Line snapshotLine = fromSnapshot.line(id);
-            assertThat(snapshotLine.getLineName()).as("line %s name", id).isEqualTo(parsedLine.getLineName());
-            assertThat(snapshotLine.getPublicCode()).as("line %s publicCode", id).isEqualTo(parsedLine.getPublicCode());
-        }
+        // Records compare every field, so this covers colours and transport mode too.
+        assertThat(replayedBuilder.lines()).isEqualTo(parsedBuilder.lines());
 
         for (String id : parsedBuilder.serviceJourneyPattern().keySet()) {
             assertThat(fromSnapshot.journeyPatternOf(id)).as("journeyPatternOf %s", id).isEqualTo(fromParse.journeyPatternOf(id));
@@ -227,6 +222,47 @@ public class PlannedDataSnapshotTest {
         assertThat(actualTail).containsExactly(expectedTail);
     }
 
+    /** Pins the line record layout, so moving it between classes cannot change a byte. */
+    @Test
+    public void v5ExactBytesOfALineRecord(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addLine(new LineRecord("N:1", "Ab", "7", "FF0000", null, "bus"));
+
+        Path file = dir.resolve("planned-line.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] bytes = Files.readAllBytes(file);
+
+        int offset = 4 + 4 + (2 + 1) + 8; // magic, version, writeUTF("e"), createdAt
+
+        byte[] expectedTail = {
+                // duplicateIds = 0
+                0x00, 0x00, 0x00, 0x00,
+                // prefix table: count=1, "N:"
+                0x01,
+                0x03, 'N', ':',
+                // section 1: operators, count=0
+                0x00,
+                // section 2: lines, count=1
+                0x01,
+                // id: prefixIdx=0, kind=DIGITS(4), local 1
+                0x00, 0x04, 0x01,
+                // name "Ab", publicCode "7", colour "FF0000", textColour null, transportMode "bus"
+                0x03, 'A', 'b',
+                0x02, '7',
+                0x07, 'F', 'F', '0', '0', '0', '0',
+                0x00,
+                0x04, 'b', 'u', 's',
+                // sections 3-8 empty: operatingDays, destinationDisplays, serviceLinks,
+                // journeyPatterns, serviceJourneys, datedServiceJourneys
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                // trailer: 0xFF, total record count = 1
+                (byte) 0xFF, 0x01,
+        };
+
+        byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
+        assertThat(actualTail).containsExactly(expectedTail);
+    }
+
     // ---- v2 reader ----
 
     @Test
@@ -237,8 +273,8 @@ public class PlannedDataSnapshotTest {
 
         original.addLine("RUT:Line:1", "Line One", "1");
         original.addLine("RUT:Line:2", null, null); // null name + null public code
-        original.addLine("RUT:Line:3", "Line Three", "3", "76A300", "FFFFFF", "water"); // both colours, a transport mode
-        original.addLine("RUT:Line:4", "Line Four", "4", null, "000000", null); // text colour only, no transport mode
+        original.addLine(new LineRecord("RUT:Line:3", "Line Three", "3", "76A300", "FFFFFF", "water")); // both colours, a transport mode
+        original.addLine(new LineRecord("RUT:Line:4", "Line Four", "4", null, "000000", null)); // text colour only, no transport mode
 
         original.addServiceLink("RUT:ServiceLink:empty", new int[0]); // empty geometry
         original.addServiceLink("RUT:ServiceLink:odd", new int[]{10, 20, 5}); // odd-length geometry

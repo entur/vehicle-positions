@@ -11,12 +11,7 @@ public interface PlannedDataSink {
 
     PlannedDataSink addOperator(String id, String name);
 
-    /**
-     * @param colour     {@code Line/Presentation/Colour}, as published
-     * @param textColour {@code Line/Presentation/TextColour}, as published
-     * @param transportMode the line's NeTEx {@code TransportMode}, as published
-     */
-    PlannedDataSink addLine(String id, String name, String publicCode, String colour, String textColour, String transportMode);
+    PlannedDataSink addLine(LineRecord line);
 
     /** @param geometry interleaved lat/lon microdegrees, or null when the link has no gis:posList */
     PlannedDataSink addServiceLink(String id, int[] geometry);

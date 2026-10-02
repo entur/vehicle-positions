@@ -21,6 +21,7 @@ import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
 import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.NSRService;
+import org.entur.vehicles.service.planned.LineRecord;
 import org.entur.vehicles.service.planned.PlannedDataset;
 import org.entur.vehicles.service.planned.PlannedDataService;
 import org.junit.jupiter.api.BeforeEach;
@@ -1443,7 +1444,7 @@ class ApplicationGraphQlSchemaTests {
     @Test
     void lineColoursResolveOnTheCatalogueAndOnAVehiclesLine() {
         PlannedDataset dataset = new PlannedDataset.Builder()
-                .addLine(LINE_COLOUR_LINE, "Coloured", "C", "000000", "FFFFFF", null)
+                .addLine(new LineRecord(LINE_COLOUR_LINE, "Coloured", "C", "000000", "FFFFFF", null))
                 .addLine(LINE_COLOUR_PLAIN_LINE, "Plain", "P")
                 .build();
         when(plannedDataService.current()).thenReturn(dataset);
@@ -1487,8 +1488,8 @@ class ApplicationGraphQlSchemaTests {
     @Test
     void aVehicleWithoutAModeTakesItsModeFromNetex() {
         PlannedDataset dataset = new PlannedDataset.Builder()
-                .addLine(MODE_FERRY_LINE, "Ferry", "F", null, null, "water")
-                .addLine(MODE_RAIL_LINE, "Rail", "R", null, null, "rail")
+                .addLine(new LineRecord(MODE_FERRY_LINE, "Ferry", "F", null, null, "water"))
+                .addLine(new LineRecord(MODE_RAIL_LINE, "Rail", "R", null, null, "rail"))
                 .addServiceJourney(MODE_REPLACEMENT_SJ, "JP", MODE_RAIL_LINE, "bus")
                 .addOperatingDay("TST:OperatingDay:mode-probe", "2026-09-14")
                 .addDatedServiceJourney(MODE_REPLACEMENT_DSJ, MODE_REPLACEMENT_SJ, "TST:OperatingDay:mode-probe")
