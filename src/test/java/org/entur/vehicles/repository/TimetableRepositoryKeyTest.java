@@ -23,6 +23,9 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -115,22 +118,37 @@ public class TimetableRepositoryKeyTest {
         assertEquals("5678", stored.iterator().next().getVehicleId());
     }
 
+    private static EstimatedVehicleJourneyRecord framedJourney(String vehicleRef, String operatingDate, String expectedArrival) {
+        EstimatedVehicleJourneyRecord journey = journey(vehicleRef, expectedArrival);
+        FramedVehicleJourneyRefRecord ref = new FramedVehicleJourneyRefRecord();
+        ref.setDatedVehicleJourneyRef(SERVICE_JOURNEY);
+        ref.setDataFrameRef(operatingDate);
+        journey.setFramedVehicleJourneyRef(ref);
+        return journey;
+    }
+
     @Test
     public void aFramedJourneyIsKeyedWithoutItsVehicle() {
-        EstimatedVehicleJourneyRecord unassigned = journey(null, ZonedDateTime.now().plusMinutes(5).toString());
-        EstimatedVehicleJourneyRecord assigned = journey("1234", ZonedDateTime.now().plusMinutes(7).toString());
-        for (EstimatedVehicleJourneyRecord journey : List.of(unassigned, assigned)) {
-            FramedVehicleJourneyRefRecord ref = new FramedVehicleJourneyRefRecord();
-            ref.setDatedVehicleJourneyRef(SERVICE_JOURNEY);
-            ref.setDataFrameRef("2026-10-01");
-            journey.setFramedVehicleJourneyRef(ref);
-        }
-
-        repository.add(unassigned);
-        repository.add(assigned);
+        repository.add(framedJourney(null, "2026-10-01", ZonedDateTime.now().plusMinutes(5).toString()));
+        repository.add(framedJourney("1234", "2026-10-01", ZonedDateTime.now().plusMinutes(7).toString()));
 
         Collection<EstimatedTimetableUpdate> stored = repository.getTimetables(null);
         assertEquals(1, stored.size());
         assertEquals("1234", stored.iterator().next().getVehicleId());
+    }
+
+    @Test
+    public void aServiceJourneyIsKeptApartPerOperatingDate() {
+        String today = ZonedDateTime.now().plusMinutes(5).toString();
+        String tomorrow = ZonedDateTime.now().plusDays(1).toString();
+
+        repository.add(framedJourney(null, "2026-10-01", today));
+        repository.add(framedJourney(null, "2026-10-02", tomorrow));
+
+        Map<String, EstimatedTimetableUpdate> byDate = repository.getTimetables(null).stream()
+                .collect(Collectors.toMap(u -> u.getServiceJourney().getDate(), u -> u));
+        assertEquals(Set.of("2026-10-01", "2026-10-02"), byDate.keySet());
+        assertEquals(ZonedDateTime.parse(today).toString(), expectedArrival(byDate.get("2026-10-01")));
+        assertEquals(ZonedDateTime.parse(tomorrow).toString(), expectedArrival(byDate.get("2026-10-02")));
     }
 }

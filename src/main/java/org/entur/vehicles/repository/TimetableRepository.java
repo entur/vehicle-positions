@@ -120,7 +120,8 @@ public class TimetableRepository {
 
       // Keyed by journey alone: producers add or swap the VehicleRef as a journey progresses, and
       // an entry per vehicle would leave the earlier ones behind, stale, in subscription snapshots.
-      final StorageKey key = new StorageKey(codespace, null, null, serviceJourneyId, datedServiceJourneyId);
+      // A ServiceJourney runs on many dates, so a framed ref also needs its operating date.
+      final StorageKey key = new StorageKey(codespace, null, null, serviceJourneyId, datedServiceJourneyId, date);
 
       final EstimatedTimetableUpdate v = timetableMap.getOrDefault(key, new EstimatedTimetableUpdate());
       if (v.getCalls() != null) {
