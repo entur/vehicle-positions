@@ -72,9 +72,9 @@ final class CodecFixtures {
         first.forEach(ids::intern);
         second.forEach(ids::intern);
         interner.intern(ids, record);
-        SectionIndex.Writer firstIndex = new SectionIndex.Writer();
+        SectionIndex.Writer firstIndex = new SectionIndex.Writer(first.size());
         first.forEach(firstIndex::add);
-        SectionIndex.Writer secondIndex = new SectionIndex.Writer();
+        SectionIndex.Writer secondIndex = new SectionIndex.Writer(second.size());
         second.forEach(secondIndex::add);
 
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();

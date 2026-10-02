@@ -23,7 +23,12 @@ final class SectionIndex {
     /** The positions of the records written to one section, so later sections can refer to them. */
     static final class Writer {
 
-        private final Map<String, Integer> positions = new HashMap<>();
+        private final Map<String, Integer> positions;
+
+        /** @param sectionSize how many records the section will have, so the index never resizes */
+        Writer(int sectionSize) {
+            this.positions = new HashMap<>(sectionSize * 4 / 3 + 1);
+        }
 
         /** Registers the next record written to the section. */
         void add(String id) {

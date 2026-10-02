@@ -81,7 +81,7 @@ public final class PlannedDataSnapshot {
             }
 
             // 2. lines - no references
-            SectionIndex.Writer lineIndex = new SectionIndex.Writer();
+            SectionIndex.Writer lineIndex = new SectionIndex.Writer(lines.size());
             SnapshotIo.writeVarInt(out, lines.size());
             for (LineRecord line : lines.values()) {
                 lineIndex.add(line.id());
@@ -90,7 +90,7 @@ public final class PlannedDataSnapshot {
             }
 
             // 3. operatingDays - no references
-            SectionIndex.Writer operatingDayIndex = new SectionIndex.Writer();
+            SectionIndex.Writer operatingDayIndex = new SectionIndex.Writer(operatingDays.size());
             SnapshotIo.writeVarInt(out, operatingDays.size());
             for (OperatingDayRecord day : operatingDays.values()) {
                 operatingDayIndex.add(day.id());
@@ -99,7 +99,7 @@ public final class PlannedDataSnapshot {
             }
 
             // 4. destinationDisplays - no references
-            SectionIndex.Writer destinationDisplayIndex = new SectionIndex.Writer();
+            SectionIndex.Writer destinationDisplayIndex = new SectionIndex.Writer(destinationDisplays.size());
             SnapshotIo.writeVarInt(out, destinationDisplays.size());
             for (DestinationDisplayRecord display : destinationDisplays.values()) {
                 destinationDisplayIndex.add(display.id());
@@ -108,7 +108,7 @@ public final class PlannedDataSnapshot {
             }
 
             // 5. serviceLinks - no references, delta-encoded geometry
-            SectionIndex.Writer linkIndex = new SectionIndex.Writer();
+            SectionIndex.Writer linkIndex = new SectionIndex.Writer(serviceLinks.size());
             SnapshotIo.writeVarInt(out, serviceLinks.size());
             for (ServiceLinkRecord link : serviceLinks.values()) {
                 linkIndex.add(link.id());
@@ -117,7 +117,7 @@ public final class PlannedDataSnapshot {
             }
 
             // 6. journeyPatterns - refs into serviceLinks and destinationDisplays
-            SectionIndex.Writer patternIndex = new SectionIndex.Writer();
+            SectionIndex.Writer patternIndex = new SectionIndex.Writer(journeyPatterns.size());
             SnapshotIo.writeVarInt(out, journeyPatterns.size());
             for (JourneyPatternRecord pattern : journeyPatterns.values()) {
                 patternIndex.add(pattern.id());
@@ -126,7 +126,7 @@ public final class PlannedDataSnapshot {
             }
 
             // 7. serviceJourneys - refs into journeyPatterns and lines
-            SectionIndex.Writer journeyIndex = new SectionIndex.Writer();
+            SectionIndex.Writer journeyIndex = new SectionIndex.Writer(serviceJourneys.size());
             SnapshotIo.writeVarInt(out, serviceJourneys.size());
             for (ServiceJourneyRecord journey : serviceJourneys.values()) {
                 journeyIndex.add(journey.id());
