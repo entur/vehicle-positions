@@ -52,6 +52,11 @@ final class LineCodec {
         return id == null ? null : new LineRecord(id, f.name, f.publicCode, f.colour, f.textColour, f.transportMode);
     }
 
+    /** Registers every id the record will write, before the prefix table is written. */
+    static void intern(IdCodec.Writer ids, LineRecord line) {
+        ids.intern(line.id());
+    }
+
     static void write(DataOutputStream out, IdCodec.Writer ids, LineRecord line) throws IOException {
         ids.writeId(out, line.id());
         SnapshotIo.writeString(out, line.name());

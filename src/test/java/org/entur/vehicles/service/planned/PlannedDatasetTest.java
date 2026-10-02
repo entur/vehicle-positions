@@ -39,10 +39,10 @@ public class PlannedDatasetTest {
                 .addLine(new LineRecord("TST:Line:replacement", "Replacement", "RB", null, null, "bus"))
                 .addLine(new LineRecord("TST:Line:cable", "Cable car", "C", null, null, "cableway"))
                 .addLine(new LineRecord("TST:Line:trolley", "Trolley", "T", null, null, "trolleyBus"))
-                .addServiceJourney("TST:ServiceJourney:onFerry", "JP", "TST:Line:ferry", null)
-                .addServiceJourney("TST:ServiceJourney:ferryRepeatsLine", "JP", "TST:Line:ferry", "water")
-                .addServiceJourney("TST:ServiceJourney:replacementBus", "JP", "TST:Line:rail", "bus")
-                .addServiceJourney("TST:ServiceJourney:onReplacementLine", "JP", "TST:Line:replacement", null)
+                .addServiceJourney(new ServiceJourneyRecord("TST:ServiceJourney:onFerry", "JP", "TST:Line:ferry", null))
+                .addServiceJourney(new ServiceJourneyRecord("TST:ServiceJourney:ferryRepeatsLine", "JP", "TST:Line:ferry", "water"))
+                .addServiceJourney(new ServiceJourneyRecord("TST:ServiceJourney:replacementBus", "JP", "TST:Line:rail", "bus"))
+                .addServiceJourney(new ServiceJourneyRecord("TST:ServiceJourney:onReplacementLine", "JP", "TST:Line:replacement", null))
                 .build();
 
         assertThat(dataset.transportModeOf(null, "TST:Line:ferry")).isEqualTo(VehicleModeEnumeration.FERRY);

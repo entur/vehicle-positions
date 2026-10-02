@@ -409,14 +409,11 @@ public final class PlannedDataset {
 
         private final Map<String, Operator> operators = new HashMap<>();
         private final Map<String, LineRecord> lines = new HashMap<>();
-        private final Map<String, String> serviceJourneyPattern = new HashMap<>();
+        private final Map<String, ServiceJourneyRecord> serviceJourneys = new HashMap<>();
         private final Map<String, RawDatedServiceJourney> rawDatedServiceJourneys = new HashMap<>();
         private final Map<String, String[]> patternLinks = new HashMap<>();
         private final Map<String, int[]> linkGeometry = new HashMap<>();
         private final Map<String, String> operatingDays = new HashMap<>();
-        private final Map<String, String> serviceJourneyLine = new HashMap<>();
-        // Raw NeTEx values, so a snapshot replays exactly what was parsed; mapped in build().
-        private final Map<String, String> serviceJourneyTransportMode = new HashMap<>();
         private final Map<String, String> destinationDisplays = new HashMap<>();
         /** Only patterns with at least one ref; consecutive refs to the same display collapsed. */
         private final Map<String, StopDestinationDisplay[]> patternDestinationDisplays = new HashMap<>();
@@ -478,36 +475,19 @@ public final class PlannedDataset {
         }
 
         public Builder addServiceJourney(String id, String journeyPatternId) {
-            return addServiceJourney(id, journeyPatternId, null, null);
+            return addServiceJourney(id, journeyPatternId, null);
         }
 
-        /** @param lineId the journey's LineRef/FlexibleLineRef; null when the element has none */
+        /** A journey that sets no transport mode of its own. */
         public Builder addServiceJourney(String id, String journeyPatternId, String lineId) {
-            return addServiceJourney(id, journeyPatternId, lineId, null);
+            return addServiceJourney(new ServiceJourneyRecord(id, journeyPatternId, lineId, null));
         }
 
+        /** A later declaration of the same id replaces an earlier one, absent fields included. */
         @Override
-        public Builder addServiceJourney(String id, String journeyPatternId, String lineId, String transportMode) {
-            // Map.copyOf in build() rejects null values; "" is never a real pattern id, so it
-            // still counts as unresolved there.
-            countDuplicate(serviceJourneyPattern.put(id, journeyPatternId == null ? "" : journeyPatternId));
-            if (lineId != null) {
-                serviceJourneyLine.put(id, lineId);
-            } else {
-                serviceJourneyLine.remove(id);
-            }
-            putOrRemove(serviceJourneyTransportMode, id, transportMode);
+        public Builder addServiceJourney(ServiceJourneyRecord journey) {
+            countDuplicate(serviceJourneys.put(journey.id(), journey));
             return this;
-        }
-
-        /** A later declaration of the same id replaces an earlier one, absent value included. */
-        private static void putOrRemove(Map<String, String> map, String id, String value) {
-            if (value != null) {
-                // A handful of distinct values across the whole export; share one instance each.
-                map.put(id, value.intern());
-            } else {
-                map.remove(id);
-            }
         }
 
         @Override
@@ -563,16 +543,8 @@ public final class PlannedDataset {
             return Collections.unmodifiableMap(patternLinks);
         }
 
-        Map<String, String> serviceJourneyPattern() {
-            return Collections.unmodifiableMap(serviceJourneyPattern);
-        }
-
-        Map<String, String> serviceJourneyLine() {
-            return Collections.unmodifiableMap(serviceJourneyLine);
-        }
-
-        Map<String, String> serviceJourneyTransportMode() {
-            return Collections.unmodifiableMap(serviceJourneyTransportMode);
+        Map<String, ServiceJourneyRecord> serviceJourneys() {
+            return Collections.unmodifiableMap(serviceJourneys);
         }
 
         Map<String, String> destinationDisplays() {
@@ -593,6 +565,23 @@ public final class PlannedDataset {
         }
 
         public PlannedDataset build() {
+            int journeyCapacity = serviceJourneys.size() * 4 / 3 + 1;
+            Map<String, String> serviceJourneyPattern = new HashMap<>(journeyCapacity);
+            Map<String, String> serviceJourneyLine = new HashMap<>(journeyCapacity);
+            Map<String, String> serviceJourneyTransportMode = new HashMap<>();
+            for (ServiceJourneyRecord journey : serviceJourneys.values()) {
+                // Map.copyOf below rejects null values; "" is never a real pattern id, so it
+                // still counts as unresolved.
+                String patternId = journey.journeyPatternId();
+                serviceJourneyPattern.put(journey.id(), patternId == null ? "" : patternId);
+                if (journey.lineId() != null) {
+                    serviceJourneyLine.put(journey.id(), journey.lineId());
+                }
+                if (journey.transportMode() != null) {
+                    serviceJourneyTransportMode.put(journey.id(), journey.transportMode());
+                }
+            }
+
             // Canonicalise duplicate id Strings: every ref string comes fresh from the XML
             // reader, so the same logical id declared once (e.g. a JourneyPattern) but
             // referenced many times (e.g. from every ServiceJourney on it) is otherwise a

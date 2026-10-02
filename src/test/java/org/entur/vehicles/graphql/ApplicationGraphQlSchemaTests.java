@@ -23,6 +23,7 @@ import org.entur.vehicles.repository.VehicleRepository;
 import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.planned.LineRecord;
 import org.entur.vehicles.service.planned.PlannedDataset;
+import org.entur.vehicles.service.planned.ServiceJourneyRecord;
 import org.entur.vehicles.service.planned.PlannedDataService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1490,10 +1491,10 @@ class ApplicationGraphQlSchemaTests {
         PlannedDataset dataset = new PlannedDataset.Builder()
                 .addLine(new LineRecord(MODE_FERRY_LINE, "Ferry", "F", null, null, "water"))
                 .addLine(new LineRecord(MODE_RAIL_LINE, "Rail", "R", null, null, "rail"))
-                .addServiceJourney(MODE_REPLACEMENT_SJ, "JP", MODE_RAIL_LINE, "bus")
+                .addServiceJourney(new ServiceJourneyRecord(MODE_REPLACEMENT_SJ, "JP", MODE_RAIL_LINE, "bus"))
                 .addOperatingDay("TST:OperatingDay:mode-probe", "2026-09-14")
                 .addDatedServiceJourney(MODE_REPLACEMENT_DSJ, MODE_REPLACEMENT_SJ, "TST:OperatingDay:mode-probe")
-                .addServiceJourney(MODE_RAIL_SJ, "JP", MODE_RAIL_LINE, null)
+                .addServiceJourney(new ServiceJourneyRecord(MODE_RAIL_SJ, "JP", MODE_RAIL_LINE, null))
                 .addDatedServiceJourney(MODE_RAIL_DSJ, MODE_RAIL_SJ, "TST:OperatingDay:mode-probe")
                 .build();
         when(plannedDataService.current()).thenReturn(dataset);

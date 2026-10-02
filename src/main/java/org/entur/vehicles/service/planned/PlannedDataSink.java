@@ -25,8 +25,7 @@ public interface PlannedDataSink {
     /** @param frontText {@code DestinationDisplay/FrontText}, as published */
     PlannedDataSink addDestinationDisplay(String id, String frontText);
 
-    /** @param transportMode the journey's own NeTEx {@code TransportMode}; null when it inherits its line's */
-    PlannedDataSink addServiceJourney(String id, String journeyPatternId, String lineId, String transportMode);
+    PlannedDataSink addServiceJourney(ServiceJourneyRecord journey);
 
     PlannedDataSink addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId);
 

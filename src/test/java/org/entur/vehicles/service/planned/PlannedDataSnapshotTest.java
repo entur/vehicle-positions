@@ -57,16 +57,16 @@ public class PlannedDataSnapshotTest {
         // Records compare every field, so this covers colours and transport mode too.
         assertThat(replayedBuilder.lines()).isEqualTo(parsedBuilder.lines());
 
-        for (String id : parsedBuilder.serviceJourneyPattern().keySet()) {
-            assertThat(fromSnapshot.journeyPatternOf(id)).as("journeyPatternOf %s", id).isEqualTo(fromParse.journeyPatternOf(id));
-            assertThat(fromSnapshot.lineOf(id)).as("lineOf %s", id).isEqualTo(fromParse.lineOf(id));
+        assertThat(replayedBuilder.serviceJourneys()).isEqualTo(parsedBuilder.serviceJourneys());
+
+        for (String id : parsedBuilder.serviceJourneys().keySet()) {
             for (Integer order : new Integer[]{null, 1, 2, 3, 5, 8, 13, 21, 34}) {
                 assertThat(fromSnapshot.destinationDisplayOf(id, order))
                         .as("destinationDisplayOf %s at %s", id, order)
                         .isEqualTo(fromParse.destinationDisplayOf(id, order));
             }
         }
-        assertThat(fromParse.destinationDisplayOf(parsedBuilder.serviceJourneyPattern().keySet().iterator().next(), null))
+        assertThat(fromParse.destinationDisplayOf(parsedBuilder.serviceJourneys().keySet().iterator().next(), null))
                 .as("the GOA export sets a destination display on its journey patterns")
                 .isNotNull();
 
@@ -263,6 +263,61 @@ public class PlannedDataSnapshotTest {
         assertThat(actualTail).containsExactly(expectedTail);
     }
 
+    /**
+     * Pins the service journey record layout and every kind of reference it carries: a null
+     * ref, a ref by position, a dangling ref written as a literal, and a dated service journey
+     * referring back to a journey by position.
+     */
+    @Test
+    public void v5ExactBytesOfServiceJourneyRecords(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addLine("L:1", "A", null);
+        builder.addJourneyPattern("P:1", List.of());
+        builder.addServiceJourney(new ServiceJourneyRecord("S:1", "P:1", "L:1", "bus"));
+        builder.addServiceJourney("S:2", null, "X:9");
+        builder.addDatedServiceJourney("D:1", "S:2", "O:1");
+
+        Path file = dir.resolve("planned-journeys.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] bytes = Files.readAllBytes(file);
+
+        int offset = 4 + 4 + (2 + 1) + 8; // magic, version, writeUTF("e"), createdAt
+
+        byte[] expectedTail = {
+                // duplicateIds = 0
+                0x00, 0x00, 0x00, 0x00,
+                // prefix table, in first-interned order: "L:", "P:", "S:", "X:", "D:", "O:"
+                0x06,
+                0x03, 'L', ':', 0x03, 'P', ':', 0x03, 'S', ':',
+                0x03, 'X', ':', 0x03, 'D', ':', 0x03, 'O', ':',
+                // section 1: operators, count=0
+                0x00,
+                // section 2: lines, count=1: L:1, name "A", then four nulls
+                0x01,
+                0x00, 0x04, 0x01, 0x02, 'A', 0x00, 0x00, 0x00, 0x00,
+                // sections 3-5 empty: operatingDays, destinationDisplays, serviceLinks
+                0x00, 0x00, 0x00,
+                // section 6: journeyPatterns, count=1: P:1, no links, no displays
+                0x01,
+                0x01, 0x04, 0x01, 0x00, 0x00,
+                // section 7: serviceJourneys, count=2, in hash order (S:2 first)
+                0x02,
+                // S:2: pattern null; line dangling (lines size 1, so 2) then literal X:9; mode null
+                0x02, 0x04, 0x02, 0x00, 0x02, 0x03, 0x04, 0x09, 0x00,
+                // S:1: pattern at position 0; line at position 0; mode "bus"
+                0x02, 0x04, 0x01, 0x01, 0x01, 0x04, 'b', 'u', 's',
+                // section 8: datedServiceJourneys, count=1
+                0x01,
+                // D:1: journey S:2 at position 0; operating day dangling (size 0, so 1) then literal O:1
+                0x04, 0x04, 0x01, 0x01, 0x01, 0x05, 0x04, 0x01,
+                // trailer: 0xFF, total record count = 5
+                (byte) 0xFF, 0x05,
+        };
+
+        byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
+        assertThat(actualTail).containsExactly(expectedTail);
+    }
+
     // ---- v2 reader ----
 
     @Test
@@ -292,7 +347,7 @@ public class PlannedDataSnapshotTest {
         original.addServiceJourney("RUT:ServiceJourney:1", "RUT:JourneyPattern:missing", "RUT:Line:dangling"); // dangling pattern + dangling line
         original.addServiceJourney("RUT:ServiceJourney:2", null, "RUT:Line:1"); // null pattern -> "" placeholder
         original.addServiceJourney("RUT:ServiceJourney:3", "RUT:JourneyPattern:1", null); // resolvable pattern, null line
-        original.addServiceJourney("RUT:ServiceJourney:4", null, "RUT:Line:3", "coach"); // own transport mode
+        original.addServiceJourney(new ServiceJourneyRecord("RUT:ServiceJourney:4", null, "RUT:Line:3", "coach")); // own transport mode
 
         original.addOperatingDay("RUT:OperatingDay:1", "2026-09-02");
         original.addOperatingDay("RUT:OperatingDay:2", null); // null calendar date
