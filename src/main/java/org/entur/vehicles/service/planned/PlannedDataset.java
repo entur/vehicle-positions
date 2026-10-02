@@ -405,18 +405,15 @@ public final class PlannedDataset {
      */
     public static final class Builder implements PlannedDataSink {
 
-        record RawDatedServiceJourney(String serviceJourneyId, String operatingDayId) {}
-
         private final Map<String, OperatorRecord> operators = new HashMap<>();
         private final Map<String, LineRecord> lines = new HashMap<>();
         private final Map<String, ServiceJourneyRecord> serviceJourneys = new HashMap<>();
-        private final Map<String, RawDatedServiceJourney> rawDatedServiceJourneys = new HashMap<>();
-        private final Map<String, String[]> patternLinks = new HashMap<>();
-        private final Map<String, int[]> linkGeometry = new HashMap<>();
+        /** Their refs unresolved until build(). */
+        private final Map<String, DatedServiceJourneyRecord> rawDatedServiceJourneys = new HashMap<>();
+        private final Map<String, JourneyPatternRecord> journeyPatterns = new HashMap<>();
+        private final Map<String, ServiceLinkRecord> serviceLinks = new HashMap<>();
         private final Map<String, OperatingDayRecord> operatingDays = new HashMap<>();
         private final Map<String, DestinationDisplayRecord> destinationDisplays = new HashMap<>();
-        /** Only patterns with at least one ref; consecutive refs to the same display collapsed. */
-        private final Map<String, StopDestinationDisplay[]> patternDestinationDisplays = new HashMap<>();
         private int duplicateIds = 0;
 
         public Builder addOperator(String id, String name) {
@@ -441,9 +438,13 @@ public final class PlannedDataset {
         }
 
         /** @param geometry interleaved lat/lon microdegrees; null when the link has no gis:posList */
-        @Override
         public Builder addServiceLink(String id, int[] geometry) {
-            countDuplicate(linkGeometry.put(id, geometry == null ? new int[0] : geometry));
+            return addServiceLink(new ServiceLinkRecord(id, geometry));
+        }
+
+        @Override
+        public Builder addServiceLink(ServiceLinkRecord link) {
+            countDuplicate(serviceLinks.put(link.id(), link));
             return this;
         }
 
@@ -452,21 +453,14 @@ public final class PlannedDataset {
             return addJourneyPattern(id, serviceLinkIds, List.of());
         }
 
-        @Override
         public Builder addJourneyPattern(String id, List<String> serviceLinkIds, List<StopDestinationDisplay> destinationDisplays) {
-            countDuplicate(patternLinks.put(id, serviceLinkIds.toArray(new String[0])));
-            List<StopDestinationDisplay> changes = new ArrayList<>(destinationDisplays.size());
-            for (StopDestinationDisplay display : destinationDisplays) {
-                // Most producers repeat the ref on every stop; only a change is worth keeping.
-                if (changes.isEmpty() || !changes.get(changes.size() - 1).destinationDisplayId().equals(display.destinationDisplayId())) {
-                    changes.add(display);
-                }
-            }
-            if (changes.isEmpty()) {
-                patternDestinationDisplays.remove(id);
-            } else {
-                patternDestinationDisplays.put(id, changes.toArray(new StopDestinationDisplay[0]));
-            }
+            return addJourneyPattern(new JourneyPatternRecord(id, serviceLinkIds.toArray(new String[0]),
+                    destinationDisplays.toArray(new StopDestinationDisplay[0])));
+        }
+
+        @Override
+        public Builder addJourneyPattern(JourneyPatternRecord pattern) {
+            countDuplicate(journeyPatterns.put(pattern.id(), pattern));
             return this;
         }
 
@@ -496,9 +490,13 @@ public final class PlannedDataset {
             return this;
         }
 
-        @Override
         public Builder addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId) {
-            countDuplicate(rawDatedServiceJourneys.put(id, new RawDatedServiceJourney(serviceJourneyId, operatingDayId)));
+            return addDatedServiceJourney(new DatedServiceJourneyRecord(id, serviceJourneyId, operatingDayId));
+        }
+
+        @Override
+        public Builder addDatedServiceJourney(DatedServiceJourneyRecord dated) {
+            countDuplicate(rawDatedServiceJourneys.put(dated.id(), dated));
             return this;
         }
 
@@ -545,12 +543,12 @@ public final class PlannedDataset {
             return Collections.unmodifiableMap(operatingDays);
         }
 
-        Map<String, int[]> linkGeometry() {
-            return Collections.unmodifiableMap(linkGeometry);
+        Map<String, ServiceLinkRecord> serviceLinks() {
+            return Collections.unmodifiableMap(serviceLinks);
         }
 
-        Map<String, String[]> patternLinks() {
-            return Collections.unmodifiableMap(patternLinks);
+        Map<String, JourneyPatternRecord> journeyPatterns() {
+            return Collections.unmodifiableMap(journeyPatterns);
         }
 
         Map<String, ServiceJourneyRecord> serviceJourneys() {
@@ -561,11 +559,7 @@ public final class PlannedDataset {
             return Collections.unmodifiableMap(destinationDisplays);
         }
 
-        Map<String, StopDestinationDisplay[]> patternDestinationDisplays() {
-            return Collections.unmodifiableMap(patternDestinationDisplays);
-        }
-
-        Map<String, RawDatedServiceJourney> rawDatedServiceJourneys() {
+        Map<String, DatedServiceJourneyRecord> rawDatedServiceJourneys() {
             return Collections.unmodifiableMap(rawDatedServiceJourneys);
         }
 
@@ -575,6 +569,19 @@ public final class PlannedDataset {
         }
 
         public PlannedDataset build() {
+            Map<String, int[]> linkGeometry = new HashMap<>(serviceLinks.size() * 4 / 3 + 1);
+            for (ServiceLinkRecord link : serviceLinks.values()) {
+                linkGeometry.put(link.id(), link.geometry());
+            }
+            Map<String, String[]> patternLinks = new HashMap<>(journeyPatterns.size() * 4 / 3 + 1);
+            // Only patterns with at least one display ref.
+            Map<String, StopDestinationDisplay[]> patternDestinationDisplays = new HashMap<>();
+            for (JourneyPatternRecord pattern : journeyPatterns.values()) {
+                patternLinks.put(pattern.id(), pattern.serviceLinkIds());
+                if (pattern.destinationDisplays().length > 0) {
+                    patternDestinationDisplays.put(pattern.id(), pattern.destinationDisplays());
+                }
+            }
             int journeyCapacity = serviceJourneys.size() * 4 / 3 + 1;
             Map<String, String> serviceJourneyPattern = new HashMap<>(journeyCapacity);
             Map<String, String> serviceJourneyLine = new HashMap<>(journeyCapacity);
@@ -635,6 +642,17 @@ public final class PlannedDataset {
                 e.setValue(lineId);
                 journeysByLine.computeIfAbsent(lineId, k -> new ArrayList<>()).add(e.getKey());
             }
+
+            // Hand the shared instances back to the records: a load keeps the builder until it
+            // returns, and records holding the parser's own copy of every ref would keep those
+            // alive next to the dataset's shared ones.
+            journeyPatterns.replaceAll((id, pattern) ->
+                    new JourneyPatternRecord(id, patternLinks.get(id), pattern.destinationDisplays()));
+            serviceJourneys.replaceAll((id, journey) -> {
+                String patternId = serviceJourneyPattern.get(id);
+                return new ServiceJourneyRecord(id, patternId.isEmpty() ? null : patternId,
+                        serviceJourneyLine.get(id), journey.transportMode());
+            });
             Map<String, String[]> lineServiceJourneys = new HashMap<>(journeysByLine.size());
             for (Map.Entry<String, List<String>> e : journeysByLine.entrySet()) {
                 String[] ids = e.getValue().toArray(new String[0]);
@@ -724,8 +742,8 @@ public final class PlannedDataset {
             }
 
             Map<String, DatedJourneyRef> datedServiceJourneys = new HashMap<>(rawDatedServiceJourneys.size());
-            for (Map.Entry<String, RawDatedServiceJourney> e : rawDatedServiceJourneys.entrySet()) {
-                RawDatedServiceJourney raw = e.getValue();
+            for (Map.Entry<String, DatedServiceJourneyRecord> e : rawDatedServiceJourneys.entrySet()) {
+                DatedServiceJourneyRecord raw = e.getValue();
                 String serviceJourneyId = canonSj.getOrDefault(raw.serviceJourneyId(), raw.serviceJourneyId());
                 if (serviceJourneyId == null || !serviceJourneyPattern.containsKey(serviceJourneyId)) {
                     unresolvedServiceJourneyRefs++;

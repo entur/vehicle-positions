@@ -1,11 +1,9 @@
 package org.entur.vehicles.service.planned;
 
-import java.util.List;
-
 /**
  * Where {@link NetexPlannedDataExtractor} puts what it finds during a full parse, and what a
- * snapshot replay feeds into on a hit. Ids are never null (the extractor skips elements
- * without one); every other argument may be.
+ * snapshot replay feeds into on a hit. A record's id is never null (the codecs skip elements
+ * without one); its other fields may be, unless the record says otherwise.
  */
 public interface PlannedDataSink {
 
@@ -13,20 +11,15 @@ public interface PlannedDataSink {
 
     PlannedDataSink addLine(LineRecord line);
 
-    /** @param geometry interleaved lat/lon microdegrees, or null when the link has no gis:posList */
-    PlannedDataSink addServiceLink(String id, int[] geometry);
+    PlannedDataSink addServiceLink(ServiceLinkRecord link);
 
-    /**
-     * @param destinationDisplays the DestinationDisplayRef of each StopPointInJourneyPattern that
-     *                            has one, in sequence order; a stop without one keeps the previous
-     */
-    PlannedDataSink addJourneyPattern(String id, List<String> serviceLinkIds, List<StopDestinationDisplay> destinationDisplays);
+    PlannedDataSink addJourneyPattern(JourneyPatternRecord pattern);
 
     PlannedDataSink addDestinationDisplay(DestinationDisplayRecord display);
 
     PlannedDataSink addServiceJourney(ServiceJourneyRecord journey);
 
-    PlannedDataSink addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId);
+    PlannedDataSink addDatedServiceJourney(DatedServiceJourneyRecord dated);
 
     PlannedDataSink addOperatingDay(OperatingDayRecord day);
 

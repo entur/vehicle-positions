@@ -135,6 +135,29 @@ public class PlannedDatasetTest {
                 .isSameAs(declaredId);
     }
 
+    /**
+     * A load keeps the builder until it returns; records still holding the parser's own copy
+     * of every ref would keep those alive next to the dataset's shared ones.
+     */
+    @Test
+    public void afterBuildTheBuildersRecordsShareTheDeclaredIdInstances() {
+        String linkId = new String("X:ServiceLink:1");
+        String patternId = new String("X:JourneyPattern:1");
+        String lineId = new String("X:Line:1");
+        PlannedDataset.Builder builder = new PlannedDataset.Builder()
+                .addServiceLink(linkId, new int[]{1, 2})
+                .addJourneyPattern(patternId, List.of(new String("X:ServiceLink:1")))
+                .addLine(lineId, "One", "1")
+                .addServiceJourney("X:ServiceJourney:1", new String("X:JourneyPattern:1"), new String("X:Line:1"));
+
+        builder.build();
+
+        assertThat(builder.journeyPatterns().get("X:JourneyPattern:1").serviceLinkIds()[0]).isSameAs(linkId);
+        ServiceJourneyRecord journey = builder.serviceJourneys().get("X:ServiceJourney:1");
+        assertThat(journey.journeyPatternId()).isSameAs(patternId);
+        assertThat(journey.lineId()).isSameAs(lineId);
+    }
+
     @Test
     public void duplicateIdsLastOneWinsAndAreCounted() {
         PlannedDataset dataset = new PlannedDataset.Builder()

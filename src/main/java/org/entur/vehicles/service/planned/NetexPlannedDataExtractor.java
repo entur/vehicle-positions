@@ -5,22 +5,16 @@ import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.entur.vehicles.service.planned.Stax.id;
-import static org.entur.vehicles.service.planned.Stax.order;
-import static org.entur.vehicles.service.planned.Stax.ref;
-import static org.entur.vehicles.service.planned.Stax.scan;
 
 /**
  * One StAX pass over a NeTEx XML stream, feeding the eight element types the service needs
  * into a {@link PlannedDataSink}. Everything else is skipped at the token level, so memory
  * is bounded by what is kept, not by the size of the file.
  * <p>
- * Each handled element is read by a method that consumes exactly that element (from its
- * START_ELEMENT to its END_ELEMENT) and only looks at the children it needs, tracking depth
- * so a nested {@code <Name>} several levels down never masquerades as the element's own.
+ * Each handled element is read by its codec (e.g. {@link LineCodec}), which consumes exactly
+ * that element (from its START_ELEMENT to its END_ELEMENT) and only looks at the children it
+ * needs, tracking depth so a nested {@code <Name>} several levels down never masquerades as
+ * the element's own.
  */
 public final class NetexPlannedDataExtractor {
 
@@ -72,50 +66,16 @@ public final class NetexPlannedDataExtractor {
     }
 
     private void readServiceLink(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        int[][] geometry = new int[1][];
-        scan(r, (reader, localName, depth) -> {
-            if (localName.equals("posList")) {
-                geometry[0] = PosListParser.parse(reader.getElementText());
-                return true;
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addServiceLink(id, geometry[0]);
+        ServiceLinkRecord link = ServiceLinkCodec.read(r);
+        if (link != null) {
+            sink.addServiceLink(link);
         }
     }
 
     private void readJourneyPattern(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        List<String> links = new ArrayList<>();
-        List<PlannedDataSink.StopDestinationDisplay> destinationDisplays = new ArrayList<>();
-        String[] point = new String[1]; // the pointsInSequence entry the scan is currently inside
-        int[] stop = new int[2]; // order of the current StopPointInJourneyPattern, stops seen so far
-        scan(r, (reader, localName, depth) -> {
-            if (depth == 2) {
-                point[0] = localName;
-                if (localName.equals("StopPointInJourneyPattern")) {
-                    stop[1]++;
-                    stop[0] = order(reader, stop[1]);
-                }
-            }
-            if (localName.equals("ServiceLinkRef")) {
-                String ref = ref(reader);
-                if (ref != null) {
-                    links.add(ref);
-                }
-            } else if (depth == 3 && localName.equals("DestinationDisplayRef")
-                    && "StopPointInJourneyPattern".equals(point[0])) {
-                String ref = ref(reader);
-                if (ref != null) {
-                    destinationDisplays.add(new PlannedDataSink.StopDestinationDisplay(stop[0], ref));
-                }
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addJourneyPattern(id, links, destinationDisplays);
+        JourneyPatternRecord pattern = JourneyPatternCodec.read(r);
+        if (pattern != null) {
+            sink.addJourneyPattern(pattern);
         }
     }
 
@@ -134,21 +94,9 @@ public final class NetexPlannedDataExtractor {
     }
 
     private void readDatedServiceJourney(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] refs = new String[2]; // serviceJourneyId, operatingDayId
-        scan(r, (reader, localName, depth) -> {
-            if (depth != 1) {
-                return false;
-            }
-            switch (localName) {
-                case "ServiceJourneyRef" -> refs[0] = ref(reader);
-                case "OperatingDayRef" -> refs[1] = ref(reader);
-                default -> { /* DatedServiceJourneyRef and others are ignored */ }
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addDatedServiceJourney(id, refs[0], refs[1]);
+        DatedServiceJourneyRecord dated = DatedServiceJourneyCodec.read(r);
+        if (dated != null) {
+            sink.addDatedServiceJourney(dated);
         }
     }
 

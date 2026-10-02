@@ -53,8 +53,10 @@ public class PlannedDataSnapshotTest {
         assertThat(replayedBuilder.lines()).isEqualTo(parsedBuilder.lines());
         assertThat(replayedBuilder.operatingDays()).isEqualTo(parsedBuilder.operatingDays());
         assertThat(replayedBuilder.destinationDisplays()).isEqualTo(parsedBuilder.destinationDisplays());
-
+        assertThat(replayedBuilder.serviceLinks()).isEqualTo(parsedBuilder.serviceLinks());
+        assertThat(replayedBuilder.journeyPatterns()).isEqualTo(parsedBuilder.journeyPatterns());
         assertThat(replayedBuilder.serviceJourneys()).isEqualTo(parsedBuilder.serviceJourneys());
+        assertThat(replayedBuilder.rawDatedServiceJourneys()).isEqualTo(parsedBuilder.rawDatedServiceJourneys());
 
         for (String id : parsedBuilder.serviceJourneys().keySet()) {
             for (Integer order : new Integer[]{null, 1, 2, 3, 5, 8, 13, 21, 34}) {
@@ -74,7 +76,7 @@ public class PlannedDataSnapshotTest {
         // pointsOnLink is where an off-by-one in the delta-encoded geometry, or geometry
         // attached to the wrong link, would hide - so every journey pattern the parse
         // produced is checked, not a sample.
-        for (String id : parsedBuilder.patternLinks().keySet()) {
+        for (String id : parsedBuilder.journeyPatterns().keySet()) {
             PointsOnLink parsedPoints = fromParse.pointsOnLink(id);
             PointsOnLink snapshotPoints = fromSnapshot.pointsOnLink(id);
             if (parsedPoints == null) {
@@ -361,6 +363,56 @@ public class PlannedDataSnapshotTest {
                 0x03, 0x04, 0x01, 0x00, 0x01,
                 // trailer: 0xFF, total record count = 5
                 (byte) 0xFF, 0x05,
+        };
+
+        byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
+        assertThat(actualTail).containsExactly(expectedTail);
+    }
+
+    /**
+     * Pins the service link and journey pattern record layouts: a link without geometry, link
+     * refs by position and dangling, and a stop display repeated on the next stop collapsed.
+     */
+    @Test
+    public void v5ExactBytesOfServiceLinkAndJourneyPatternRecords(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addServiceLink("L:1", new int[]{1, 2});
+        builder.addServiceLink("L:2", null);
+        builder.addJourneyPattern("P:1", List.of("L:1", "L:9"), List.of(
+                new PlannedDataSink.StopDestinationDisplay(1, "V:1"),
+                new PlannedDataSink.StopDestinationDisplay(2, "V:1")));
+
+        Path file = dir.resolve("planned-links-patterns.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] bytes = Files.readAllBytes(file);
+
+        int offset = 4 + 4 + (2 + 1) + 8; // magic, version, writeUTF("e"), createdAt
+
+        byte[] expectedTail = {
+                // duplicateIds = 0
+                0x00, 0x00, 0x00, 0x00,
+                // prefix table, in first-interned order: "L:", "P:", "V:"
+                0x03,
+                0x03, 'L', ':', 0x03, 'P', ':', 0x03, 'V', ':',
+                // sections 1-4 empty: operators, lines, operatingDays, destinationDisplays
+                0x00, 0x00, 0x00, 0x00,
+                // section 5: serviceLinks, count=2
+                0x02,
+                // L:1: two values, zigzag(1-0)=2, zigzag(2-0)=4
+                0x00, 0x04, 0x01, 0x02, 0x02, 0x04,
+                // L:2: no geometry, written as zero values
+                0x00, 0x04, 0x02, 0x00,
+                // section 6: journeyPatterns, count=1: P:1
+                0x01,
+                0x01, 0x04, 0x01,
+                // two links: L:1 at position 0, L:9 dangling (links size 2, so 3) then literal L:9
+                0x02, 0x01, 0x03, 0x00, 0x04, 0x09,
+                // one display, the repeat collapsed: order zigzag(1), V:1 dangling (size 0, so 1) then literal V:1
+                0x01, 0x02, 0x01, 0x02, 0x04, 0x01,
+                // sections 7-8 empty: serviceJourneys, datedServiceJourneys
+                0x00, 0x00,
+                // trailer: 0xFF, total record count = 3
+                (byte) 0xFF, 0x03,
         };
 
         byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
