@@ -620,11 +620,19 @@ public final class PlannedDataset {
 
             serviceJourneyPattern.replaceAll((sj, patternId) -> canonPattern.getOrDefault(patternId, patternId));
             patternLinks.replaceAll((patternId, links) -> {
-                String[] canonicalised = new String[links.length];
+                // Copied only on the first ref that is not already the shared instance: a
+                // snapshot replay's refs all are, and the array is shared with the record.
+                String[] canonicalised = null;
                 for (int i = 0; i < links.length; i++) {
-                    canonicalised[i] = canonLink.getOrDefault(links[i], links[i]);
+                    String canonical = canonLink.getOrDefault(links[i], links[i]);
+                    if (canonical != links[i]) {
+                        if (canonicalised == null) {
+                            canonicalised = links.clone();
+                        }
+                        canonicalised[i] = canonical;
+                    }
                 }
-                return canonicalised;
+                return canonicalised == null ? links : canonicalised;
             });
 
             Map<String, String> canonLine = new HashMap<>(lines.size());
@@ -645,13 +653,21 @@ public final class PlannedDataset {
 
             // Hand the shared instances back to the records: a load keeps the builder until it
             // returns, and records holding the parser's own copy of every ref would keep those
-            // alive next to the dataset's shared ones.
-            journeyPatterns.replaceAll((id, pattern) ->
-                    new JourneyPatternRecord(id, patternLinks.get(id), pattern.destinationDisplays()));
+            // alive next to the dataset's shared ones. A record whose refs already are the
+            // shared instances, as after a snapshot replay, is kept rather than copied.
+            journeyPatterns.replaceAll((id, pattern) -> {
+                String[] links = patternLinks.get(id);
+                return links == pattern.serviceLinkIds() ? pattern
+                        : new JourneyPatternRecord(id, links, pattern.destinationDisplays());
+            });
             serviceJourneys.replaceAll((id, journey) -> {
                 String patternId = serviceJourneyPattern.get(id);
-                return new ServiceJourneyRecord(id, patternId.isEmpty() ? null : patternId,
-                        serviceJourneyLine.get(id), journey.transportMode());
+                if (patternId.isEmpty()) {
+                    patternId = null;
+                }
+                String lineId = serviceJourneyLine.get(id);
+                return patternId == journey.journeyPatternId() && lineId == journey.lineId() ? journey
+                        : new ServiceJourneyRecord(id, patternId, lineId, journey.transportMode());
             });
             Map<String, String[]> lineServiceJourneys = new HashMap<>(journeysByLine.size());
             for (Map.Entry<String, List<String>> e : journeysByLine.entrySet()) {

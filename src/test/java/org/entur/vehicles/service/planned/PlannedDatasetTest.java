@@ -158,6 +158,32 @@ public class PlannedDatasetTest {
         assertThat(journey.lineId()).isSameAs(lineId);
     }
 
+    /**
+     * A snapshot replay hands the builder records whose refs already are the declared
+     * instances; build() must not copy hundreds of thousands of them for nothing.
+     */
+    @Test
+    public void buildKeepsRecordsWhoseRefsAreAlreadyShared() {
+        String linkId = "X:ServiceLink:1";
+        String patternId = "X:JourneyPattern:1";
+        String lineId = "X:Line:1";
+        PlannedDataset.Builder builder = new PlannedDataset.Builder()
+                .addServiceLink(linkId, new int[]{1, 2})
+                .addJourneyPattern(patternId, List.of(linkId))
+                .addLine(lineId, "One", "1")
+                .addServiceJourney("X:ServiceJourney:1", patternId, lineId)
+                .addServiceJourney("X:ServiceJourney:2", null, null);
+        JourneyPatternRecord pattern = builder.journeyPatterns().get(patternId);
+        ServiceJourneyRecord journey = builder.serviceJourneys().get("X:ServiceJourney:1");
+        ServiceJourneyRecord journeyWithoutRefs = builder.serviceJourneys().get("X:ServiceJourney:2");
+
+        builder.build();
+
+        assertThat(builder.journeyPatterns().get(patternId)).isSameAs(pattern);
+        assertThat(builder.serviceJourneys().get("X:ServiceJourney:1")).isSameAs(journey);
+        assertThat(builder.serviceJourneys().get("X:ServiceJourney:2")).isSameAs(journeyWithoutRefs);
+    }
+
     @Test
     public void duplicateIdsLastOneWinsAndAreCounted() {
         PlannedDataset dataset = new PlannedDataset.Builder()
