@@ -48,14 +48,11 @@ public class PlannedDataSnapshotTest {
 
         assertThat(fromSnapshot.stats()).isEqualTo(fromParse.stats());
 
-        for (String id : parsedBuilder.operators().keySet()) {
-            assertThat(fromSnapshot.operator(id).getName())
-                    .as("operator %s name", id)
-                    .isEqualTo(fromParse.operator(id).getName());
-        }
-
-        // Records compare every field, so this covers colours and transport mode too.
+        // Records compare every field, so this covers e.g. line colours and transport modes too.
+        assertThat(replayedBuilder.operators()).isEqualTo(parsedBuilder.operators());
         assertThat(replayedBuilder.lines()).isEqualTo(parsedBuilder.lines());
+        assertThat(replayedBuilder.operatingDays()).isEqualTo(parsedBuilder.operatingDays());
+        assertThat(replayedBuilder.destinationDisplays()).isEqualTo(parsedBuilder.destinationDisplays());
 
         assertThat(replayedBuilder.serviceJourneys()).isEqualTo(parsedBuilder.serviceJourneys());
 
@@ -310,6 +307,58 @@ public class PlannedDataSnapshotTest {
                 0x01,
                 // D:1: journey S:2 at position 0; operating day dangling (size 0, so 1) then literal O:1
                 0x04, 0x04, 0x01, 0x01, 0x01, 0x05, 0x04, 0x01,
+                // trailer: 0xFF, total record count = 5
+                (byte) 0xFF, 0x05,
+        };
+
+        byte[] actualTail = java.util.Arrays.copyOfRange(bytes, offset, bytes.length);
+        assertThat(actualTail).containsExactly(expectedTail);
+    }
+
+    /**
+     * Pins the operating day and destination display record layouts, and a reference by
+     * position into each: from a journey pattern's stop and from a dated service journey.
+     */
+    @Test
+    public void v5ExactBytesOfOperatingDayAndDestinationDisplayRecords(@TempDir Path dir) throws Exception {
+        PlannedDataset.Builder builder = new PlannedDataset.Builder();
+        builder.addOperatingDay("O:1", "2026-10-02");
+        builder.addDestinationDisplay("V:1", "Sentrum");
+        builder.addDestinationDisplay("V:2", null);
+        builder.addJourneyPattern("P:1", List.of(), List.of(new PlannedDataSink.StopDestinationDisplay(1, "V:1")));
+        builder.addDatedServiceJourney("D:1", null, "O:1");
+
+        Path file = dir.resolve("planned-days-displays.bin");
+        PlannedDataSnapshot.write(builder, file, "e");
+        byte[] bytes = Files.readAllBytes(file);
+
+        int offset = 4 + 4 + (2 + 1) + 8; // magic, version, writeUTF("e"), createdAt
+
+        byte[] expectedTail = {
+                // duplicateIds = 0
+                0x00, 0x00, 0x00, 0x00,
+                // prefix table, in first-interned order: "O:", "V:", "P:", "D:"
+                0x04,
+                0x03, 'O', ':', 0x03, 'V', ':', 0x03, 'P', ':', 0x03, 'D', ':',
+                // sections 1-2 empty: operators, lines
+                0x00, 0x00,
+                // section 3: operatingDays, count=1: O:1, "2026-10-02"
+                0x01,
+                0x00, 0x04, 0x01, 0x0B, '2', '0', '2', '6', '-', '1', '0', '-', '0', '2',
+                // section 4: destinationDisplays, count=2: V:1 "Sentrum", V:2 with no front text
+                0x02,
+                0x01, 0x04, 0x01, 0x08, 'S', 'e', 'n', 't', 'r', 'u', 'm',
+                0x01, 0x04, 0x02, 0x00,
+                // section 5: serviceLinks, count=0
+                0x00,
+                // section 6: journeyPatterns, count=1: P:1, no links, one display: order zigzag(1), V:1 at position 0
+                0x01,
+                0x02, 0x04, 0x01, 0x00, 0x01, 0x02, 0x01,
+                // section 7: serviceJourneys, count=0
+                0x00,
+                // section 8: datedServiceJourneys, count=1: D:1, no journey, O:1 at position 0
+                0x01,
+                0x03, 0x04, 0x01, 0x00, 0x01,
                 // trailer: 0xFF, total record count = 5
                 (byte) 0xFF, 0x05,
         };

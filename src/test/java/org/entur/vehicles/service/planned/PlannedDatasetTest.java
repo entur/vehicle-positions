@@ -147,6 +147,18 @@ public class PlannedDatasetTest {
         assertThat(dataset.stats().lines()).isEqualTo(1);
     }
 
+    @Test
+    public void aRedeclaredIdIsCountedEvenWhenItsFirstDeclarationHadNoText() {
+        PlannedDataset dataset = new PlannedDataset.Builder()
+                .addDestinationDisplay("X:DestinationDisplay:1", null)
+                .addDestinationDisplay("X:DestinationDisplay:1", "Sentrum")
+                .addOperatingDay("X:OperatingDay:1", null)
+                .addOperatingDay("X:OperatingDay:1", "2026-10-02")
+                .build();
+
+        assertThat(dataset.stats().duplicateIds()).isEqualTo(2);
+    }
+
     private static PlannedDataSink.StopDestinationDisplay at(int order, String destinationDisplayId) {
         return new PlannedDataSink.StopDestinationDisplay(order, destinationDisplayId);
     }

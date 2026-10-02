@@ -1,6 +1,5 @@
 package org.entur.vehicles.service.planned;
 
-import org.entur.vehicles.data.model.Operator;
 import org.entur.vehicles.service.planned.PlannedDataSink.StopDestinationDisplay;
 import org.entur.vehicles.service.snapshot.IdCodec;
 import org.entur.vehicles.service.snapshot.SnapshotFormatException;
@@ -63,13 +62,13 @@ public final class PlannedDataSnapshot {
             out.writeLong(System.currentTimeMillis());
             out.writeInt(builder.duplicateIds());
 
-            Map<String, Operator> operators = builder.operators();
+            Map<String, OperatorRecord> operators = builder.operators();
             Map<String, LineRecord> lines = builder.lines();
-            Map<String, String> operatingDays = builder.operatingDays();
+            Map<String, OperatingDayRecord> operatingDays = builder.operatingDays();
             Map<String, int[]> linkGeometry = builder.linkGeometry();
             Map<String, String[]> patternLinks = builder.patternLinks();
             Map<String, ServiceJourneyRecord> serviceJourneys = builder.serviceJourneys();
-            Map<String, String> destinationDisplays = builder.destinationDisplays();
+            Map<String, DestinationDisplayRecord> destinationDisplays = builder.destinationDisplays();
             Map<String, StopDestinationDisplay[]> patternDestinationDisplays = builder.patternDestinationDisplays();
             Map<String, PlannedDataset.Builder.RawDatedServiceJourney> rawDatedServiceJourneys = builder.rawDatedServiceJourneys();
 
@@ -82,9 +81,8 @@ public final class PlannedDataSnapshot {
 
             // 1. operators - no references
             SnapshotIo.writeVarInt(out, operators.size());
-            for (Map.Entry<String, Operator> e : operators.entrySet()) {
-                ids.writeId(out, e.getKey());
-                SnapshotIo.writeString(out, e.getValue().getName());
+            for (OperatorRecord operator : operators.values()) {
+                OperatorCodec.write(out, ids, operator);
                 totalRecords++;
             }
 
@@ -100,20 +98,18 @@ public final class PlannedDataSnapshot {
             // 3. operatingDays - no references
             SectionIndex.Writer operatingDayIndex = new SectionIndex.Writer();
             SnapshotIo.writeVarInt(out, operatingDays.size());
-            for (Map.Entry<String, String> e : operatingDays.entrySet()) {
-                operatingDayIndex.add(e.getKey());
-                ids.writeId(out, e.getKey());
-                SnapshotIo.writeString(out, e.getValue());
+            for (OperatingDayRecord day : operatingDays.values()) {
+                operatingDayIndex.add(day.id());
+                OperatingDayCodec.write(out, ids, day);
                 totalRecords++;
             }
 
             // 4. destinationDisplays - no references
             SectionIndex.Writer destinationDisplayIndex = new SectionIndex.Writer();
             SnapshotIo.writeVarInt(out, destinationDisplays.size());
-            for (Map.Entry<String, String> e : destinationDisplays.entrySet()) {
-                destinationDisplayIndex.add(e.getKey());
-                ids.writeId(out, e.getKey());
-                SnapshotIo.writeString(out, e.getValue());
+            for (DestinationDisplayRecord display : destinationDisplays.values()) {
+                destinationDisplayIndex.add(display.id());
+                DestinationDisplayCodec.write(out, ids, display);
                 totalRecords++;
             }
 
@@ -178,21 +174,27 @@ public final class PlannedDataSnapshot {
      * the resulting prefix table.
      */
     private static void internIds(IdCodec.Writer ids,
-                                   Map<String, Operator> operators,
+                                   Map<String, OperatorRecord> operators,
                                    Map<String, LineRecord> lines,
-                                   Map<String, String> operatingDays,
-                                   Map<String, String> destinationDisplays,
+                                   Map<String, OperatingDayRecord> operatingDays,
+                                   Map<String, DestinationDisplayRecord> destinationDisplays,
                                    Map<String, int[]> linkGeometry,
                                    Map<String, String[]> patternLinks,
                                    Map<String, StopDestinationDisplay[]> patternDestinationDisplays,
                                    Map<String, ServiceJourneyRecord> serviceJourneys,
                                    Map<String, PlannedDataset.Builder.RawDatedServiceJourney> rawDatedServiceJourneys) {
-        internAll(ids, operators.keySet());
+        for (OperatorRecord operator : operators.values()) {
+            OperatorCodec.intern(ids, operator);
+        }
         for (LineRecord line : lines.values()) {
             LineCodec.intern(ids, line);
         }
-        internAll(ids, operatingDays.keySet());
-        internAll(ids, destinationDisplays.keySet());
+        for (OperatingDayRecord day : operatingDays.values()) {
+            OperatingDayCodec.intern(ids, day);
+        }
+        for (DestinationDisplayRecord display : destinationDisplays.values()) {
+            DestinationDisplayCodec.intern(ids, display);
+        }
         internAll(ids, linkGeometry.keySet());
         for (Map.Entry<String, String[]> e : patternLinks.entrySet()) {
             ids.intern(e.getKey());
@@ -269,8 +271,7 @@ public final class PlannedDataSnapshot {
             // 1. operators - no references
             int operatorCount = (int) SnapshotIo.readVarInt(in);
             for (int i = 0; i < operatorCount; i++) {
-                String id = ids.readId(in);
-                sink.addOperator(id, SnapshotIo.readString(in));
+                sink.addOperator(OperatorCodec.read(in, ids));
                 totalRecords++;
             }
 
@@ -288,9 +289,9 @@ public final class PlannedDataSnapshot {
             int operatingDayCount = (int) SnapshotIo.readVarInt(in);
             SectionIndex.Reader operatingDayIds = new SectionIndex.Reader(operatingDayCount);
             for (int i = 0; i < operatingDayCount; i++) {
-                String id = ids.readId(in);
-                operatingDayIds.add(id);
-                sink.addOperatingDay(id, SnapshotIo.readString(in));
+                OperatingDayRecord day = OperatingDayCodec.read(in, ids);
+                operatingDayIds.add(day.id());
+                sink.addOperatingDay(day);
                 totalRecords++;
             }
 
@@ -298,9 +299,9 @@ public final class PlannedDataSnapshot {
             int destinationDisplayCount = (int) SnapshotIo.readVarInt(in);
             SectionIndex.Reader destinationDisplayIds = new SectionIndex.Reader(destinationDisplayCount);
             for (int i = 0; i < destinationDisplayCount; i++) {
-                String id = ids.readId(in);
-                destinationDisplayIds.add(id);
-                sink.addDestinationDisplay(id, SnapshotIo.readString(in));
+                DestinationDisplayRecord display = DestinationDisplayCodec.read(in, ids);
+                destinationDisplayIds.add(display.id());
+                sink.addDestinationDisplay(display);
                 totalRecords++;
             }
 

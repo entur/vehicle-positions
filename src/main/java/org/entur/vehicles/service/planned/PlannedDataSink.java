@@ -9,7 +9,7 @@ import java.util.List;
  */
 public interface PlannedDataSink {
 
-    PlannedDataSink addOperator(String id, String name);
+    PlannedDataSink addOperator(OperatorRecord operator);
 
     PlannedDataSink addLine(LineRecord line);
 
@@ -22,14 +22,13 @@ public interface PlannedDataSink {
      */
     PlannedDataSink addJourneyPattern(String id, List<String> serviceLinkIds, List<StopDestinationDisplay> destinationDisplays);
 
-    /** @param frontText {@code DestinationDisplay/FrontText}, as published */
-    PlannedDataSink addDestinationDisplay(String id, String frontText);
+    PlannedDataSink addDestinationDisplay(DestinationDisplayRecord display);
 
     PlannedDataSink addServiceJourney(ServiceJourneyRecord journey);
 
     PlannedDataSink addDatedServiceJourney(String id, String serviceJourneyId, String operatingDayId);
 
-    PlannedDataSink addOperatingDay(String id, String calendarDate);
+    PlannedDataSink addOperatingDay(OperatingDayRecord day);
 
     /** A journey pattern's stop, by its {@code order}, and the destination display it sets. */
     record StopDestinationDisplay(int order, String destinationDisplayId) {

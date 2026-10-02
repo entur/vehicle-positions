@@ -407,23 +407,25 @@ public final class PlannedDataset {
 
         record RawDatedServiceJourney(String serviceJourneyId, String operatingDayId) {}
 
-        private final Map<String, Operator> operators = new HashMap<>();
+        private final Map<String, OperatorRecord> operators = new HashMap<>();
         private final Map<String, LineRecord> lines = new HashMap<>();
         private final Map<String, ServiceJourneyRecord> serviceJourneys = new HashMap<>();
         private final Map<String, RawDatedServiceJourney> rawDatedServiceJourneys = new HashMap<>();
         private final Map<String, String[]> patternLinks = new HashMap<>();
         private final Map<String, int[]> linkGeometry = new HashMap<>();
-        private final Map<String, String> operatingDays = new HashMap<>();
-        private final Map<String, String> destinationDisplays = new HashMap<>();
+        private final Map<String, OperatingDayRecord> operatingDays = new HashMap<>();
+        private final Map<String, DestinationDisplayRecord> destinationDisplays = new HashMap<>();
         /** Only patterns with at least one ref; consecutive refs to the same display collapsed. */
         private final Map<String, StopDestinationDisplay[]> patternDestinationDisplays = new HashMap<>();
         private int duplicateIds = 0;
 
-        @Override
         public Builder addOperator(String id, String name) {
-            Operator operator = new Operator(id);
-            operator.setName(name);
-            countDuplicate(operators.put(id, operator));
+            return addOperator(new OperatorRecord(id, name));
+        }
+
+        @Override
+        public Builder addOperator(OperatorRecord operator) {
+            countDuplicate(operators.put(operator.id(), operator));
             return this;
         }
 
@@ -468,9 +470,13 @@ public final class PlannedDataset {
             return this;
         }
 
-        @Override
         public Builder addDestinationDisplay(String id, String frontText) {
-            countDuplicate(destinationDisplays.put(id, frontText));
+            return addDestinationDisplay(new DestinationDisplayRecord(id, frontText));
+        }
+
+        @Override
+        public Builder addDestinationDisplay(DestinationDisplayRecord display) {
+            countDuplicate(destinationDisplays.put(display.id(), display));
             return this;
         }
 
@@ -496,9 +502,13 @@ public final class PlannedDataset {
             return this;
         }
 
-        @Override
         public Builder addOperatingDay(String id, String calendarDate) {
-            countDuplicate(operatingDays.put(id, calendarDate));
+            return addOperatingDay(new OperatingDayRecord(id, calendarDate));
+        }
+
+        @Override
+        public Builder addOperatingDay(OperatingDayRecord day) {
+            countDuplicate(operatingDays.put(day.id(), day));
             return this;
         }
 
@@ -523,7 +533,7 @@ public final class PlannedDataset {
         // ---- snapshot writer. Views, not copies: these maps can hold millions of entries and
         // ---- a defensive copy would double the peak heap during a snapshot write.
 
-        Map<String, Operator> operators() {
+        Map<String, OperatorRecord> operators() {
             return Collections.unmodifiableMap(operators);
         }
 
@@ -531,7 +541,7 @@ public final class PlannedDataset {
             return Collections.unmodifiableMap(lines);
         }
 
-        Map<String, String> operatingDays() {
+        Map<String, OperatingDayRecord> operatingDays() {
             return Collections.unmodifiableMap(operatingDays);
         }
 
@@ -547,7 +557,7 @@ public final class PlannedDataset {
             return Collections.unmodifiableMap(serviceJourneys);
         }
 
-        Map<String, String> destinationDisplays() {
+        Map<String, DestinationDisplayRecord> destinationDisplays() {
             return Collections.unmodifiableMap(destinationDisplays);
         }
 
@@ -720,11 +730,19 @@ public final class PlannedDataset {
                 if (serviceJourneyId == null || !serviceJourneyPattern.containsKey(serviceJourneyId)) {
                     unresolvedServiceJourneyRefs++;
                 }
-                String date = raw.operatingDayId() == null ? null : operatingDays.get(raw.operatingDayId());
+                OperatingDayRecord day = raw.operatingDayId() == null ? null : operatingDays.get(raw.operatingDayId());
+                String date = day == null ? null : day.calendarDate();
                 if (date == null) {
                     unresolvedOperatingDayRefs++;
                 }
                 datedServiceJourneys.put(e.getKey(), new DatedJourneyRef(serviceJourneyId, date));
+            }
+
+            Map<String, Operator> operatorModels = new HashMap<>(operators.size() * 2);
+            for (OperatorRecord record : operators.values()) {
+                Operator operator = new Operator(record.id());
+                operator.setName(record.name());
+                operatorModels.put(record.id(), operator);
             }
 
             Map<String, Line> lineModels = new HashMap<>(lines.size() * 2);
@@ -759,10 +777,11 @@ public final class PlannedDataset {
                 List<StopDestinationDisplay> resolved = new ArrayList<>(e.getValue().length);
                 List<String> frontTexts = new ArrayList<>(e.getValue().length);
                 for (StopDestinationDisplay display : e.getValue()) {
-                    String frontText = destinationDisplays.get(display.destinationDisplayId());
+                    DestinationDisplayRecord declared = destinationDisplays.get(display.destinationDisplayId());
+                    String frontText = declared == null ? null : declared.frontText();
                     if (frontText == null) {
                         // Dangling, or a display without text: the previous one stays in effect.
-                        if (!destinationDisplays.containsKey(display.destinationDisplayId())) {
+                        if (declared == null) {
                             unresolvedDestinationDisplayRefs++;
                         }
                         continue;
@@ -797,7 +816,7 @@ public final class PlannedDataset {
             }
 
             return new PlannedDataset(
-                    Map.copyOf(operators),
+                    Map.copyOf(operatorModels),
                     Map.copyOf(lineModels),
                     Map.copyOf(serviceJourneyPattern),
                     Map.copyOf(datedServiceJourneys),

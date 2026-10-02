@@ -58,17 +58,9 @@ public final class NetexPlannedDataExtractor {
     }
 
     private void readOperator(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] name = new String[1];
-        scan(r, (reader, localName, depth) -> {
-            if (depth == 1 && localName.equals("Name")) {
-                name[0] = reader.getElementText();
-                return true;
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addOperator(id, name[0]);
+        OperatorRecord operator = OperatorCodec.read(r);
+        if (operator != null) {
+            sink.addOperator(operator);
         }
     }
 
@@ -128,18 +120,9 @@ public final class NetexPlannedDataExtractor {
     }
 
     private void readDestinationDisplay(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] frontText = new String[1];
-        scan(r, (reader, localName, depth) -> {
-            // Variants carry a FrontText of their own further down; only the display's counts.
-            if (depth == 1 && localName.equals("FrontText")) {
-                frontText[0] = reader.getElementText();
-                return true;
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addDestinationDisplay(id, frontText[0]);
+        DestinationDisplayRecord display = DestinationDisplayCodec.read(r);
+        if (display != null) {
+            sink.addDestinationDisplay(display);
         }
     }
 
@@ -170,17 +153,9 @@ public final class NetexPlannedDataExtractor {
     }
 
     private void readOperatingDay(XMLStreamReader r, PlannedDataSink sink) throws XMLStreamException {
-        String id = id(r);
-        String[] date = new String[1];
-        scan(r, (reader, localName, depth) -> {
-            if (depth == 1 && localName.equals("CalendarDate")) {
-                date[0] = reader.getElementText();
-                return true;
-            }
-            return false;
-        });
-        if (id != null) {
-            sink.addOperatingDay(id, date[0]);
+        OperatingDayRecord day = OperatingDayCodec.read(r);
+        if (day != null) {
+            sink.addOperatingDay(day);
         }
     }
 }
