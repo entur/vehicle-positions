@@ -23,7 +23,7 @@ public abstract class ObjectRef {
         if (other == null) {
             return false;
         }
-        return getRef().matches(other.getRef());
+        return Objects.equal(getRef(), other.getRef());
     }
 
     @Override

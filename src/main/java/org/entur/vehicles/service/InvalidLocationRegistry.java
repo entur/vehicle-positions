@@ -23,12 +23,15 @@ public class InvalidLocationRegistry {
 
   private static final Logger LOG = LoggerFactory.getLogger(InvalidLocationRegistry.class);
 
-  private final Set<Coordinate> invalidCoordinates;
+  private final double[] latitudes;
+  private final double[] longitudes;
 
   public InvalidLocationRegistry(
       @Value("${vehicle.invalid.locations:0.0/0.0,-1.0/-1.0,1.0/1.0}") String invalidLocations
   ) {
-    this.invalidCoordinates = parse(invalidLocations);
+    Set<Coordinate> invalidCoordinates = parse(invalidLocations);
+    this.latitudes = invalidCoordinates.stream().mapToDouble(Coordinate::latitude).toArray();
+    this.longitudes = invalidCoordinates.stream().mapToDouble(Coordinate::longitude).toArray();
     LOG.info("Treating {} coordinate(s) as invalid vehicle locations: {}",
         invalidCoordinates.size(), invalidCoordinates);
   }
@@ -37,9 +40,24 @@ public class InvalidLocationRegistry {
     if (location == null || location.getLatitude() == null || location.getLongitude() == null) {
       return false;
     }
-    return invalidCoordinates.contains(
-        new Coordinate(normalize(location.getLatitude()), normalize(location.getLongitude()))
-    );
+    // Runs per vehicle on every query and per update on every subscription: compare primitives
+    // instead of allocating a Coordinate and dispatching through the record's equals.
+    double latitude = location.getLatitude();
+    double longitude = location.getLongitude();
+    for (int i = 0; i < latitudes.length; i++) {
+      if (same(latitudes[i], latitude) && same(longitudes[i], longitude)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * {@code ==} already treats {@code -0.0} and {@code 0.0} as equal but never matches NaN, which
+   * the configuration accepts; the record lookup this replaced matched both.
+   */
+  private static boolean same(double configured, double actual) {
+    return configured == actual || (Double.isNaN(configured) && Double.isNaN(actual));
   }
 
   private static Set<Coordinate> parse(String invalidLocations) {
