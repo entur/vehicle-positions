@@ -1,8 +1,8 @@
 package org.entur.vehicles.service.pubsub.impl;
 
 import com.google.cloud.pubsub.v1.MessageReceiver;
-import org.entur.avro.realtime.siri.helper.JsonReader;
 import org.entur.vehicles.repository.SituationRepository;
+import org.entur.vehicles.service.SiriJsonReader;
 import org.entur.vehicles.service.pubsub.PubSubSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +48,7 @@ public class PubSubSXSubscriber extends PubSubSubscriber {
     return (pubsubMessage, ackReplyConsumer) -> {
       try {
         situationRepository.add(
-                JsonReader.readPtSituationElement(pubsubMessage.getData().toStringUtf8())
+                SiriJsonReader.readPtSituationElement(pubsubMessage.getData().toStringUtf8())
         );
       } catch (IOException e) {
         throw new RuntimeException(e);
