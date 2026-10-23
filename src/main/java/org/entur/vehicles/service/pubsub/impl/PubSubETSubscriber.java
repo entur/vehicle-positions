@@ -1,8 +1,8 @@
 package org.entur.vehicles.service.pubsub.impl;
 
 import com.google.cloud.pubsub.v1.MessageReceiver;
-import org.entur.avro.realtime.siri.helper.JsonReader;
 import org.entur.vehicles.repository.TimetableRepository;
+import org.entur.vehicles.service.SiriJsonReader;
 import org.entur.vehicles.service.pubsub.PubSubSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +43,7 @@ public class PubSubETSubscriber extends PubSubSubscriber {
     return (pubsubMessage, ackReplyConsumer) -> {
       try {
         timetableRepository.add(
-                JsonReader.readEstimatedVehicleJourney(pubsubMessage.getData().toStringUtf8())
+                SiriJsonReader.readEstimatedVehicleJourney(pubsubMessage.getData().toStringUtf8())
         );
       } catch (IOException e) {
         throw new RuntimeException(e);

@@ -1,8 +1,8 @@
 package org.entur.vehicles.service.pubsub.impl;
 
 import com.google.cloud.pubsub.v1.MessageReceiver;
-import org.entur.avro.realtime.siri.helper.JsonReader;
 import org.entur.vehicles.repository.VehicleRepository;
+import org.entur.vehicles.service.SiriJsonReader;
 import org.entur.vehicles.service.pubsub.PubSubSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +43,7 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
     return (pubsubMessage, ackReplyConsumer) -> {
       try {
         vehicleRepository.add(
-                JsonReader.readVehicleActivity(pubsubMessage.getData().toStringUtf8())
+                SiriJsonReader.readVehicleActivity(pubsubMessage.getData().toStringUtf8())
         );
       } catch (IOException e) {
         throw new RuntimeException(e);

@@ -7,7 +7,6 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import jakarta.annotation.PostConstruct;
 import org.apache.avro.Schema;
-import org.entur.avro.realtime.siri.helper.JsonReader;
 import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
 import org.entur.vehicles.repository.SituationRepository;
 import org.slf4j.Logger;
@@ -165,7 +164,7 @@ public class SituationSnapshotService {
      */
     private boolean addSituation(JsonNode situation, int failuresSoFar) {
         try {
-            PtSituationElementRecord record = JsonReader.readPtSituationElement(
+            PtSituationElementRecord record = SiriJsonReader.readPtSituationElement(
                     MAPPER.writeValueAsString(AvroJsonUnionWrapper.wrap(situation, SITUATION_SCHEMA)));
             situationRepository.add(record);
             return true;
