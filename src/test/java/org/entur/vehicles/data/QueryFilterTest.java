@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QueryFilterTest {
@@ -187,6 +188,59 @@ class QueryFilterTest {
     );
 
     assertFalse(filterNoMatch.isMatch(update));
+  }
+
+  @Test
+  void aLineRefRegexMatchesVehiclesAndTimetables() {
+    QueryFilter filter = lineFilter("TST:Line:1.*", null);
+
+    VehicleUpdate vehicle = new VehicleUpdate();
+    vehicle.setLine(new Line("TST:Line:123", "A - B"));
+    EstimatedTimetableUpdate timetable = new EstimatedTimetableUpdate();
+    timetable.setLine(new Line("TST:Line:123", "A - B"));
+    VehicleUpdate other = new VehicleUpdate();
+    other.setLine(new Line("TST:Line:223", "A - B"));
+
+    assertTrue(filter.isMatch(vehicle));
+    assertTrue(filter.isMatch(timetable));
+    assertFalse(filter.isMatch(other));
+  }
+
+  @Test
+  void aLineRegexMustMatchTheWholeValue() {
+    VehicleUpdate update = new VehicleUpdate();
+    update.setLine(new Line("TST:Line:123", "Test Line"));
+
+    assertFalse(lineFilter("TST:Line:12", null).isMatch(update));
+    assertFalse(lineFilter(null, "Test").isMatch(update));
+  }
+
+  @Test
+  void aVehicleWithoutTheFilteredLineFieldDoesNotMatch() {
+    VehicleUpdate update = new VehicleUpdate();
+    update.setLine(new Line("TST:Line:123", null));
+
+    assertFalse(lineFilter(null, ".*").isMatch(update));
+  }
+
+  /**
+   * Compiled once when the filter is built, so a malformed pattern is a bad request for the
+   * query or subscription rather than an exception per vehicle or per published update.
+   */
+  @Test
+  void anInvalidLineRegexIsRejectedWhenTheFilterIsBuilt() {
+    assertThrows(IllegalArgumentException.class, () -> lineFilter("TST:Line:(", null));
+    assertThrows(IllegalArgumentException.class, () -> lineFilter(null, "[A"));
+  }
+
+  private static QueryFilter lineFilter(String lineRef, String lineName) {
+    return new QueryFilter(
+            null,
+            MetricType.QUERY,
+            null, null, null, null, null, null,
+            lineRef, lineName,
+            null, null, null, null
+    );
   }
 
   private static QueryFilter emptyFilter() {

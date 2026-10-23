@@ -18,6 +18,7 @@ import java.time.ZonedDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.regex.Pattern;
 
 import static org.entur.vehicles.data.MetricType.UNDEFINED;
 
@@ -33,6 +34,9 @@ public class QueryFilter extends AbstractUpdate {
   private Set<String> vehicleIds;
   private Set<DatedServiceJourney> datedServiceJourneyIds;
   private Set<ServiceJourney> serviceJourneys;
+
+  private final Pattern lineRefPattern;
+  private final Pattern lineNamePattern;
 
   private ZonedDateTime maxDataAge;
 
@@ -88,6 +92,9 @@ public class QueryFilter extends AbstractUpdate {
     if (lineRef != null || lineName != null) {
       this.line = new Line(lineRef, lineName);
     }
+    // Compiled once: matching runs per vehicle on every query and per update on every subscription
+    this.lineRefPattern = lineRef != null ? Pattern.compile(lineRef) : null;
+    this.lineNamePattern = lineName != null ? Pattern.compile(lineName) : null;
     this.monitored = monitored;
     this.cancellation = cancellation;
     this.boundingBox = boundingBox;
@@ -164,8 +171,8 @@ public class QueryFilter extends AbstractUpdate {
       isCompleteMatch = matches(vehicleIds, vehicleUpdate.getVehicleId());
     }
     if (isCompleteMatch && line != null) {
-      isCompleteMatch = matches(line.getLineRef(), vehicleUpdate.getLine().getLineRef());
-      isCompleteMatch = isCompleteMatch && matches(line.getLineName(), vehicleUpdate.getLine().getLineName());
+      isCompleteMatch = matches(lineRefPattern, vehicleUpdate.getLine().getLineRef());
+      isCompleteMatch = isCompleteMatch && matches(lineNamePattern, vehicleUpdate.getLine().getLineName());
     }
     if (isCompleteMatch && monitored != null) {
       isCompleteMatch = monitored.equals(vehicleUpdate.getMonitored());
@@ -212,8 +219,8 @@ public class QueryFilter extends AbstractUpdate {
       isCompleteMatch = matches(vehicleIds, timetableUpdate.getVehicleId());
     }
     if (isCompleteMatch && line != null) {
-      isCompleteMatch = matches(line.getLineRef(), timetableUpdate.getLine().getLineRef());
-      isCompleteMatch = isCompleteMatch && matches(line.getLineName(), timetableUpdate.getLine().getLineName());
+      isCompleteMatch = matches(lineRefPattern, timetableUpdate.getLine().getLineRef());
+      isCompleteMatch = isCompleteMatch && matches(lineNamePattern, timetableUpdate.getLine().getLineName());
     }
     if (isCompleteMatch && monitored != null) {
       isCompleteMatch = monitored.equals(timetableUpdate.getMonitored());
@@ -257,7 +264,7 @@ public class QueryFilter extends AbstractUpdate {
     return identifiedObj.matches(objectRef_2);
   }
 
-  private boolean matches(String template, String value) {
+  private boolean matches(Pattern template, String value) {
 
     if (template != null) {
 
@@ -265,7 +272,7 @@ public class QueryFilter extends AbstractUpdate {
         // If a template-value is set, null-values does not match
         return false;
       }
-      return value.matches(template);
+      return template.matcher(value).matches();
     }
     return true;
   }
