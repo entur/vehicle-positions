@@ -16,6 +16,7 @@ public class VehicleUpdate extends AbstractUpdate {
   private ZonedDateTime lastUpdated;
   private ZonedDateTime expiration;
   private Location location;
+  private boolean locationInvalid;
   private Double speed;
   private Double bearing;
   /** True when {@link #bearing} was calculated from consecutive positions rather than reported by the producer. */
@@ -57,6 +58,20 @@ public class VehicleUpdate extends AbstractUpdate {
 
   public void setLocation(Location location) {
     this.location = location;
+  }
+
+  /**
+   * Whether {@link #getLocation()} is one of the coordinates producers report when the real
+   * position is unknown, decided by {@code VehicleRepository} each time it stores a position.
+   * Queries and subscriptions read this instead of loading every vehicle's location to check it.
+   * Not part of the GraphQL schema.
+   */
+  public boolean isLocationInvalid() {
+    return locationInvalid;
+  }
+
+  public void setLocationInvalid(boolean locationInvalid) {
+    this.locationInvalid = locationInvalid;
   }
 
   public String getDirection() {

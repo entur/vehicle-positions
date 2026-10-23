@@ -14,7 +14,6 @@ import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher
 import org.entur.vehicles.graphql.publishers.SituationUpdateRxPublisher;
 import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
-import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.NSRService;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
@@ -37,7 +36,6 @@ class Subscription {
     private final EstimatedTimetableUpdateRxPublisher timetableUpdater;
     private final SituationUpdateRxPublisher situationUpdater;
     private final NSRService nsrService;
-    private final InvalidLocationRegistry invalidLocationRegistry;
 
     PrometheusMetricsService metricsService;
 
@@ -45,14 +43,12 @@ class Subscription {
                  EstimatedTimetableUpdateRxPublisher timetableUpdater,
                  SituationUpdateRxPublisher situationUpdater,
                  NSRService nsrService,
-                 PrometheusMetricsService metricsService,
-                 InvalidLocationRegistry invalidLocationRegistry) {
+                 PrometheusMetricsService metricsService) {
         this.vehicleUpdater = vehicleUpdater;
         this.timetableUpdater = timetableUpdater;
         this.situationUpdater = situationUpdater;
         this.nsrService = nsrService;
         this.metricsService = metricsService;
-        this.invalidLocationRegistry = invalidLocationRegistry;
     }
 
     @SubscriptionMapping
@@ -115,7 +111,7 @@ class Subscription {
                 maxDataAge,
                 bufferSize,
                 bufferTime
-        ).withLocationValidity(invalidLocationRegistry, Boolean.TRUE.equals(includeInvalidLocations));
+        ).withLocationValidity(Boolean.TRUE.equals(includeInvalidLocations));
         LOG.debug("Creating new subscription with filter: {}", filter);
         return vehicleUpdater.getPublisher(filter, uuid);
     }

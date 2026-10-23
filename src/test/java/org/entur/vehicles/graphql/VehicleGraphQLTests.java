@@ -56,13 +56,13 @@ public class VehicleGraphQLTests {
                 new AutoPurgingVehicleMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                         180,
                 true,
-                publisher
+                publisher,
+                new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0")
         );
         publisher = new VehicleUpdateRxPublisher();
         PlannedDataService plannedDataService = Mockito.mock(PlannedDataService.class);
         Mockito.when(plannedDataService.current()).thenReturn(plannedDataset());
-        queryService = new Query(repository, null, null, new NSRService(false, null), metricsService,
-                new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0"), plannedDataService);
+        queryService = new Query(repository, null, null, new NSRService(false, null), metricsService, plannedDataService);
 
         VehicleActivityRecord vehicleActivityRecord = new VehicleActivityRecord();
         vehicleActivityRecord.setRecordedAtTime(ZonedDateTime.now().toString());

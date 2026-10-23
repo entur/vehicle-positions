@@ -21,6 +21,7 @@ import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.helpers.Bearing;
 import org.entur.vehicles.repository.helpers.Util;
+import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.OperatorService;
 import org.entur.vehicles.service.ServiceJourneyService;
@@ -60,6 +61,8 @@ public class VehicleRepository {
 
   private final boolean bearingCalculationEnabled;
 
+  private final InvalidLocationRegistry invalidLocations;
+
   public VehicleRepository(
           @Autowired PrometheusMetricsService metricsService,
           @Autowired LineService lineService,
@@ -67,7 +70,8 @@ public class VehicleRepository {
           @Autowired AutoPurgingVehicleMap vehicles,
           @Value("${vehicle.updates.max.validity.minutes}") long maxValidityInMinutes,
           @Value("${vehicle.bearing.calculation.enabled:true}") boolean bearingCalculationEnabled,
-          @Autowired VehicleUpdateRxPublisher publisher) {
+          @Autowired VehicleUpdateRxPublisher publisher,
+          @Autowired InvalidLocationRegistry invalidLocations) {
     this.metricsService = metricsService;
     this.lineService = lineService;
     this.serviceJourneyService = serviceJourneyService;
@@ -76,6 +80,7 @@ public class VehicleRepository {
     this.bearingCalculationEnabled = bearingCalculationEnabled;
     this.publisher = publisher;
     this.publisher.setRepository(this);
+    this.invalidLocations = invalidLocations;
   }
 
   public void addAll(List<VehicleActivityRecord> vehicleList) {
@@ -133,6 +138,8 @@ public class VehicleRepository {
               journey.getVehicleLocation().getLongitude(),
               journey.getVehicleLocation().getLatitude()
       ));
+      // Decided once per position: the filter reads the flag instead of each vehicle's location
+      v.setLocationInvalid(invalidLocations.isInvalid(v.getLocation()));
 
       if (vehicleActivity.getProgressBetweenStops() != null) {
         if (vehicleActivity.getProgressBetweenStops().getLinkDistance() != null &&

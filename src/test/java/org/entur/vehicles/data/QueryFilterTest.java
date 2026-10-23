@@ -5,7 +5,6 @@ import org.entur.vehicles.data.model.Line;
 import org.entur.vehicles.data.model.Location;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourneyIdAndDate;
-import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -253,54 +252,53 @@ class QueryFilterTest {
     );
   }
 
-  private static VehicleUpdate vehicleAt(double latitude, double longitude) {
+  /**
+   * A stored vehicle, flagged the way {@code VehicleRepository} flags it at ingest. Which
+   * coordinates count as invalid is {@code InvalidLocationRegistryTest}'s concern; here only the
+   * flag matters, which is all the filter reads.
+   */
+  private static VehicleUpdate vehicle(boolean locationInvalid) {
     VehicleUpdate update = new VehicleUpdate();
     // NOTE: Location takes (longitude, latitude) - longitude first.
-    update.setLocation(new Location(longitude, latitude));
+    update.setLocation(locationInvalid ? new Location(0.0, 0.0) : new Location(10.757933, 59.911491));
+    update.setLocationInvalid(locationInvalid);
     return update;
   }
 
   @Test
   void testInvalidLocationExcludedByDefault() {
-    InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0");
-    QueryFilter filter = emptyFilter().withLocationValidity(registry, false);
-
-    assertFalse(filter.isMatch(vehicleAt(0.0, 0.0)));
-    assertFalse(filter.isMatch(vehicleAt(-1.0, -1.0)));
-    assertFalse(filter.isMatch(vehicleAt(1.0, 1.0)));
+    assertFalse(emptyFilter().withLocationValidity(false).isMatch(vehicle(true)));
   }
 
   @Test
   void testValidLocationMatchesRegardlessOfFlag() {
-    InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0");
-
-    assertTrue(emptyFilter().withLocationValidity(registry, false).isMatch(vehicleAt(59.911491, 10.757933)));
-    assertTrue(emptyFilter().withLocationValidity(registry, true).isMatch(vehicleAt(59.911491, 10.757933)));
+    assertTrue(emptyFilter().withLocationValidity(false).isMatch(vehicle(false)));
+    assertTrue(emptyFilter().withLocationValidity(true).isMatch(vehicle(false)));
   }
 
   @Test
   void testInvalidLocationIncludedWhenRequested() {
-    InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0");
-    QueryFilter filter = emptyFilter().withLocationValidity(registry, true);
-
-    assertTrue(filter.isMatch(vehicleAt(0.0, 0.0)));
+    assertTrue(emptyFilter().withLocationValidity(true).isMatch(vehicle(true)));
   }
 
   @Test
   void testFilterWithoutLocationValidityIsUnchanged() {
     // Timetable and situation filters - and every pre-existing test - never call
     // withLocationValidity, and must keep matching invalid locations.
-    assertTrue(emptyFilter().isMatch(vehicleAt(0.0, 0.0)));
+    assertTrue(emptyFilter().isMatch(vehicle(true)));
   }
 
+  /** The filter reads the flag, not the coordinates: a stored 0,0 left unflagged is not re-checked. */
   @Test
-  void testNullRegistryDisablesTheCheck() {
-    assertTrue(emptyFilter().withLocationValidity(null, false).isMatch(vehicleAt(0.0, 0.0)));
+  void testTheFlagDecidesNotTheCoordinates() {
+    VehicleUpdate unflagged = vehicle(true);
+    unflagged.setLocationInvalid(false);
+
+    assertTrue(emptyFilter().withLocationValidity(false).isMatch(unflagged));
   }
 
   @Test
   void testInvalidLocationExcludedEvenWhenOtherCriteriaMatch() {
-    InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0");
     QueryFilter filter = new QueryFilter(
             null,
             MetricType.QUERY,
@@ -308,9 +306,9 @@ class QueryFilterTest {
             "TST:Line:123",
             null,
             null, null, null, null
-    ).withLocationValidity(registry, false);
+    ).withLocationValidity(false);
 
-    VehicleUpdate update = vehicleAt(0.0, 0.0);
+    VehicleUpdate update = vehicle(true);
     update.setLine(new Line("TST:Line:123", "A - B"));
 
     assertFalse(filter.isMatch(update));
