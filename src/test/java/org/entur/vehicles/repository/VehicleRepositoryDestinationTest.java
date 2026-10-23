@@ -13,6 +13,7 @@ import org.entur.vehicles.data.model.DatedServiceJourney;
 import org.entur.vehicles.data.model.ServiceJourney;
 import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.entur.vehicles.service.planned.PlannedDataService;
@@ -54,7 +55,8 @@ public class VehicleRepositoryDestinationTest {
                 new AutoPurgingVehicleMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 1440,
                 false,
-                new VehicleUpdateRxPublisher()
+                new VehicleUpdateRxPublisher(),
+                new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0")
         );
     }
 

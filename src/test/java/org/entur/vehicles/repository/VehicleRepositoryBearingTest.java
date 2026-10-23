@@ -8,6 +8,7 @@ import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
+import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.ServiceJourneyService;
 import org.entur.vehicles.service.planned.PlannedDataService;
@@ -53,7 +54,8 @@ public class VehicleRepositoryBearingTest {
                 new AutoPurgingVehicleMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 1440,
                 bearingCalculationEnabled,
-                new VehicleUpdateRxPublisher()
+                new VehicleUpdateRxPublisher(),
+                new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0")
         );
     }
 

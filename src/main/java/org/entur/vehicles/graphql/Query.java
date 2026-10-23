@@ -19,7 +19,6 @@ import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.repository.TimetableRepository;
 import org.entur.vehicles.repository.VehicleRepository;
-import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.NSRService;
 import org.entur.vehicles.service.planned.PlannedDataService;
 import org.slf4j.Logger;
@@ -43,7 +42,6 @@ class Query {
     private final TimetableRepository timetableRepository;
     private final SituationRepository situationRepository;
     private final NSRService nsrService;
-    private final InvalidLocationRegistry invalidLocationRegistry;
 
     PrometheusMetricsService metricsService;
 
@@ -52,7 +50,6 @@ class Query {
                  SituationRepository situationRepository,
                  NSRService nsrService,
                  PrometheusMetricsService metricsService,
-                 InvalidLocationRegistry invalidLocationRegistry,
                  PlannedDataService plannedDataService) {
         this.vehicleRepository = vehicleRepository;
         this.plannedDataService = plannedDataService;
@@ -60,7 +57,6 @@ class Query {
         this.situationRepository = situationRepository;
         this.nsrService = nsrService;
         this.metricsService = metricsService;
-        this.invalidLocationRegistry = invalidLocationRegistry;
     }
 
 
@@ -154,7 +150,7 @@ class Query {
                 false, // cancellation is not used in vehicle queries
                 boundingBox,
                 maxDataAge
-        ).withLocationValidity(invalidLocationRegistry, Boolean.TRUE.equals(includeInvalidLocations));
+        ).withLocationValidity(Boolean.TRUE.equals(includeInvalidLocations));
         LOG.debug("Requesting vehicles with filter: {}", filter);
         final long start = System.currentTimeMillis();
         final Collection<VehicleUpdate> vehicles = vehicleRepository.getVehicles(filter);

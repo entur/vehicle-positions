@@ -21,6 +21,7 @@ import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.helpers.Bearing;
 import org.entur.vehicles.repository.helpers.Util;
+import org.entur.vehicles.service.InvalidLocationRegistry;
 import org.entur.vehicles.service.LineService;
 import org.entur.vehicles.service.OperatorService;
 import org.entur.vehicles.service.ServiceJourneyService;
@@ -60,6 +61,8 @@ public class VehicleRepository {
 
   private final boolean bearingCalculationEnabled;
 
+  private final InvalidLocationRegistry invalidLocations;
+
   public VehicleRepository(
           @Autowired PrometheusMetricsService metricsService,
           @Autowired LineService lineService,
@@ -67,7 +70,8 @@ public class VehicleRepository {
           @Autowired AutoPurgingVehicleMap vehicles,
           @Value("${vehicle.updates.max.validity.minutes}") long maxValidityInMinutes,
           @Value("${vehicle.bearing.calculation.enabled:true}") boolean bearingCalculationEnabled,
-          @Autowired VehicleUpdateRxPublisher publisher) {
+          @Autowired VehicleUpdateRxPublisher publisher,
+          @Autowired InvalidLocationRegistry invalidLocations) {
     this.metricsService = metricsService;
     this.lineService = lineService;
     this.serviceJourneyService = serviceJourneyService;
@@ -76,6 +80,7 @@ public class VehicleRepository {
     this.bearingCalculationEnabled = bearingCalculationEnabled;
     this.publisher = publisher;
     this.publisher.setRepository(this);
+    this.invalidLocations = invalidLocations;
   }
 
   public void addAll(List<VehicleActivityRecord> vehicleList) {
@@ -129,10 +134,18 @@ public class VehicleRepository {
       final Location previousLocation = v.getLocation();
       final ZonedDateTime previousRecordedAt = v.getLastUpdated();
 
-      v.setLocation(new Location(
+      final Location location = new Location(
               journey.getVehicleLocation().getLongitude(),
               journey.getVehicleLocation().getLatitude()
-      ));
+      );
+      // Decided once per position: the filter reads the flag instead of each vehicle's location
+      final boolean locationInvalid = invalidLocations.isInvalid(location);
+      // Updates of one vehicle can run on several Pub/Sub threads at once and all mutate this
+      // VehicleUpdate; setting the pair under one lock keeps the stored flag with its location
+      synchronized (v) {
+        v.setLocation(location);
+        v.setLocationInvalid(locationInvalid);
+      }
 
       if (vehicleActivity.getProgressBetweenStops() != null) {
         if (vehicleActivity.getProgressBetweenStops().getLinkDistance() != null &&
