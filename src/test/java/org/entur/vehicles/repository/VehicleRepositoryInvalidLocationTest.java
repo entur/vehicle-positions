@@ -17,7 +17,10 @@ import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,6 +96,61 @@ public class VehicleRepositoryInvalidLocationTest {
 
         repository.add(position(-1.0, -1.0, T0.plusSeconds(40)));
         assertTrue(stored(repository).isLocationInvalid());
+    }
+
+    /**
+     * Pub/Sub delivers on several executor threads, and every update for one vehicle mutates the
+     * same stored VehicleUpdate. Two updates racing - one valid, one at 0,0 - must never leave the
+     * flag disagreeing with the location that ends up stored.
+     */
+    @Test
+    public void concurrentUpdatesOfOneVehicleNeverLeaveTheFlagDisagreeingWithTheLocation() throws Exception {
+        InvalidLocationRegistry registry = new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0");
+        VehicleRepository repository = repository("0.0/0.0,-1.0/-1.0,1.0/1.0");
+        VehicleActivityRecord valid = position(59.91, 10.75, T0);
+        VehicleActivityRecord invalid = position(0.0, 0.0, T0);
+        repository.add(valid);
+
+        int rounds = 20_000;
+        // The checker takes part in both barriers, so it never reads while a round is being written
+        CyclicBarrier start = new CyclicBarrier(3);
+        CyclicBarrier end = new CyclicBarrier(3);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread[] threads = new Thread[2];
+        for (int t = 0; t < 2; t++) {
+            int id = t;
+            threads[t] = new Thread(() -> {
+                try {
+                    for (int i = 0; i < rounds; i++) {
+                        start.await();
+                        // Alternate which thread writes the invalid position, so either can win
+                        repository.add(((i + id) % 2 == 0) ? valid : invalid);
+                        end.await();
+                    }
+                } catch (Throwable e) {
+                    failure.compareAndSet(null, e);
+                }
+            });
+            threads[t].start();
+        }
+
+        int mismatches = 0;
+        for (int i = 0; i < rounds; i++) {
+            start.await();
+            end.await();
+            VehicleUpdate stored = stored(repository);
+            if (stored.isLocationInvalid() != registry.isInvalid(stored.getLocation())) {
+                mismatches++;
+            }
+        }
+        for (Thread thread : threads) {
+            thread.join();
+        }
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        assertEquals(0, mismatches,
+                "rounds where the stored flag disagreed with the stored location, out of " + rounds);
     }
 
     @Test

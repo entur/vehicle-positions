@@ -134,12 +134,18 @@ public class VehicleRepository {
       final Location previousLocation = v.getLocation();
       final ZonedDateTime previousRecordedAt = v.getLastUpdated();
 
-      v.setLocation(new Location(
+      final Location location = new Location(
               journey.getVehicleLocation().getLongitude(),
               journey.getVehicleLocation().getLatitude()
-      ));
+      );
       // Decided once per position: the filter reads the flag instead of each vehicle's location
-      v.setLocationInvalid(invalidLocations.isInvalid(v.getLocation()));
+      final boolean locationInvalid = invalidLocations.isInvalid(location);
+      // Updates of one vehicle can run on several Pub/Sub threads at once and all mutate this
+      // VehicleUpdate; setting the pair under one lock keeps the stored flag with its location
+      synchronized (v) {
+        v.setLocation(location);
+        v.setLocationInvalid(locationInvalid);
+      }
 
       if (vehicleActivity.getProgressBetweenStops() != null) {
         if (vehicleActivity.getProgressBetweenStops().getLinkDistance() != null &&
