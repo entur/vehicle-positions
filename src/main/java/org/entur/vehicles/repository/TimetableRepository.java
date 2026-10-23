@@ -219,13 +219,13 @@ public class TimetableRepository {
               c.setOccupancyStatus(OccupancyStatus.fromValue(call.getOccupancy().toString()));
           }
 
-          c.setAimedArrivalTime(call.getAimedArrivalTime() != null ? convert(call.getAimedArrivalTime()) : null);
-          c.setAimedDepartureTime(call.getAimedDepartureTime() != null ? convert(call.getAimedDepartureTime()) : null);
+          c.parseAimedArrivalTime(call.getAimedArrivalTime());
+          c.parseAimedDepartureTime(call.getAimedDepartureTime());
 
-          c.setExpectedArrivalTime(call.getExpectedArrivalTime() != null ? convert(call.getExpectedArrivalTime()) : null);
-          c.setExpectedDepartureTime(call.getExpectedDepartureTime() != null ? convert(call.getExpectedDepartureTime()) : null);
-          c.setActualArrivalTime(call.getActualArrivalTime() != null ? convert(call.getActualArrivalTime()) : null);
-          c.setActualDepartureTime(call.getActualDepartureTime() != null ? convert(call.getActualDepartureTime()) : null);
+          c.parseExpectedArrivalTime(call.getExpectedArrivalTime());
+          c.parseExpectedDepartureTime(call.getExpectedDepartureTime());
+          c.parseActualArrivalTime(call.getActualArrivalTime());
+          c.parseActualDepartureTime(call.getActualDepartureTime());
 
           if (call.getArrivalBoardingActivity() != null) {
             c.setArrivalBoardingActivity(call.getArrivalBoardingActivity().toString());
@@ -250,11 +250,11 @@ public class TimetableRepository {
               c.setOccupancyStatus(OccupancyStatus.fromValue(call.getOccupancy().toString()));
           }
 
-          c.setAimedArrivalTime(call.getAimedArrivalTime() != null ? convert(call.getAimedArrivalTime()) : null);
-          c.setAimedDepartureTime(call.getAimedDepartureTime() != null ? convert(call.getAimedDepartureTime()) : null);
+          c.parseAimedArrivalTime(call.getAimedArrivalTime());
+          c.parseAimedDepartureTime(call.getAimedDepartureTime());
 
-          c.setExpectedArrivalTime(call.getExpectedArrivalTime() != null ? convert(call.getExpectedArrivalTime()) : null);
-          c.setExpectedDepartureTime(call.getExpectedDepartureTime() != null ? convert(call.getExpectedDepartureTime()) : null);
+          c.parseExpectedArrivalTime(call.getExpectedArrivalTime());
+          c.parseExpectedDepartureTime(call.getExpectedDepartureTime());
 
           c.setCancellation(call.getCancellation() != null && call.getCancellation());
 
