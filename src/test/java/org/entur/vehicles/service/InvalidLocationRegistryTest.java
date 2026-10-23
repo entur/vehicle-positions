@@ -46,6 +46,30 @@ class InvalidLocationRegistryTest {
     assertThat(registry.isInvalid(location(-0.0, -0.0))).isTrue();
   }
 
+  /**
+   * {@code NaN == NaN} is false, so a plain primitive comparison would never match a configured
+   * NaN component. The configuration accepts NaN, and a feed can report it, so it must match.
+   */
+  @Test
+  void aConfiguredNaNComponentMatchesNaN() {
+    InvalidLocationRegistry latitudeNaN = new InvalidLocationRegistry("NaN/10.0");
+    InvalidLocationRegistry longitudeNaN = new InvalidLocationRegistry("60.0/NaN");
+    InvalidLocationRegistry bothNaN = new InvalidLocationRegistry("NaN/NaN");
+
+    assertThat(latitudeNaN.isInvalid(location(Double.NaN, 10.0))).isTrue();
+    assertThat(longitudeNaN.isInvalid(location(60.0, Double.NaN))).isTrue();
+    assertThat(bothNaN.isInvalid(location(Double.NaN, Double.NaN))).isTrue();
+  }
+
+  @Test
+  void aNaNComponentOnlyMatchesAConfiguredNaN() {
+    InvalidLocationRegistry registry = new InvalidLocationRegistry("NaN/10.0");
+
+    assertThat(registry.isInvalid(location(Double.NaN, 11.0))).isFalse();
+    assertThat(registry.isInvalid(location(0.0, 10.0))).isFalse();
+    assertThat(new InvalidLocationRegistry(DEFAULT_CONFIG).isInvalid(location(Double.NaN, 0.0))).isFalse();
+  }
+
   @Test
   void aNullLocationIsValid() {
     InvalidLocationRegistry registry = new InvalidLocationRegistry(DEFAULT_CONFIG);

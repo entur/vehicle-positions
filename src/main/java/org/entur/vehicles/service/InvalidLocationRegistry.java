@@ -45,11 +45,19 @@ public class InvalidLocationRegistry {
     double latitude = location.getLatitude();
     double longitude = location.getLongitude();
     for (int i = 0; i < latitudes.length; i++) {
-      if (latitudes[i] == latitude && longitudes[i] == longitude) {
+      if (same(latitudes[i], latitude) && same(longitudes[i], longitude)) {
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * {@code ==} already treats {@code -0.0} and {@code 0.0} as equal but never matches NaN, which
+   * the configuration accepts; the record lookup this replaced matched both.
+   */
+  private static boolean same(double configured, double actual) {
+    return configured == actual || (Double.isNaN(configured) && Double.isNaN(actual));
   }
 
   private static Set<Coordinate> parse(String invalidLocations) {
