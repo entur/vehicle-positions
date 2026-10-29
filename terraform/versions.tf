@@ -3,7 +3,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 7.0"
+      version = "~> 8.8"
     }
     # Required by the cloud-storage module even though we create no Kubernetes
     # resources from Terraform (see create_kubernetes_resources in snapshots.tf).
