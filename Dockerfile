@@ -1,4 +1,4 @@
-FROM eclipse-temurin:25-jre-jammy@sha256:7d1b8bf8b361b932f8c76589b963bc164e4fff416d832169f8dfe26c8aae8f50
+FROM bellsoft/liberica-openjre-debian:25.0.5.0.3-5@sha256:d5f6c00def204e1b7c6147342be2291243e586ac41b97b62ab6ba0eb6dff5ad3
 
 RUN addgroup appuser && adduser --disabled-password appuser --ingroup appuser
 USER appuser
