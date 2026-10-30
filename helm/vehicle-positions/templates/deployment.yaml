@@ -71,21 +71,17 @@ spec:
                   - -c
                   - sleep 30
           livenessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - curl --fail http://0.0.0.0:{{ .Values.service.http.internalPort }}/actuator/health
+            httpGet:
+              path: /actuator/health
+              port: http
             failureThreshold: 3
             periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 5
           startupProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - curl --fail http://0.0.0.0:{{ .Values.service.http.internalPort }}/actuator/health
+            httpGet:
+              path: /actuator/health
+              port: http
             failureThreshold: 25
             periodSeconds: 5
           securityContext:
