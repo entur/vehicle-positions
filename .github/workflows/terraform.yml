@@ -38,7 +38,7 @@ jobs:
   tf-apply-dev:
     if: github.event_name != 'push'
     needs: [tf-plan-dev]
-    uses: entur/gha-terraform/.github/workflows/apply.yml@7492b8dd422a63a6826f1ccfbdec14c7e5d43bb0 # v2.5.0
+    uses: entur/gha-terraform/.github/workflows/apply.yml@67c83c025c1810b54a77624ca6090a46dcac9c94 # v3.0.0
     permissions:
       contents: read
       id-token: write
@@ -71,7 +71,7 @@ jobs:
   tf-apply-tst:
     if: github.event_name != 'pull_request'
     needs: [tf-plan-tst]
-    uses: entur/gha-terraform/.github/workflows/apply.yml@7492b8dd422a63a6826f1ccfbdec14c7e5d43bb0 # v2.5.0
+    uses: entur/gha-terraform/.github/workflows/apply.yml@67c83c025c1810b54a77624ca6090a46dcac9c94 # v3.0.0
     permissions:
       contents: read
       id-token: write
@@ -89,7 +89,7 @@ jobs:
       && needs.tf-apply-tst.result != 'failure'
       && needs.tf-apply-tst.result != 'cancelled'
     needs: [tf-plan-prd, tf-apply-tst]
-    uses: entur/gha-terraform/.github/workflows/apply.yml@7492b8dd422a63a6826f1ccfbdec14c7e5d43bb0 # v2.5.0
+    uses: entur/gha-terraform/.github/workflows/apply.yml@67c83c025c1810b54a77624ca6090a46dcac9c94 # v3.0.0
     permissions:
       contents: read
       id-token: write
