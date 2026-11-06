@@ -1,4 +1,4 @@
-FROM bellsoft/liberica-openjre-debian:25.0.5.0.3-5@sha256:d5f6c00def204e1b7c6147342be2291243e586ac41b97b62ab6ba0eb6dff5ad3
+FROM bellsoft/liberica-openjre-debian:27-36@sha256:0e0ed62763fd24cfd6db87e0f05e73a1cb18222ceed84d06161f396787d03036
 
 RUN addgroup appuser && adduser --disabled-password appuser --ingroup appuser
 USER appuser
