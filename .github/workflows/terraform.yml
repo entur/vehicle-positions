@@ -19,7 +19,7 @@ on:
 # block would clamp the unlisted scopes to none (startup_failure).
 jobs:
   terraform-lint:
-    uses: entur/gha-terraform/.github/workflows/lint.yml@7492b8dd422a63a6826f1ccfbdec14c7e5d43bb0 # v2.5.0
+    uses: entur/gha-terraform/.github/workflows/lint.yml@67c83c025c1810b54a77624ca6090a46dcac9c94 # v3.0.0
     permissions:
       contents: read
 
