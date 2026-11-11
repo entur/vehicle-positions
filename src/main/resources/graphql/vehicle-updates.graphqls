@@ -44,7 +44,7 @@ type Query {
         mode: VehicleModeEnumeration
         lineRef: String
         monitored: Boolean
-        cancellation: Boolean) : [EstimatedTimetableUpdate] @deprecated(reason: "Experimental.")
+        cancellation: Boolean) : [EstimatedTimetableUpdate]
 
     situations(
         situationNumbers: [String]
