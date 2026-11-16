@@ -127,6 +127,9 @@ public class PrometheusMetricsService {
 
     private static final String TYPE_TAG_NAME = "type";
     private static final String SOURCE_LATENCY_MISSING_NAME = METRICS_PREFIX + "latency.source.missing";
+    // Negative latencies from clock skew; separate names since the timers' tag sets differ
+    private static final String PUBSUB_LATENCY_SKEWED_NAME = METRICS_PREFIX + "latency.pubsub.skewed";
+    private static final String SOURCE_LATENCY_SKEWED_NAME = METRICS_PREFIX + "latency.source.skewed";
 
     private final java.util.Map<String, Timer> latencyTimers = new ConcurrentHashMap<>();
 
@@ -257,7 +260,9 @@ public class PrometheusMetricsService {
     /** Time from Anshar publishing an update to Pub/Sub until this pod received it */
     public void recordPubsubLatency(String type, Duration latency) {
         if (latency.isNegative()) {
-            return; // clock skew between Pub/Sub and this pod
+            // Clock skew between Pub/Sub and this pod; Micrometer rejects negative timings
+            prometheusMeterRegistry.counter(PUBSUB_LATENCY_SKEWED_NAME, TYPE_TAG_NAME, type).increment();
+            return;
         }
         latencyTimers.computeIfAbsent(PUBSUB_LATENCY_NAME + type, key ->
                 Timer.builder(PUBSUB_LATENCY_NAME)
@@ -271,7 +276,10 @@ public class PrometheusMetricsService {
     /** Time from the update's reported time until Anshar published it to Pub/Sub */
     public void recordSourceLatency(String type, Codespace codespace, Duration latency) {
         if (latency.isNegative()) {
-            return; // clock skew between the producer and Anshar or Pub/Sub
+            // Clock skew between the producer and Anshar or Pub/Sub; Micrometer rejects negative timings
+            prometheusMeterRegistry.counter(SOURCE_LATENCY_SKEWED_NAME,
+                    TYPE_TAG_NAME, type, CODESPACE_TAG_NAME, codespace.getCodespaceId()).increment();
+            return;
         }
         latencyTimers.computeIfAbsent(SOURCE_LATENCY_NAME + type + "/" + codespace.getCodespaceId(), key ->
                 Timer.builder(SOURCE_LATENCY_NAME)
