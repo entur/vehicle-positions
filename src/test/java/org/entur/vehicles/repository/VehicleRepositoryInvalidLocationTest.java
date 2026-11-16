@@ -41,7 +41,7 @@ public class VehicleRepositoryInvalidLocationTest {
                 new AutoPurgingVehicleMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 1440,
                 false,
-                new VehicleUpdateRxPublisher(),
+                new VehicleUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT))),
                 new InvalidLocationRegistry(invalidLocations)
         );
     }

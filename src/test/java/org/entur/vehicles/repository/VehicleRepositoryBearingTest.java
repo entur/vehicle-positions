@@ -54,7 +54,7 @@ public class VehicleRepositoryBearingTest {
                 new AutoPurgingVehicleMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 1440,
                 bearingCalculationEnabled,
-                new VehicleUpdateRxPublisher(),
+                new VehicleUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT))),
                 new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0")
         );
     }
