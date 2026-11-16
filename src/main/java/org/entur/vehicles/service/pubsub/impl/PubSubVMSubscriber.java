@@ -5,6 +5,7 @@ import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.VehicleRepository;
+import org.entur.vehicles.repository.helpers.Util;
 import org.entur.vehicles.service.SiriJsonReader;
 import org.entur.vehicles.service.pubsub.PubSubSubscriber;
 import org.slf4j.Logger;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 @Service
@@ -64,14 +66,33 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
         throw e instanceof RuntimeException runtimeException ? runtimeException : new RuntimeException(e);
       }
 
+      // Read from this message, not the stored VehicleUpdate: the repository falls back to
+      // ingest time when no time is reported, and other threads may overwrite the stored entry
+      Instant reportedAt = reportedAt(vehicleActivity);
+
       VehicleUpdate stored = vehicleRepository.add(vehicleActivity);
-      if (stored != null && publishedAt != null) {
-        metricsService.recordSourceLatency(stored.getCodespace(),
-                Duration.between(stored.getLastUpdated().toInstant(), publishedAt));
+      if (stored != null && publishedAt != null && reportedAt != null) {
+        metricsService.recordSourceLatency(stored.getCodespace(), Duration.between(reportedAt, publishedAt));
       }
 
       // Ack only after all work for the message is complete.
       ackReplyConsumer.ack();
     };
+  }
+
+  /** Same precedence as VehicleRepository's lastUpdated, minus the ingest-time fallback */
+  private static Instant reportedAt(VehicleActivityRecord vehicleActivity) {
+    CharSequence reported = vehicleActivity.getMonitoredVehicleJourney() != null
+            && vehicleActivity.getMonitoredVehicleJourney().getLocationRecordedAtTime() != null
+            ? vehicleActivity.getMonitoredVehicleJourney().getLocationRecordedAtTime()
+            : vehicleActivity.getRecordedAtTime();
+    if (reported == null) {
+      return null;
+    }
+    try {
+      return Util.convert(reported).toInstant();
+    } catch (DateTimeParseException e) {
+      return null;
+    }
   }
 }

@@ -74,7 +74,7 @@ class PubSubVMSubscriberMetricsTest {
         journey.setDataSource("TST");
         journey.setVehicleRef("TST:Vehicle:1");
         journey.setVehicleLocation(location);
-        journey.setLocationRecordedAtTime(locationRecordedAt.toString());
+        journey.setLocationRecordedAtTime(locationRecordedAt == null ? null : locationRecordedAt.toString());
         // Avro arrays are non-nullable
         journey.setVehicleModes(List.of());
         journey.setPublishedLineNames(List.of());
@@ -83,8 +83,8 @@ class PubSubVMSubscriberMetricsTest {
 
         VehicleActivityRecord activity = new VehicleActivityRecord();
         activity.setMonitoredVehicleJourney(journey);
-        activity.setRecordedAtTime(locationRecordedAt.toString());
-        activity.setValidUntilTime(locationRecordedAt.plusMinutes(10).toString());
+        activity.setRecordedAtTime(locationRecordedAt == null ? null : locationRecordedAt.toString());
+        activity.setValidUntilTime(ZonedDateTime.now().plusMinutes(10).toString());
         return JsonWriter.write(activity);
     }
 
@@ -114,6 +114,19 @@ class PubSubVMSubscriberMetricsTest {
         assertNotNull(source, "source latency timer not registered");
         assertEquals(1, source.count());
         assertEquals(5_000, source.totalTime(TimeUnit.MILLISECONDS), 1);
+    }
+
+    @Test
+    void sourceLatencyIsNotRecordedWithoutReportedTime() throws Exception {
+        RecordingAck ack = new RecordingAck();
+
+        // Publish time after ingest, so a sample taken from the ingest-time fallback would be positive and kept
+        receiver.receiveMessage(message(vehicle(null), Instant.now().plusSeconds(5)), ack);
+
+        assertTrue(ack.acked.get());
+        Timer source = registry.find("app.vehicles.latency.source").timer();
+        assertTrue(source == null || source.count() == 0,
+                "source latency recorded from ingest time instead of a reported time");
     }
 
     @Test
