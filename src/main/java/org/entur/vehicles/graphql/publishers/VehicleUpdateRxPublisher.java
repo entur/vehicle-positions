@@ -29,7 +29,13 @@ public class VehicleUpdateRxPublisher {
         this.repository = repository;
     }
 
-    public void publishUpdate(VehicleUpdate vehicleUpdate) {
+    /**
+     * Called from several Pub/Sub executor threads. A Reactor sink rejects overlapping emits with
+     * FAIL_NON_SERIALIZED, so emits must be serialised. The work under the lock is each
+     * subscription's filter and buffer; blocking WebSocket sends happen on the session's own
+     * thread (publishOn in Spring GraphQL), so a slow client cannot hold the lock.
+     */
+    public synchronized void publishUpdate(VehicleUpdate vehicleUpdate) {
         Sinks.EmitResult result = sink.tryEmitNext(vehicleUpdate);
         // No subscribers means nobody is listening, not a lost update
         if (result.isFailure() && result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER) {
