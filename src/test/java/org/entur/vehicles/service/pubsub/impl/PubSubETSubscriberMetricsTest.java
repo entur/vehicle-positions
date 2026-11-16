@@ -99,7 +99,7 @@ class PubSubETSubscriberMetricsTest {
     void pubsubLatencyIsTaggedAsTimetable() throws Exception {
         receiver.receiveMessage(message(journey(ZonedDateTime.now()), Instant.now().minusSeconds(2)), new RecordingAck());
 
-        Timer pubsub = registry.find("app.vehicles.latency.pubsub").tag("type", "timetable").timer();
+        Timer pubsub = registry.find("app.vehicles.latency.pubsub").tag("dataType", "timetable").timer();
         assertNotNull(pubsub, "pubsub latency timer not registered");
         assertEquals(1, pubsub.count());
         double millis = pubsub.totalTime(TimeUnit.MILLISECONDS);
@@ -114,7 +114,7 @@ class PubSubETSubscriberMetricsTest {
         receiver.receiveMessage(message(journey(recordedAt), published), new RecordingAck());
 
         Timer source = registry.find("app.vehicles.latency.source")
-                .tags("type", "timetable", "codespaceId", "TST").timer();
+                .tags("dataType", "timetable", "codespaceId", "TST").timer();
         assertNotNull(source, "source latency timer not registered");
         assertEquals(1, source.count());
         assertEquals(5_000, source.totalTime(TimeUnit.MILLISECONDS), 1);
@@ -124,9 +124,9 @@ class PubSubETSubscriberMetricsTest {
     void journeyWithoutRecordedAtIsCountedAsMissing() throws Exception {
         receiver.receiveMessage(message(journey(null), Instant.now()), new RecordingAck());
 
-        assertNull(registry.find("app.vehicles.latency.source").tag("type", "timetable").timer());
+        assertNull(registry.find("app.vehicles.latency.source").tag("dataType", "timetable").timer());
         Counter missing = registry.find("app.vehicles.latency.source.missing")
-                .tags("type", "timetable", "codespaceId", "TST").counter();
+                .tags("dataType", "timetable", "codespaceId", "TST").counter();
         assertNotNull(missing, "missing counter not registered");
         assertEquals(1, missing.count());
     }
@@ -140,7 +140,7 @@ class PubSubETSubscriberMetricsTest {
 
         assertFalse(ack.acked.get());
         Counter dropped = registry.find("app.vehicles.dropped")
-                .tags("type", "timetable", "reason", "decode_error").counter();
+                .tags("dataType", "timetable", "reason", "decode_error").counter();
         assertNotNull(dropped, "decode_error counter not registered");
         assertEquals(1, dropped.count());
     }

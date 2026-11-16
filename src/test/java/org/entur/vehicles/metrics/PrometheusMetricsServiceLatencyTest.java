@@ -36,7 +36,7 @@ class PrometheusMetricsServiceLatencyTest {
 
         assertNull(registry.find("app.vehicles.latency.source").timer());
         Counter skewed = registry.find("app.vehicles.latency.source.skewed")
-                .tags("type", "vehicle", "codespaceId", "TST").counter();
+                .tags("dataType", "vehicle", "codespaceId", "TST").counter();
         assertNotNull(skewed, "source skew counter not registered");
         assertEquals(1, skewed.count());
     }
@@ -46,7 +46,7 @@ class PrometheusMetricsServiceLatencyTest {
         metrics.recordPubsubLatency("vehicle", Duration.ofMillis(-1));
 
         assertNull(registry.find("app.vehicles.latency.pubsub").timer());
-        Counter skewed = registry.find("app.vehicles.latency.pubsub.skewed").tags("type", "vehicle").counter();
+        Counter skewed = registry.find("app.vehicles.latency.pubsub.skewed").tags("dataType", "vehicle").counter();
         assertNotNull(skewed, "pubsub skew counter not registered");
         assertEquals(1, skewed.count());
     }

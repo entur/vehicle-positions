@@ -71,7 +71,7 @@ class VehicleRepositoryDropMetricsTest {
     }
 
     private double dropped(String reason) {
-        Counter counter = registry.find("app.vehicles.dropped").tags("type", "vehicle", "reason", reason).counter();
+        Counter counter = registry.find("app.vehicles.dropped").tags("dataType", "vehicle", "reason", reason).counter();
         assertNotNull(counter, reason + " counter not registered");
         return counter.count();
     }

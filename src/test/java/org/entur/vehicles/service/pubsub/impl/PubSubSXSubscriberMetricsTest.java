@@ -102,7 +102,7 @@ class PubSubSXSubscriberMetricsTest {
         receiver.receiveMessage(message(situation(), Instant.now().minusSeconds(2)), ack);
 
         assertTrue(ack.acked.get());
-        Timer pubsub = registry.find("app.vehicles.latency.pubsub").tag("type", "situation").timer();
+        Timer pubsub = registry.find("app.vehicles.latency.pubsub").tag("dataType", "situation").timer();
         assertNotNull(pubsub, "pubsub latency timer not registered");
         assertEquals(1, pubsub.count());
         double millis = pubsub.totalTime(TimeUnit.MILLISECONDS);
@@ -118,7 +118,7 @@ class PubSubSXSubscriberMetricsTest {
 
         assertFalse(ack.acked.get());
         Counter dropped = registry.find("app.vehicles.dropped")
-                .tags("type", "situation", "reason", "decode_error").counter();
+                .tags("dataType", "situation", "reason", "decode_error").counter();
         assertNotNull(dropped, "decode_error counter not registered");
         assertEquals(1, dropped.count());
     }
