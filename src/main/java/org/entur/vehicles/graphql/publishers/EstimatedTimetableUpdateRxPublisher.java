@@ -22,7 +22,13 @@ public class EstimatedTimetableUpdateRxPublisher {
         this.repository = repository;
     }
 
-    public void publishUpdate(EstimatedTimetableUpdate vehicleUpdate) {
+    /**
+     * Called from several Pub/Sub executor threads. A Reactor sink rejects overlapping emits with
+     * FAIL_NON_SERIALIZED, so emits must be serialised. The work under the lock is each
+     * subscription's filter and buffer; blocking WebSocket sends happen on the session's own
+     * thread (publishOn in Spring GraphQL), so a slow client cannot hold the lock.
+     */
+    public synchronized void publishUpdate(EstimatedTimetableUpdate vehicleUpdate) {
         sink.tryEmitNext(vehicleUpdate);
     }
 
