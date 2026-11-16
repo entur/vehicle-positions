@@ -120,12 +120,13 @@ public class PrometheusMetricsService {
     private static final String CODESPACES = "codespaces";
     private static final String SITUATIONS = "situations";
 
-    /** Values of the "type" tag on the pipeline metrics */
+    /** Values of the "dataType" tag on the pipeline metrics */
     public static final String TYPE_VEHICLE = "vehicle";
     public static final String TYPE_TIMETABLE = "timetable";
     public static final String TYPE_SITUATION = "situation";
 
-    private static final String TYPE_TAG_NAME = "type";
+    // Not "type": the scrape target already sets type="api", so Prometheus would store ours as exported_type
+    private static final String TYPE_TAG_NAME = "dataType";
     private static final String SOURCE_LATENCY_MISSING_NAME = METRICS_PREFIX + "latency.source.missing";
     // Negative latencies from clock skew; separate names since the timers' tag sets differ
     private static final String PUBSUB_LATENCY_SKEWED_NAME = METRICS_PREFIX + "latency.pubsub.skewed";
@@ -248,7 +249,7 @@ public class PrometheusMetricsService {
     }
 
     /**
-     * Counts updates that never reach subscribers, by {@code type} (vehicle, timetable, situation).
+     * Counts updates that never reach subscribers, by {@code dataType} (vehicle, timetable, situation).
      * Reasons: decode_error, no_location, not_mapped, outdated, mapping_error, a failed sink emit
      * (Reactor EmitResult name, e.g. fail_non_serialized), and backpressure, which counts per
      * subscriber.

@@ -31,7 +31,7 @@ class TimetableSituationPublisherMetricsTest {
     }
 
     private double backpressure(String type) {
-        return registry.find("app.vehicles.dropped").tags("type", type, "reason", "backpressure")
+        return registry.find("app.vehicles.dropped").tags("dataType", type, "reason", "backpressure")
                 .counters().stream().mapToDouble(Counter::count).sum();
     }
 

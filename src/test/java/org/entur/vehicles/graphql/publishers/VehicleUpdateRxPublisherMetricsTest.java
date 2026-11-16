@@ -56,12 +56,12 @@ class VehicleUpdateRxPublisherMetricsTest {
     }
 
     private double dropped(String reason) {
-        return registry.find("app.vehicles.dropped").tags("type", "vehicle", "reason", reason)
+        return registry.find("app.vehicles.dropped").tags("dataType", "vehicle", "reason", reason)
                 .counters().stream().mapToDouble(Counter::count).sum();
     }
 
     private double droppedForAnyReason() {
-        return registry.find("app.vehicles.dropped").tag("type", "vehicle")
+        return registry.find("app.vehicles.dropped").tag("dataType", "vehicle")
                 .counters().stream().mapToDouble(Counter::count).sum();
     }
 

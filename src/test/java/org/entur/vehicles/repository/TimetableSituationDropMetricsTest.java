@@ -68,7 +68,7 @@ class TimetableSituationDropMetricsTest {
     }
 
     private double dropped(String type, String reason) {
-        Counter counter = registry.find("app.vehicles.dropped").tags("type", type, "reason", reason).counter();
+        Counter counter = registry.find("app.vehicles.dropped").tags("dataType", type, "reason", reason).counter();
         assertNotNull(counter, type + "/" + reason + " counter not registered");
         return counter.count();
     }
