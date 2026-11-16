@@ -256,6 +256,9 @@ public class PrometheusMetricsService {
 
     /** Time from Anshar publishing an update to Pub/Sub until this pod received it */
     public void recordPubsubLatency(String type, Duration latency) {
+        if (latency.isNegative()) {
+            return; // clock skew between Pub/Sub and this pod
+        }
         latencyTimers.computeIfAbsent(PUBSUB_LATENCY_NAME + type, key ->
                 Timer.builder(PUBSUB_LATENCY_NAME)
                         .description("Time from Anshar publishing an update to Pub/Sub until this pod received it")
@@ -267,6 +270,9 @@ public class PrometheusMetricsService {
 
     /** Time from the update's reported time until Anshar published it to Pub/Sub */
     public void recordSourceLatency(String type, Codespace codespace, Duration latency) {
+        if (latency.isNegative()) {
+            return; // clock skew between the producer and Anshar or Pub/Sub
+        }
         latencyTimers.computeIfAbsent(SOURCE_LATENCY_NAME + type + "/" + codespace.getCodespaceId(), key ->
                 Timer.builder(SOURCE_LATENCY_NAME)
                         .description("Time from an update's reported time until Anshar published it to Pub/Sub")
