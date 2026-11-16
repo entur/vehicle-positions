@@ -91,7 +91,10 @@ public class TimetableRepository {
     return null;
   }
 
-  public void add(EstimatedVehicleJourneyRecord journeyRecord) {
+  /**
+   * @return the stored timetable, or null when the update was dropped
+   */
+  public EstimatedTimetableUpdate add(EstimatedVehicleJourneyRecord journeyRecord) {
     try {
 
       final Codespace codespace = Codespace.getCodespace(journeyRecord.getDataSource().toString());
@@ -277,9 +280,12 @@ public class TimetableRepository {
       publisher.publishUpdate(v);
 
       metricsService.markTimetableUpdate(1, v.getCodespace());
+      return v;
     }
     catch (RuntimeException e) {
       LOG.warn("Update ignored.", e);
+      metricsService.markDropped(PrometheusMetricsService.TYPE_TIMETABLE, "mapping_error", 1);
+      return null;
     }
   }
 

@@ -100,7 +100,7 @@ public class VehicleRepository {
               || journey.getVehicleLocation().getLatitude() == null
               || journey.getVehicleLocation().getLongitude() == null) {
         // No usable location - ignoring
-        metricsService.markVehicleDropped("no_location", 1);
+        metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, "no_location", 1);
         return null;
       }
 
@@ -305,7 +305,7 @@ public class VehicleRepository {
     }
     catch (RuntimeException e) {
       LOG.warn("Update ignored.", e);
-      metricsService.markVehicleDropped("mapping_error", 1);
+      metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, "mapping_error", 1);
       return null;
     }
   }

@@ -120,15 +120,21 @@ public class PrometheusMetricsService {
     private static final String CODESPACES = "codespaces";
     private static final String SITUATIONS = "situations";
 
-    private final Timer pubsubLatency;
-    private final java.util.Map<String, Timer> sourceLatencyByCodespace = new ConcurrentHashMap<>();
+    /** Values of the "type" tag on the pipeline metrics */
+    public static final String TYPE_VEHICLE = "vehicle";
+    public static final String TYPE_TIMETABLE = "timetable";
+    public static final String TYPE_SITUATION = "situation";
+
+    private static final String TYPE_TAG_NAME = "type";
+    private static final String SOURCE_LATENCY_MISSING_NAME = METRICS_PREFIX + "latency.source.missing";
+    // Negative latencies from clock skew; separate names since the timers' tag sets differ
+    private static final String PUBSUB_LATENCY_SKEWED_NAME = METRICS_PREFIX + "latency.pubsub.skewed";
+    private static final String SOURCE_LATENCY_SKEWED_NAME = METRICS_PREFIX + "latency.source.skewed";
+
+    private final java.util.Map<String, Timer> latencyTimers = new ConcurrentHashMap<>();
 
     public PrometheusMetricsService(@Autowired PrometheusMeterRegistry prometheusMeterRegistry) {
         this.prometheusMeterRegistry = prometheusMeterRegistry;
-        this.pubsubLatency = Timer.builder(PUBSUB_LATENCY_NAME)
-                .description("Time from Anshar publishing a VM update to Pub/Sub until this pod received it")
-                .serviceLevelObjectives(PUBSUB_LATENCY_BUCKETS)
-                .register(prometheusMeterRegistry);
         prometheusMeterRegistry.gauge(PLANNED_DATA_LOAD_DURATION_NAME, plannedDataLoadDurationMillis);
         prometheusMeterRegistry.gauge(PLANNED_DATA_LAST_SUCCESS_NAME, plannedDataLastSuccessEpochSeconds);
         prometheusMeterRegistry.gauge(NSR_LOAD_DURATION_NAME, nsrLoadDurationMillis);
@@ -242,26 +248,53 @@ public class PrometheusMetricsService {
     }
 
     /**
-     * Counts VM updates that never reach subscribers. Reasons: decode_error, no_location,
-     * mapping_error, a failed sink emit (Reactor EmitResult name, e.g. fail_non_serialized), and
-     * backpressure, which counts per subscriber.
+     * Counts updates that never reach subscribers, by {@code type} (vehicle, timetable, situation).
+     * Reasons: decode_error, no_location, not_mapped, outdated, mapping_error, a failed sink emit
+     * (Reactor EmitResult name, e.g. fail_non_serialized), and backpressure, which counts per
+     * subscriber.
      */
-    public void markVehicleDropped(String reason, int count) {
-        prometheusMeterRegistry.counter(DROPPED_COUNTER_NAME, "type", "vehicle", "reason", reason).increment(count);
+    public void markDropped(String type, String reason, int count) {
+        prometheusMeterRegistry.counter(DROPPED_COUNTER_NAME, TYPE_TAG_NAME, type, "reason", reason).increment(count);
     }
 
-    public void recordPubsubLatency(Duration latency) {
-        pubsubLatency.record(latency);
+    /** Time from Anshar publishing an update to Pub/Sub until this pod received it */
+    public void recordPubsubLatency(String type, Duration latency) {
+        if (latency.isNegative()) {
+            // Clock skew between Pub/Sub and this pod; Micrometer rejects negative timings
+            prometheusMeterRegistry.counter(PUBSUB_LATENCY_SKEWED_NAME, TYPE_TAG_NAME, type).increment();
+            return;
+        }
+        latencyTimers.computeIfAbsent(PUBSUB_LATENCY_NAME + type, key ->
+                Timer.builder(PUBSUB_LATENCY_NAME)
+                        .description("Time from Anshar publishing an update to Pub/Sub until this pod received it")
+                        .tag(TYPE_TAG_NAME, type)
+                        .serviceLevelObjectives(PUBSUB_LATENCY_BUCKETS)
+                        .register(prometheusMeterRegistry)
+        ).record(latency);
     }
 
-    public void recordSourceLatency(Codespace codespace, Duration latency) {
-        sourceLatencyByCodespace.computeIfAbsent(codespace.getCodespaceId(), codespaceId ->
+    /** Time from the update's reported time until Anshar published it to Pub/Sub */
+    public void recordSourceLatency(String type, Codespace codespace, Duration latency) {
+        if (latency.isNegative()) {
+            // Clock skew between the producer and Anshar or Pub/Sub; Micrometer rejects negative timings
+            prometheusMeterRegistry.counter(SOURCE_LATENCY_SKEWED_NAME,
+                    TYPE_TAG_NAME, type, CODESPACE_TAG_NAME, codespace.getCodespaceId()).increment();
+            return;
+        }
+        latencyTimers.computeIfAbsent(SOURCE_LATENCY_NAME + type + "/" + codespace.getCodespaceId(), key ->
                 Timer.builder(SOURCE_LATENCY_NAME)
-                        .description("Time from a vehicle's reported position time until Anshar published it to Pub/Sub")
-                        .tag(CODESPACE_TAG_NAME, codespaceId)
+                        .description("Time from an update's reported time until Anshar published it to Pub/Sub")
+                        .tag(TYPE_TAG_NAME, type)
+                        .tag(CODESPACE_TAG_NAME, codespace.getCodespaceId())
                         .serviceLevelObjectives(SOURCE_LATENCY_BUCKETS)
                         .register(prometheusMeterRegistry)
         ).record(latency);
+    }
+
+    /** Counts stored updates without a reported time, so their source latency cannot be measured */
+    public void markSourceTimeMissing(String type, Codespace codespace) {
+        prometheusMeterRegistry.counter(SOURCE_LATENCY_MISSING_NAME,
+                TYPE_TAG_NAME, type, CODESPACE_TAG_NAME, codespace.getCodespaceId()).increment();
     }
 
     /** @param outcome uploaded, exists or failed */

@@ -61,7 +61,7 @@ public class SituationTriggeredRepublisherTest {
         registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         metricsService = new PrometheusMetricsService(registry);
         republisher = new SituationTriggeredRepublisher(metricsService, timetableMap,
-                new EstimatedTimetableUpdateRxPublisher(), 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
+                new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT))), 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
     }
 
     /** A filter that matches everything, with the small buffer the publisher requires. */
@@ -232,7 +232,7 @@ public class SituationTriggeredRepublisherTest {
 
     @Test
     public void testRepublishesAffectedJourneysToSubscribers() {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
@@ -257,7 +257,7 @@ public class SituationTriggeredRepublisherTest {
 
     @Test
     public void testLargeFanOutIsEmittedInChunksRatherThanOneBurst() {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
@@ -284,7 +284,7 @@ public class SituationTriggeredRepublisherTest {
 
     @Test
     public void testHandOffEventuallyRunsAScan() throws Exception {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
         republisher.start();
@@ -324,7 +324,7 @@ public class SituationTriggeredRepublisherTest {
     @Test
     @Timeout(5)
     public void testChunkSizeZeroFallsBackAndEmitsEveryCandidateExactlyOnce() {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 0, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
@@ -768,7 +768,7 @@ public class SituationTriggeredRepublisherTest {
      */
     @Test
     public void testChunkDelayNegativeFallsBackToDefault() {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 1, Duration.ofSeconds(-1), DEFAULT_THRESHOLD, ref -> Set.of());
 
@@ -803,7 +803,7 @@ public class SituationTriggeredRepublisherTest {
     @Test
     @Timeout(5)
     public void testChunkDelayAboveMaximumFallsBackToDefault() {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 1, Duration.ofMinutes(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
@@ -830,7 +830,7 @@ public class SituationTriggeredRepublisherTest {
      */
     @Test
     public void testLargeFanoutCrossingThresholdStillEmitsEveryCandidate() {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 100, Duration.ofMillis(1), 2, ref -> Set.of());
 
@@ -863,7 +863,7 @@ public class SituationTriggeredRepublisherTest {
      */
     @Test
     public void testLargeFanoutThresholdNonPositiveFallsBackToDefaultAndStillEmits() {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 100, Duration.ofMillis(1), 0, ref -> Set.of());
 
@@ -909,7 +909,7 @@ public class SituationTriggeredRepublisherTest {
 
     @Test
     public void testScanRepublishAndChunkCountsAreAlsoRecordedOnPrometheusMetricsService() {
-        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
 
@@ -950,7 +950,7 @@ public class SituationTriggeredRepublisherTest {
                 "VYG:DatedServiceJourney:80808_548292-R", "NSR:Quay:749");
 
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(
-                metricsService, timetableMap, new EstimatedTimetableUpdateRxPublisher(),
+                metricsService, timetableMap, new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT))),
                 100, Duration.ofMillis(1), DEFAULT_THRESHOLD,
                 ref -> "NSR:Quay:749".equals(ref) ? Set.of("NSR:StopPlace:451") : Set.of());
 
@@ -965,7 +965,7 @@ public class SituationTriggeredRepublisherTest {
         storeJourney("VYG:Line:1", "VYG:ServiceJourney:1", "VYG:DatedServiceJourney:1", "NSR:Quay:749");
 
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(
-                metricsService, timetableMap, new EstimatedTimetableUpdateRxPublisher(),
+                metricsService, timetableMap, new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT))),
                 100, Duration.ofMillis(1), DEFAULT_THRESHOLD,
                 ref -> "NSR:Quay:749".equals(ref) ? Set.of("NSR:StopPlace:451") : Set.of());
 

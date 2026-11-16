@@ -5,7 +5,6 @@ import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.VehicleRepository;
-import org.entur.vehicles.repository.helpers.Util;
 import org.entur.vehicles.service.SiriJsonReader;
 import org.entur.vehicles.service.pubsub.PubSubSubscriber;
 import org.slf4j.Logger;
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 @Service
@@ -50,11 +48,9 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
   static MessageReceiver messageReceiver(VehicleRepository vehicleRepository, PrometheusMetricsService metricsService) {
     return (pubsubMessage, ackReplyConsumer) -> {
       Instant receivedAt = Instant.now();
-      Instant publishedAt = null;
-      if (pubsubMessage.hasPublishTime()) {
-        publishedAt = Instant.ofEpochSecond(pubsubMessage.getPublishTime().getSeconds(),
-                pubsubMessage.getPublishTime().getNanos());
-        metricsService.recordPubsubLatency(Duration.between(publishedAt, receivedAt));
+      Instant publishedAt = ReceivedMessages.publishedAt(pubsubMessage);
+      if (publishedAt != null) {
+        metricsService.recordPubsubLatency(PrometheusMetricsService.TYPE_VEHICLE, Duration.between(publishedAt, receivedAt));
       }
 
       VehicleActivityRecord vehicleActivity;
@@ -62,7 +58,7 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
         vehicleActivity = SiriJsonReader.readVehicleActivity(pubsubMessage.getData().toStringUtf8());
       } catch (IOException | RuntimeException e) {
         // Not acked, so Pub/Sub redelivers it; each attempt is counted
-        metricsService.markVehicleDropped("decode_error", 1);
+        metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, "decode_error", 1);
         throw e instanceof RuntimeException runtimeException ? runtimeException : new RuntimeException(e);
       }
 
@@ -71,8 +67,10 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
       Instant reportedAt = reportedAt(vehicleActivity);
 
       VehicleUpdate stored = vehicleRepository.add(vehicleActivity);
-      if (stored != null && publishedAt != null && reportedAt != null) {
-        metricsService.recordSourceLatency(stored.getCodespace(), Duration.between(reportedAt, publishedAt));
+      if (stored != null && reportedAt == null) {
+        metricsService.markSourceTimeMissing(PrometheusMetricsService.TYPE_VEHICLE, stored.getCodespace());
+      } else if (stored != null && publishedAt != null) {
+        metricsService.recordSourceLatency(PrometheusMetricsService.TYPE_VEHICLE, stored.getCodespace(), Duration.between(reportedAt, publishedAt));
       }
 
       // Ack only after all work for the message is complete.
@@ -86,13 +84,6 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
             && vehicleActivity.getMonitoredVehicleJourney().getLocationRecordedAtTime() != null
             ? vehicleActivity.getMonitoredVehicleJourney().getLocationRecordedAtTime()
             : vehicleActivity.getRecordedAtTime();
-    if (reported == null) {
-      return null;
-    }
-    try {
-      return Util.convert(reported).toInstant();
-    } catch (DateTimeParseException e) {
-      return null;
-    }
+    return ReceivedMessages.parseReportedTime(reported);
   }
 }

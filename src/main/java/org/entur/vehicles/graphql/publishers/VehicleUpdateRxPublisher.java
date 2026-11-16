@@ -39,7 +39,7 @@ public class VehicleUpdateRxPublisher {
         Sinks.EmitResult result = sink.tryEmitNext(vehicleUpdate);
         // No subscribers means nobody is listening, not a lost update
         if (result.isFailure() && result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER) {
-            metricsService.markVehicleDropped(result.name().toLowerCase(Locale.ROOT), 1);
+            metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, result.name().toLowerCase(Locale.ROOT), 1);
         }
     }
 
@@ -53,7 +53,7 @@ public class VehicleUpdateRxPublisher {
                 .startWith(initialdata)
                 .filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
                 .bufferTimeout(template.getBufferSize(), Duration.of(template.getBufferTimeMillis(), ChronoUnit.MILLIS))
-                .onBackpressureDrop(batch -> metricsService.markVehicleDropped("backpressure", batch.size()));
+                .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, "backpressure", batch.size()));
     }
 
     public int currentSubscribers() {

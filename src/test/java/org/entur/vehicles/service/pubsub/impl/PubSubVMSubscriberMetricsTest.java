@@ -156,4 +156,23 @@ class PubSubVMSubscriberMetricsTest {
         assertNotNull(dropped, "decode_error counter not registered");
         assertEquals(1, dropped.count());
     }
+
+    @Test
+    void pubsubLatencyIsTaggedAsVehicle() throws Exception {
+        receiver.receiveMessage(message(vehicle(ZonedDateTime.now()), Instant.now().minusSeconds(2)), new RecordingAck());
+
+        Timer pubsub = registry.find("app.vehicles.latency.pubsub").tag("type", "vehicle").timer();
+        assertNotNull(pubsub, "pubsub latency timer not tagged type=vehicle");
+        assertEquals(1, pubsub.count());
+    }
+
+    @Test
+    void vehicleWithoutReportedTimeIsCountedAsMissing() throws Exception {
+        receiver.receiveMessage(message(vehicle(null), Instant.now()), new RecordingAck());
+
+        Counter missing = registry.find("app.vehicles.latency.source.missing")
+                .tags("type", "vehicle", "codespaceId", "TST").counter();
+        assertNotNull(missing, "missing counter not registered");
+        assertEquals(1, missing.count());
+    }
 }

@@ -68,7 +68,7 @@ public class TimetableRepositoryStopPointTest {
                 nsrService,
                 new AutoPurgingTimetableMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
                 180,
-                new EstimatedTimetableUpdateRxPublisher()
+                new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)))
         );
     }
 

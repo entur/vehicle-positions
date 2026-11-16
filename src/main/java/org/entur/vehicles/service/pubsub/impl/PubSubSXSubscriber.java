@@ -1,6 +1,8 @@
 package org.entur.vehicles.service.pubsub.impl;
 
 import com.google.cloud.pubsub.v1.MessageReceiver;
+import org.entur.avro.realtime.siri.model.PtSituationElementRecord;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.SituationRepository;
 import org.entur.vehicles.service.SiriJsonReader;
 import org.entur.vehicles.service.pubsub.PubSubSubscriber;
@@ -12,6 +14,8 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 
 // The startup snapshot must finish loading before the stream starts: `version` is null on
@@ -24,6 +28,7 @@ public class PubSubSXSubscriber extends PubSubSubscriber {
   private static final Logger LOG = LoggerFactory.getLogger(PubSubSXSubscriber.class.getName());
 
   public PubSubSXSubscriber(@Autowired SituationRepository situationRepository,
+                            @Autowired PrometheusMetricsService metricsService,
                             @Value("${entur.vehicle-positions.gcp.subscription.project.name}") String subscriptionProjectName,
                             @Value("${entur.vehicle-positions.gcp.subscription.name.sx}") String subscriptionName,
                             @Value("${entur.vehicle-positions.gcp.topic.project.name}") String topicProjectName,
@@ -39,20 +44,29 @@ public class PubSubSXSubscriber extends PubSubSubscriber {
             parallelPullCount,
             executorThreadCount,
             appLabels,
-            getMessageReceiver(situationRepository),
+            messageReceiver(situationRepository, metricsService),
             enabled
     );
   }
 
-  private static MessageReceiver getMessageReceiver(SituationRepository situationRepository) {
+  static MessageReceiver messageReceiver(SituationRepository situationRepository, PrometheusMetricsService metricsService) {
     return (pubsubMessage, ackReplyConsumer) -> {
-      try {
-        situationRepository.add(
-                SiriJsonReader.readPtSituationElement(pubsubMessage.getData().toStringUtf8())
-        );
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+      Instant publishedAt = ReceivedMessages.publishedAt(pubsubMessage);
+      if (publishedAt != null) {
+        metricsService.recordPubsubLatency(PrometheusMetricsService.TYPE_SITUATION, Duration.between(publishedAt, Instant.now()));
       }
+
+      PtSituationElementRecord situation;
+      try {
+        situation = SiriJsonReader.readPtSituationElement(pubsubMessage.getData().toStringUtf8());
+      } catch (IOException | RuntimeException e) {
+        // Not acked, so Pub/Sub redelivers it; each attempt is counted
+        metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, "decode_error", 1);
+        throw e instanceof RuntimeException runtimeException ? runtimeException : new RuntimeException(e);
+      }
+
+      // No source latency: a situation's creation or version time says little about pipeline delay
+      situationRepository.add(situation);
 
       // Ack only after all work for the message is complete.
       ackReplyConsumer.ack();
