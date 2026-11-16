@@ -51,7 +51,7 @@ public class SituationSnapshotServiceTest {
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(
                 metricsService,
                 new AutoPurgingTimetableMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
-                new EstimatedTimetableUpdateRxPublisher(),
+                new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT))),
                 100,
                 Duration.ofMillis(50),
                 2000,
@@ -61,7 +61,7 @@ public class SituationSnapshotServiceTest {
                 new SituationMapper(new LineService(PlannedDataService.disabled()), nsrService,
                         new ServiceJourneyService(PlannedDataService.disabled())),
                 new AutoPurgingSituationMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
-                new SituationUpdateRxPublisher(),
+                new SituationUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT))),
                 republisher
         );
 

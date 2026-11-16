@@ -46,11 +46,16 @@ public class SituationRepository {
         }
     }
 
-    public void add(PtSituationElementRecord record) {
+    /**
+     * @return the stored situation, or null when the update was dropped
+     */
+    public SituationUpdate add(PtSituationElementRecord record) {
         try {
             SituationUpdate situation = mapper.map(record);
             if (situation == null) {
-                return;
+                // No codespace could be resolved
+                metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, "not_mapped", 1);
+                return null;
             }
 
             SituationKey key = new SituationKey(situation.getCodespace(), situation.getSituationNumber());
@@ -78,7 +83,8 @@ public class SituationRepository {
             if (accepted != situation) {
                 LOG.debug("Ignoring out-of-order update for {} - version {} is older than the stored one.",
                         situation.getSituationNumber(), situation.getVersion());
-                return;
+                metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, "outdated", 1);
+                return null;
             }
 
             // Publishing happens outside the compute() lock above (as it must - see the
@@ -93,8 +99,11 @@ public class SituationRepository {
             metricsService.markSituationUpdate(1, situation.getCodespace());
 
             republisher.onSituationChanged(previous.get(), situation);
+            return situation;
         } catch (RuntimeException e) {
             LOG.warn("Update ignored.", e);
+            metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, "mapping_error", 1);
+            return null;
         }
     }
 

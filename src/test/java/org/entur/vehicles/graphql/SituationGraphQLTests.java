@@ -63,14 +63,14 @@ public class SituationGraphQLTests {
                 .thenAnswer(invocation ->
                         new org.entur.vehicles.data.model.StopPoint(invocation.getArgument(0)));
 
-        publisher = new SituationUpdateRxPublisher();
+        publisher = new SituationUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         // A real republisher, never started: onSituationChanged() only accumulates pending
         // refs and releases a semaphore permit, which is harmless with no worker thread
         // running to consume it - these tests exercise queries, not republishing.
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(
                 metricsService,
                 new AutoPurgingTimetableMap(Duration.parse("PT5S"), Duration.parse("PT5M")),
-                new EstimatedTimetableUpdateRxPublisher(),
+                new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT))),
                 100,
                 Duration.ofMillis(50),
                 2000,

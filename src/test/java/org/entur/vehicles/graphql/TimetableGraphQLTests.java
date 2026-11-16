@@ -35,7 +35,7 @@ public class TimetableGraphQLTests {
     TimetableRepository repository;
 
     Query queryService;
-    private EstimatedTimetableUpdateRxPublisher publisher = new EstimatedTimetableUpdateRxPublisher();
+    private EstimatedTimetableUpdateRxPublisher publisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
 
     private ServiceJourneyService serviceJourneyService = Mockito.mock(ServiceJourneyService.class);
 
@@ -51,7 +51,7 @@ public class TimetableGraphQLTests {
                         180,
                 publisher
         );
-        publisher = new EstimatedTimetableUpdateRxPublisher();
+        publisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         queryService = new Query(null, repository, null, new NSRService(false, null), metricsService, PlannedDataService.disabled());
 
         EstimatedVehicleJourneyRecord journeyRecord = new EstimatedVehicleJourneyRecord();

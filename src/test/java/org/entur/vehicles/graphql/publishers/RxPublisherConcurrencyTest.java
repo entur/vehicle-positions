@@ -57,7 +57,7 @@ class RxPublisherConcurrencyTest {
 
     @Test
     void concurrentTimetableUpdatesAllReachSubscriber() throws Exception {
-        EstimatedTimetableUpdateRxPublisher publisher = new EstimatedTimetableUpdateRxPublisher();
+        EstimatedTimetableUpdateRxPublisher publisher = new EstimatedTimetableUpdateRxPublisher(metrics);
         assertAllDelivered(
                 received -> publisher.getPublisher(matchAllQuery(), "test").subscribe(batch -> received.accept(batch.size())),
                 () -> {
@@ -69,7 +69,7 @@ class RxPublisherConcurrencyTest {
 
     @Test
     void concurrentSituationUpdatesAllReachSubscriber() throws Exception {
-        SituationUpdateRxPublisher publisher = new SituationUpdateRxPublisher();
+        SituationUpdateRxPublisher publisher = new SituationUpdateRxPublisher(metrics);
         SituationFilter matchAll = new SituationFilter(metrics, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, true, 20, 250);
         assertAllDelivered(
