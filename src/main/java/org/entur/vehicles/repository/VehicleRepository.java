@@ -89,7 +89,10 @@ public class VehicleRepository {
     }
   }
 
-  public void add(VehicleActivityRecord vehicleActivity) {
+  /**
+   * @return the stored vehicle, or null when the update was dropped
+   */
+  public VehicleUpdate add(VehicleActivityRecord vehicleActivity) {
     try {
       MonitoredVehicleJourneyRecord journey = vehicleActivity.getMonitoredVehicleJourney();
 
@@ -97,7 +100,8 @@ public class VehicleRepository {
               || journey.getVehicleLocation().getLatitude() == null
               || journey.getVehicleLocation().getLongitude() == null) {
         // No usable location - ignoring
-        return;
+        metricsService.markVehicleDropped("no_location", 1);
+        return null;
       }
 
       final Codespace codespace = Codespace.getCodespace(journey.getDataSource().toString());
@@ -297,9 +301,12 @@ public class VehicleRepository {
       publisher.publishUpdate(v);
 
       metricsService.markVehicleUpdate(1, v.getCodespace());
+      return v;
     }
     catch (RuntimeException e) {
       LOG.warn("Update ignored.", e);
+      metricsService.markVehicleDropped("mapping_error", 1);
+      return null;
     }
   }
 

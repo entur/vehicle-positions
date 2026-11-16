@@ -42,7 +42,7 @@ public class VehicleGraphQLTests {
     VehicleRepository repository;
 
     Query queryService;
-    private VehicleUpdateRxPublisher publisher = new VehicleUpdateRxPublisher();
+    private VehicleUpdateRxPublisher publisher = new VehicleUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
 
     private ServiceJourneyService serviceJourneyService = Mockito.mock(ServiceJourneyService.class);
 
@@ -59,7 +59,7 @@ public class VehicleGraphQLTests {
                 publisher,
                 new InvalidLocationRegistry("0.0/0.0,-1.0/-1.0,1.0/1.0")
         );
-        publisher = new VehicleUpdateRxPublisher();
+        publisher = new VehicleUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         PlannedDataService plannedDataService = Mockito.mock(PlannedDataService.class);
         Mockito.when(plannedDataService.current()).thenReturn(plannedDataset());
         queryService = new Query(repository, null, null, new NSRService(false, null), metricsService, plannedDataService);

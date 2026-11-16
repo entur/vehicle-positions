@@ -17,6 +17,7 @@ package org.entur.vehicles.metrics;
 
 import io.micrometer.core.instrument.ImmutableTag;
 import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import jakarta.annotation.PreDestroy;
 import org.entur.vehicles.data.MetricType;
@@ -28,8 +29,10 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -70,6 +73,22 @@ public class PrometheusMetricsService {
     private static final String SNAPSHOT_UPLOAD_COUNTER_NAME = METRICS_PREFIX + "snapshot.upload";
     private static final String NSR_LOAD_DURATION_NAME = METRICS_PREFIX + "nsr.load.duration.millis";
 
+    private static final String DROPPED_COUNTER_NAME = METRICS_PREFIX + "dropped";
+    private static final String PUBSUB_LATENCY_NAME = METRICS_PREFIX + "latency.pubsub";
+    private static final String SOURCE_LATENCY_NAME = METRICS_PREFIX + "latency.source";
+
+    // Pub/Sub delivery is expected in milliseconds; seconds mean consumer lag
+    private static final Duration[] PUBSUB_LATENCY_BUCKETS = {
+            Duration.ofMillis(10), Duration.ofMillis(25), Duration.ofMillis(50), Duration.ofMillis(100),
+            Duration.ofMillis(250), Duration.ofMillis(500), Duration.ofSeconds(1), Duration.ofMillis(2500),
+            Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(60)};
+
+    // Operator reporting plus Anshar processing: seconds to minutes
+    private static final Duration[] SOURCE_LATENCY_BUCKETS = {
+            Duration.ofMillis(250), Duration.ofMillis(500), Duration.ofSeconds(1), Duration.ofSeconds(2),
+            Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(15), Duration.ofSeconds(30),
+            Duration.ofSeconds(60), Duration.ofSeconds(120), Duration.ofSeconds(300), Duration.ofSeconds(600)};
+
     private final PrometheusMeterRegistry prometheusMeterRegistry;
 
     private final AtomicInteger vehicleCounter = new AtomicInteger(0);
@@ -101,8 +120,15 @@ public class PrometheusMetricsService {
     private static final String CODESPACES = "codespaces";
     private static final String SITUATIONS = "situations";
 
+    private final Timer pubsubLatency;
+    private final java.util.Map<String, Timer> sourceLatencyByCodespace = new ConcurrentHashMap<>();
+
     public PrometheusMetricsService(@Autowired PrometheusMeterRegistry prometheusMeterRegistry) {
         this.prometheusMeterRegistry = prometheusMeterRegistry;
+        this.pubsubLatency = Timer.builder(PUBSUB_LATENCY_NAME)
+                .description("Time from Anshar publishing a VM update to Pub/Sub until this pod received it")
+                .serviceLevelObjectives(PUBSUB_LATENCY_BUCKETS)
+                .register(prometheusMeterRegistry);
         prometheusMeterRegistry.gauge(PLANNED_DATA_LOAD_DURATION_NAME, plannedDataLoadDurationMillis);
         prometheusMeterRegistry.gauge(PLANNED_DATA_LAST_SUCCESS_NAME, plannedDataLastSuccessEpochSeconds);
         prometheusMeterRegistry.gauge(NSR_LOAD_DURATION_NAME, nsrLoadDurationMillis);
@@ -213,6 +239,29 @@ public class PrometheusMetricsService {
     public void markSnapshotSource(String dataset, boolean fromSnapshot) {
         gauge(SNAPSHOT_SOURCE_NAME, List.of(new ImmutableTag("dataset", dataset), new ImmutableTag("source", "snapshot")), fromSnapshot ? 1 : 0);
         gauge(SNAPSHOT_SOURCE_NAME, List.of(new ImmutableTag("dataset", dataset), new ImmutableTag("source", "export")), fromSnapshot ? 0 : 1);
+    }
+
+    /**
+     * Counts VM updates that never reach subscribers. Reasons: decode_error, no_location,
+     * mapping_error, a failed sink emit (Reactor EmitResult name, e.g. fail_non_serialized), and
+     * backpressure, which counts per subscriber.
+     */
+    public void markVehicleDropped(String reason, int count) {
+        prometheusMeterRegistry.counter(DROPPED_COUNTER_NAME, "type", "vehicle", "reason", reason).increment(count);
+    }
+
+    public void recordPubsubLatency(Duration latency) {
+        pubsubLatency.record(latency);
+    }
+
+    public void recordSourceLatency(Codespace codespace, Duration latency) {
+        sourceLatencyByCodespace.computeIfAbsent(codespace.getCodespaceId(), codespaceId ->
+                Timer.builder(SOURCE_LATENCY_NAME)
+                        .description("Time from a vehicle's reported position time until Anshar published it to Pub/Sub")
+                        .tag(CODESPACE_TAG_NAME, codespaceId)
+                        .serviceLevelObjectives(SOURCE_LATENCY_BUCKETS)
+                        .register(prometheusMeterRegistry)
+        ).record(latency);
     }
 
     /** @param outcome uploaded, exists or failed */

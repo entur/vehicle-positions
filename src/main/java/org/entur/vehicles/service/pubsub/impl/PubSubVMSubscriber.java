@@ -1,7 +1,11 @@
 package org.entur.vehicles.service.pubsub.impl;
 
 import com.google.cloud.pubsub.v1.MessageReceiver;
+import org.entur.avro.realtime.siri.model.VehicleActivityRecord;
+import org.entur.vehicles.data.VehicleUpdate;
+import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.VehicleRepository;
+import org.entur.vehicles.repository.helpers.Util;
 import org.entur.vehicles.service.SiriJsonReader;
 import org.entur.vehicles.service.pubsub.PubSubSubscriber;
 import org.slf4j.Logger;
@@ -11,6 +15,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 @Service
@@ -19,6 +26,7 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
   private static final Logger LOG = LoggerFactory.getLogger(PubSubVMSubscriber.class.getName());
 
   public PubSubVMSubscriber(@Autowired VehicleRepository vehicleRepository,
+                            @Autowired PrometheusMetricsService metricsService,
                             @Value("${entur.vehicle-positions.gcp.subscription.project.name}") String subscriptionProjectName,
                             @Value("${entur.vehicle-positions.gcp.subscription.name.vm}") String subscriptionName,
                             @Value("${entur.vehicle-positions.gcp.topic.project.name}") String topicProjectName,
@@ -34,23 +42,57 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
             parallelPullCount,
             executorThreadCount,
             appLabels,
-            getMessageReceiver(vehicleRepository),
+            messageReceiver(vehicleRepository, metricsService),
             enabled
     );
   }
 
-  private static MessageReceiver getMessageReceiver(VehicleRepository vehicleRepository) {
+  static MessageReceiver messageReceiver(VehicleRepository vehicleRepository, PrometheusMetricsService metricsService) {
     return (pubsubMessage, ackReplyConsumer) -> {
+      Instant receivedAt = Instant.now();
+      Instant publishedAt = null;
+      if (pubsubMessage.hasPublishTime()) {
+        publishedAt = Instant.ofEpochSecond(pubsubMessage.getPublishTime().getSeconds(),
+                pubsubMessage.getPublishTime().getNanos());
+        metricsService.recordPubsubLatency(Duration.between(publishedAt, receivedAt));
+      }
+
+      VehicleActivityRecord vehicleActivity;
       try {
-        vehicleRepository.add(
-                SiriJsonReader.readVehicleActivity(pubsubMessage.getData().toStringUtf8())
-        );
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+        vehicleActivity = SiriJsonReader.readVehicleActivity(pubsubMessage.getData().toStringUtf8());
+      } catch (IOException | RuntimeException e) {
+        // Not acked, so Pub/Sub redelivers it; each attempt is counted
+        metricsService.markVehicleDropped("decode_error", 1);
+        throw e instanceof RuntimeException runtimeException ? runtimeException : new RuntimeException(e);
+      }
+
+      // Read from this message, not the stored VehicleUpdate: the repository falls back to
+      // ingest time when no time is reported, and other threads may overwrite the stored entry
+      Instant reportedAt = reportedAt(vehicleActivity);
+
+      VehicleUpdate stored = vehicleRepository.add(vehicleActivity);
+      if (stored != null && publishedAt != null && reportedAt != null) {
+        metricsService.recordSourceLatency(stored.getCodespace(), Duration.between(reportedAt, publishedAt));
       }
 
       // Ack only after all work for the message is complete.
       ackReplyConsumer.ack();
     };
+  }
+
+  /** Same precedence as VehicleRepository's lastUpdated, minus the ingest-time fallback */
+  private static Instant reportedAt(VehicleActivityRecord vehicleActivity) {
+    CharSequence reported = vehicleActivity.getMonitoredVehicleJourney() != null
+            && vehicleActivity.getMonitoredVehicleJourney().getLocationRecordedAtTime() != null
+            ? vehicleActivity.getMonitoredVehicleJourney().getLocationRecordedAtTime()
+            : vehicleActivity.getRecordedAtTime();
+    if (reported == null) {
+      return null;
+    }
+    try {
+      return Util.convert(reported).toInstant();
+    } catch (DateTimeParseException e) {
+      return null;
+    }
   }
 }
