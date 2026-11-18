@@ -44,7 +44,7 @@ spec:
           env:
             - name: JDK_JAVA_OPTIONS
               value: -server -Xmx{{ .Values.resources.xmx }} -XX:+UseG1GC -XX:MaxGCPauseMillis=750 -XX:ConcGCThreads=2
-                -XX:ParallelGCThreads=5
+                -XX:ParallelGCThreads=5 -XX:-UseBASE64Intrinsic
                 -Dspring.config.location=/etc/application-config/application.properties
                 -Dfile.encoding=UTF-8
             - name: TZ
