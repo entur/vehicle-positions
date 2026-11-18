@@ -45,7 +45,7 @@ spec:
           imagePullPolicy: {{ .Values.image.imagePullPolicy }}
           env:
             - name: JDK_JAVA_OPTIONS
-              value: -server -Xmx{{ .Values.resources.xmx }} -XX:+UseG1GC -XX:MaxGCPauseMillis=750 -XX:ConcGCThreads=2
+              value: -server -XX:-UseBASE64Intrinsics -Xmx{{ .Values.resources.xmx }} -XX:+UseG1GC -XX:MaxGCPauseMillis=750 -XX:ConcGCThreads=2
                 -XX:ParallelGCThreads=5
                 -XX:-G1UseAdaptiveIHOP -XX:InitiatingHeapOccupancyPercent=75
                 -Dspring.config.location=/etc/application-config/application.properties
