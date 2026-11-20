@@ -1,4 +1,4 @@
-FROM bellsoft/liberica-openjre-debian:25.0.5.0.3-5@sha256:d5f6c00def204e1b7c6147342be2291243e586ac41b97b62ab6ba0eb6dff5ad3
+FROM bellsoft/liberica-openjre-debian:25
 
 # Nothing in the container uses curl (probes are httpGet, preStop only runs sleep), and it carries
 # most of the base image's critical CVEs. dpkg --purge fails the build if another package depends
