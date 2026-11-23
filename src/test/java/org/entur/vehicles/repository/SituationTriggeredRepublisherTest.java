@@ -40,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -231,7 +232,7 @@ public class SituationTriggeredRepublisherTest {
     }
 
     @Test
-    public void testRepublishesAffectedJourneysToSubscribers() {
+    public void testRepublishesAffectedJourneysToSubscribers() throws InterruptedException {
         EstimatedTimetableUpdateRxPublisher etPublisher = new EstimatedTimetableUpdateRxPublisher(new PrometheusMetricsService(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)));
         SituationTriggeredRepublisher republisher = new SituationTriggeredRepublisher(metricsService,
                 timetableMap, etPublisher, 100, Duration.ofMillis(1), DEFAULT_THRESHOLD, ref -> Set.of());
@@ -240,13 +241,18 @@ public class SituationTriggeredRepublisherTest {
                 storeJourney("TST:Line:1", "TST:ServiceJourney:1", "TST:DatedServiceJourney:1", "NSR:Quay:1");
         storeJourney("TST:Line:2", "TST:ServiceJourney:2", "TST:DatedServiceJourney:2", "NSR:Quay:2");
 
-        List<EstimatedTimetableUpdate> received = new ArrayList<>();
+        // Delivered on the subscription's own thread, not the publishing one
+        List<EstimatedTimetableUpdate> received = new CopyOnWriteArrayList<>();
         Disposable subscription = Flux.from(etPublisher.getPublisher(matchAll(), "test"))
                 .subscribe(received::addAll);
 
         try {
             republisher.republishNow(Set.of("TST:Line:1"));
 
+            long deadline = System.currentTimeMillis() + 2_000;
+            while (received.isEmpty() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(5);
+            }
             assertThat(received).containsExactly(affected);
             assertThat(republisher.getScanCount()).isEqualTo(1);
             assertThat(republisher.getRepublishedCount()).isEqualTo(1);
