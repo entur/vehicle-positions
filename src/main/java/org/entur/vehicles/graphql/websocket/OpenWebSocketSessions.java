@@ -67,6 +67,11 @@ public class OpenWebSocketSessions implements SmartLifecycle {
         this.closeTimeout = closeTimeout;
     }
 
+    /** How long one close may wait, including for a send in progress on the same session */
+    Duration closeTimeout() {
+        return closeTimeout;
+    }
+
     /** False from the moment shutdown begins: new handshakes are then refused with 503. */
     boolean isAcceptingConnections() {
         return !stopping;

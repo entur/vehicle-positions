@@ -32,6 +32,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -56,6 +58,9 @@ import java.util.function.Supplier;
 class GracefulWebSocketCloseConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(GracefulWebSocketCloseConfiguration.class);
+
+    /** Used only if the registry, which holds the configured close-timeout, cannot be reached */
+    static final Duration DEFAULT_CLOSE_TIMEOUT = Duration.ofSeconds(3);
 
     @Bean
     OpenWebSocketSessions openWebSocketSessions(
@@ -198,9 +203,17 @@ class GracefulWebSocketCloseConfiguration {
             return serialized != null ? serialized : session;
         }
 
+        private Duration closeTimeout() {
+            try {
+                return sessions().closeTimeout();
+            } catch (RuntimeException e) {
+                return DEFAULT_CLOSE_TIMEOUT;
+            }
+        }
+
         @Override
         public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-            SerializedCloseSession serialized = new SerializedCloseSession(session);
+            SerializedCloseSession serialized = new SerializedCloseSession(session, closeTimeout());
             wrapped.put(session.getId(), serialized);
             super.afterConnectionEstablished(serialized);
             try {
@@ -245,19 +258,27 @@ class GracefulWebSocketCloseConfiguration {
      * 1 in 500 sessions in GracefulWebSocketCloseStressTest). Here a close waits for the send in
      * progress, and sends after the close are dropped: the session is going away, and Tomcat would
      * reject them anyway.
+     *
+     * <p>A close waits at most {@code lockTimeout} for that send - a client with a stalled TCP
+     * window can hold one for Tomcat's whole send timeout - and then closes anyway, so every close
+     * stays within the shutdown budget. If the close itself fails, the session is no longer
+     * treated as closing: later sends reach Tomcat (and fail there, so Spring GraphQL disposes the
+     * subscription), and a later close, such as Spring GraphQL's own, is attempted again.
      */
     static class SerializedCloseSession extends WebSocketSessionDecorator {
 
         private final ReentrantLock lock = new ReentrantLock();
-        private volatile boolean closing;
+        private final AtomicBoolean closing = new AtomicBoolean();
+        private final Duration lockTimeout;
 
-        SerializedCloseSession(WebSocketSession delegate) {
+        SerializedCloseSession(WebSocketSession delegate, Duration lockTimeout) {
             super(delegate);
+            this.lockTimeout = lockTimeout;
         }
 
         @Override
         public void sendMessage(WebSocketMessage<?> message) throws IOException {
-            if (closing) {
+            if (closing.get()) {
                 return; // don't queue behind a close
             }
             try {
@@ -267,7 +288,7 @@ class GracefulWebSocketCloseConfiguration {
                 throw new InterruptedIOException("Interrupted while waiting to send on WebSocket session " + getId());
             }
             try {
-                if (!closing) {
+                if (!closing.get()) {
                     super.sendMessage(message);
                 }
             } finally {
@@ -277,15 +298,29 @@ class GracefulWebSocketCloseConfiguration {
 
         @Override
         public void close(CloseStatus status) throws IOException {
-            lock.lock();
+            boolean locked = false;
             try {
-                if (closing) {
+                locked = lock.tryLock(lockTimeout.toNanos(), TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); // close anyway, without waiting
+            }
+            try {
+                if (!closing.compareAndSet(false, true)) {
                     return;
                 }
-                closing = true;
-                super.close(status);
+                if (!locked) {
+                    LOG.debug("A send on WebSocket session {} did not finish within {}; closing anyway", getId(), lockTimeout);
+                }
+                try {
+                    super.close(status);
+                } catch (IOException | RuntimeException e) {
+                    closing.set(false);
+                    throw e;
+                }
             } finally {
-                lock.unlock();
+                if (locked) {
+                    lock.unlock();
+                }
             }
         }
 

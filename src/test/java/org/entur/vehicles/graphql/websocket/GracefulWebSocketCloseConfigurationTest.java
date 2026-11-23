@@ -137,7 +137,7 @@ class GracefulWebSocketCloseConfigurationTest {
         org.mockito.Mockito.doAnswer(i -> { order.add("close"); return null; })
                 .when(raw).close(org.mockito.ArgumentMatchers.any(CloseStatus.class));
         GracefulWebSocketCloseConfiguration.SerializedCloseSession session =
-                new GracefulWebSocketCloseConfiguration.SerializedCloseSession(raw);
+                new GracefulWebSocketCloseConfiguration.SerializedCloseSession(raw, Duration.ofSeconds(5));
 
         Thread sender = Thread.ofPlatform().start(() -> {
             try {
@@ -167,7 +167,7 @@ class GracefulWebSocketCloseConfigurationTest {
     void sendsAfterTheCloseAreDroppedAndTheSessionIsClosedOnce() throws Exception {
         WebSocketSession raw = mock(WebSocketSession.class);
         GracefulWebSocketCloseConfiguration.SerializedCloseSession session =
-                new GracefulWebSocketCloseConfiguration.SerializedCloseSession(raw);
+                new GracefulWebSocketCloseConfiguration.SerializedCloseSession(raw, Duration.ofSeconds(5));
 
         session.close(OpenWebSocketSessions.SHUTTING_DOWN);
         session.sendMessage(new org.springframework.web.socket.TextMessage("late update"));
@@ -199,5 +199,56 @@ class GracefulWebSocketCloseConfigurationTest {
 
         tracking.afterConnectionClosed(raw, OpenWebSocketSessions.SHUTTING_DOWN);
         verify(graphQl).afterConnectionClosed(established.getValue(), OpenWebSocketSessions.SHUTTING_DOWN);
+    }
+
+    /** A client with a stalled TCP window can hold a send for Tomcat's whole send timeout */
+    @Test
+    void aCloseStopsWaitingForAStuckSendAfterItsTimeout() throws Exception {
+        WebSocketSession raw = mock(WebSocketSession.class);
+        java.util.concurrent.CountDownLatch sending = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch neverFinishes = new java.util.concurrent.CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(i -> {
+            sending.countDown();
+            neverFinishes.await();
+            return null;
+        }).when(raw).sendMessage(org.mockito.ArgumentMatchers.any());
+        GracefulWebSocketCloseConfiguration.SerializedCloseSession session =
+                new GracefulWebSocketCloseConfiguration.SerializedCloseSession(raw, Duration.ofMillis(200));
+        Thread sender = Thread.ofPlatform().daemon().start(() -> {
+            try {
+                session.sendMessage(new org.springframework.web.socket.TextMessage("update"));
+            } catch (java.io.IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        try {
+            sending.await();
+
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(Duration.ofSeconds(2),
+                    () -> session.close(OpenWebSocketSessions.SHUTTING_DOWN));
+
+            verify(raw).close(OpenWebSocketSessions.SHUTTING_DOWN);
+        } finally {
+            neverFinishes.countDown();
+            sender.join(2_000);
+        }
+    }
+
+    @Test
+    void aFailedCloseLeavesTheSessionUsableAndCanBeRetried() throws Exception {
+        WebSocketSession raw = mock(WebSocketSession.class);
+        org.mockito.Mockito.doThrow(new java.io.IOException("write timed out")).doNothing()
+                .when(raw).close(org.mockito.ArgumentMatchers.any(CloseStatus.class));
+        GracefulWebSocketCloseConfiguration.SerializedCloseSession session =
+                new GracefulWebSocketCloseConfiguration.SerializedCloseSession(raw, Duration.ofSeconds(1));
+        org.springframework.web.socket.TextMessage update = new org.springframework.web.socket.TextMessage("update");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> session.close(OpenWebSocketSessions.SHUTTING_DOWN))
+                .isInstanceOf(java.io.IOException.class);
+        session.sendMessage(update); // reaches Tomcat, which fails it if the session is dead
+        session.close(new CloseStatus(1011));
+
+        verify(raw).sendMessage(update);
+        verify(raw).close(new CloseStatus(1011));
     }
 }
