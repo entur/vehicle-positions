@@ -109,7 +109,11 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
       serviceAccountName: application
-      terminationGracePeriodSeconds: 30
+      # Counts the preStop sleep (30s) too. At 30 the app got SIGTERM at the deadline and SIGKILL
+      # ~2s later, mid-way through deleting its first Pub/Sub subscription; every stopped pod left
+      # all three behind, each collecting the full feed for 24h. The extra 30s covers Spring's
+      # shutdown and PubSubSubscriber.teardown(), whose steps are bounded to fit well inside it.
+      terminationGracePeriodSeconds: 60
       topologySpreadConstraints:
         - maxSkew: 3
           topologyKey: "kubernetes.io/hostname"
