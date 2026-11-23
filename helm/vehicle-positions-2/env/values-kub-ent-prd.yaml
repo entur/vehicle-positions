@@ -13,4 +13,9 @@ configMap:
   # Startup snapshot cache. Bucket from terraform/snapshots.tf; empty disables it.
   snapshotUri: gs://ent-gcs-vpos-snapshots-prd-001/snapshots
 
+hpa:
+  # WebSocket clients stay on the pod they connected to; with 2 pods they all share two, and on
+  # 2026-11-23 the two busiest fell ~10 minutes behind on vehicle positions.
+  minReplicas: 3
+
 

@@ -68,3 +68,8 @@ hpa:
   maxReplicas: 20
   minReplicas: 2
   targetCPUUtilizationPercentage: 80
+  scaleDown:
+    # CPU must stay low for this long before any pod is removed
+    stabilizationWindowSeconds: 1800
+    # At most one pod removed per period
+    periodSeconds: 600
