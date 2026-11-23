@@ -20,9 +20,7 @@ spec:
   template:
     metadata:
       annotations:
-        # Evicting a pod to consolidate nodes closes every WebSocket subscription on it; on
-        # 2026-11-23 this stopped pods only minutes old. Rollouts and HPA scale-down still apply.
-        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
         prometheus.io/path: /actuator/prometheus
         prometheus.io/port: '{{ .Values.service.http.internalPort }}'
         prometheus.io/scrape: 'true'
