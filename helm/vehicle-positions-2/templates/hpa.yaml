@@ -21,3 +21,12 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{ .Values.hpa.targetCPUUtilizationPercentage }}
+  # Every pod removed closes all of its WebSocket subscriptions, so scale down slowly: wait for
+  # the lower load to hold, then remove one pod at a time. Scaling up keeps the defaults.
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: {{ .Values.hpa.scaleDown.stabilizationWindowSeconds }}
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: {{ .Values.hpa.scaleDown.periodSeconds }}
