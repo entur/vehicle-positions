@@ -451,19 +451,13 @@ public class SituationTriggeredRepublisher {
                     affected.add(timetable);
                 }
             } catch (RuntimeException e) {
-                // TimetableRepository.add() mutates a stored update in place, including
-                // getCalls().clear(), so a journey being updated right now can throw here - and
-                // not only ConcurrentModificationException from the iterator's modCount check.
-                // clear() bumps modCount and then nulls elements, so an iterator that already
-                // passed checkForComodification() can still read a nulled slot and NPE. addCall()
-                // also lazily assigns a non-final, non-volatile calls field, so a concurrently
-                // reading thread is not guaranteed to see a fully published list either. Catching
-                // broadly is what keeps one journey's race from silently costing every journey
-                // still left in this scan - by the time a narrower catch let it escape to run()'s
-                // batch-level handler, takePending() had already cleared the refs, so none of them
-                // would be retried.
-                // Skipping is safe: that journey is mid-update, so an ET event for it is about
-                // to be published anyway, carrying the fresh situations with it.
+                // TimetableRepository.add() now swaps in a fresh update rather than rebuilding the
+                // stored one in place, so the race this catch was written for (clear() under a
+                // reader: ConcurrentModificationException or an NPE on a nulled slot) should no
+                // longer occur. It stays as a guard: catching broadly keeps one bad journey from
+                // costing every journey still left in this scan - by the time a narrower catch let
+                // it escape to run()'s batch-level handler, takePending() had already cleared the
+                // refs, so none of them would be retried.
                 skippedCount.incrementAndGet();
                 metricsService.markSituationRepublishSkipped();
             }

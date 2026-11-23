@@ -126,10 +126,12 @@ public class TimetableRepository {
       // A ServiceJourney runs on many dates, so a framed ref also needs its operating date.
       final StorageKey key = new StorageKey(codespace, null, null, serviceJourneyId, datedServiceJourneyId, date);
 
-      final EstimatedTimetableUpdate v = timetableMap.getOrDefault(key, new EstimatedTimetableUpdate());
-      if (v.getCalls() != null) {
-        v.getCalls().clear();
-      }
+      // Always a new object, never the stored one rebuilt in place: queries, subscriptions and the
+      // situation republisher read stored timetables concurrently, and clearing and refilling a
+      // live calls list made them throw ConcurrentModificationException (HTTP 500 on the
+      // timetables query) or emit a journey with its calls missing. The put() below swaps the
+      // finished object in, and ConcurrentHashMap publishes it safely to those readers.
+      final EstimatedTimetableUpdate v = new EstimatedTimetableUpdate();
       v.setCodespace(codespace);
 
       v.setVehicleId(vehicleRef);

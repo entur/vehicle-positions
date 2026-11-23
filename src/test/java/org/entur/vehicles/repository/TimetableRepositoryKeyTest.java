@@ -108,6 +108,25 @@ public class TimetableRepositoryKeyTest {
         assertEquals(ZonedDateTime.parse(fresh).toString(), expectedArrival(update));
     }
 
+    /**
+     * A query or subscription may be serialising a stored timetable while the next update for the
+     * same journey arrives. Rebuilding the stored object in place - clearing and refilling its
+     * calls - made that reader throw ConcurrentModificationException (HTTP 500 in prd) or emit a
+     * journey with its calls missing. An update must swap in a new object instead.
+     */
+    @Test
+    public void anUpdateLeavesTheTimetableAReaderHoldsUntouched() {
+        String first = ZonedDateTime.now().plusMinutes(5).toString();
+        repository.add(datedJourney("1234", first));
+        EstimatedTimetableUpdate held = repository.getTimetables(null).iterator().next();
+
+        repository.add(datedJourney("5678", ZonedDateTime.now().plusMinutes(7).toString()));
+
+        assertEquals("1234", held.getVehicleId());
+        assertEquals(1, held.getCalls().size());
+        assertEquals(ZonedDateTime.parse(first).toString(), expectedArrival(held));
+    }
+
     @Test
     public void aVehicleSwapReplacesTheEntry() {
         repository.add(datedJourney("1234", ZonedDateTime.now().plusMinutes(5).toString()));
