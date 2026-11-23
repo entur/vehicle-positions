@@ -17,16 +17,22 @@ import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.WebSocketHandlerDecorator;
+import org.springframework.web.socket.handler.WebSocketSessionDecorator;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.socket.server.support.WebSocketHandlerMapping;
 import org.springframework.web.socket.server.support.WebSocketHttpRequestHandler;
 
+import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -138,7 +144,15 @@ class GracefulWebSocketCloseConfiguration {
         @Override
         public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                        WebSocketHandler wsHandler, Map<String, Object> attributes) {
-            if (tracking.sessions().isAcceptingConnections()) {
+            boolean accepting;
+            try {
+                accepting = tracking.sessions().isAcceptingConnections();
+            } catch (RuntimeException e) {
+                // Best effort, like the rest of the tracking: never fail a handshake over it
+                LOG.debug("Could not check whether shutdown has begun; accepting the handshake: {}", e.toString());
+                return true;
+            }
+            if (accepting) {
                 return true;
             }
             response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
@@ -151,10 +165,17 @@ class GracefulWebSocketCloseConfiguration {
         }
     }
 
-    /** Spring's handshake still finds the GraphQL sub-protocols: it unwraps decorators. */
+    /**
+     * Spring's handshake still finds the GraphQL sub-protocols: it unwraps decorators.
+     *
+     * <p>Hands Spring GraphQL a {@link SerializedCloseSession} for each connection, consistently
+     * in every callback, and registers that same wrapper: Spring GraphQL's sends and every close -
+     * the shutdown one and its own - then go through one lock per session.
+     */
     static class SessionTracking extends WebSocketHandlerDecorator {
 
         private final Supplier<OpenWebSocketSessions> lookup;
+        private final Map<String, SerializedCloseSession> wrapped = new ConcurrentHashMap<>();
         private volatile OpenWebSocketSessions sessions;
 
         SessionTracking(WebSocketHandler delegate, Supplier<OpenWebSocketSessions> lookup) {
@@ -172,11 +193,18 @@ class GracefulWebSocketCloseConfiguration {
             return resolved;
         }
 
+        private WebSocketSession wrapped(WebSocketSession session) {
+            WebSocketSession serialized = wrapped.get(session.getId());
+            return serialized != null ? serialized : session;
+        }
+
         @Override
         public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-            super.afterConnectionEstablished(session);
+            SerializedCloseSession serialized = new SerializedCloseSession(session);
+            wrapped.put(session.getId(), serialized);
+            super.afterConnectionEstablished(serialized);
             try {
-                sessions().opened(session);
+                sessions().opened(serialized);
             } catch (RuntimeException e) {
                 // Tracking is best effort; the subscription itself must not fail because of it
                 LOG.warn("Could not register WebSocket session {} for closing on shutdown", session.getId(), e);
@@ -184,15 +212,86 @@ class GracefulWebSocketCloseConfiguration {
         }
 
         @Override
+        public void handleMessage(WebSocketSession session, WebSocketMessage<?> message) throws Exception {
+            super.handleMessage(wrapped(session), message);
+        }
+
+        @Override
+        public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
+            super.handleTransportError(wrapped(session), exception);
+        }
+
+        @Override
         public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
+            SerializedCloseSession serialized = wrapped.remove(session.getId());
+            WebSocketSession seen = serialized != null ? serialized : session;
             try {
-                sessions().closed(session);
+                sessions().closed(seen);
             } catch (RuntimeException e) {
                 LOG.debug("Could not unregister WebSocket session {}: {}", session.getId(), e.toString());
             } finally {
                 // Spring GraphQL must always dispose the session's subscriptions
-                super.afterConnectionClosed(session, closeStatus);
+                super.afterConnectionClosed(seen, closeStatus);
             }
+        }
+    }
+
+    /**
+     * Serialises sends and closes on one WebSocket session.
+     *
+     * <p>Spring GraphQL sends each subscription's updates from its own threads, and the shutdown
+     * close came from another. When the close frame collided with a send in progress, Tomcat could
+     * fail to write it without telling the caller, and the client saw 1006 instead of 1001 (about
+     * 1 in 500 sessions in GracefulWebSocketCloseStressTest). Here a close waits for the send in
+     * progress, and sends after the close are dropped: the session is going away, and Tomcat would
+     * reject them anyway.
+     */
+    static class SerializedCloseSession extends WebSocketSessionDecorator {
+
+        private final ReentrantLock lock = new ReentrantLock();
+        private volatile boolean closing;
+
+        SerializedCloseSession(WebSocketSession delegate) {
+            super(delegate);
+        }
+
+        @Override
+        public void sendMessage(WebSocketMessage<?> message) throws IOException {
+            if (closing) {
+                return; // don't queue behind a close
+            }
+            try {
+                lock.lockInterruptibly();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new InterruptedIOException("Interrupted while waiting to send on WebSocket session " + getId());
+            }
+            try {
+                if (!closing) {
+                    super.sendMessage(message);
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        @Override
+        public void close(CloseStatus status) throws IOException {
+            lock.lock();
+            try {
+                if (closing) {
+                    return;
+                }
+                closing = true;
+                super.close(status);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            close(CloseStatus.NORMAL);
         }
     }
 }

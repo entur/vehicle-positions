@@ -189,8 +189,10 @@ class OpenWebSocketSessionsTest {
         verify(session, never()).close(any());
     }
 
+    /** Must close sessions before the web server's graceful shutdown pauses the connector */
     @Test
-    void stopsFirstOnShutdown() {
-        assertThat(registry().getPhase()).isEqualTo(Integer.MAX_VALUE);
+    void stopsBeforeTheWebServersGracefulShutdown() {
+        assertThat(registry().getPhase())
+                .isGreaterThan(org.springframework.boot.web.server.context.WebServerGracefulShutdownLifecycle.SMART_LIFECYCLE_PHASE);
     }
 }

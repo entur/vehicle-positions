@@ -32,6 +32,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * streaming a full initial snapshot - in the same instant, while a pod with few clients is not
  * held up for the full spread.
  *
+ * <p>The spread is capped because it has to fit in the termination grace period, so with very
+ * many sessions the spacing shrinks: at the defaults (20 ms, at most 5 s) it holds down to 250
+ * sessions per pod, and 5,000 sessions would be closed about 1 ms apart. Raise both the cap and
+ * terminationGracePeriodSeconds together if pods carry that many.
+ *
  * <p>The whole close is bounded by the spread plus {@code closeTimeout}: a close is a blocking
  * write of a close frame, which can stall on a slow client, so closes run on a small pool and
  * stop() returns at the deadline whatever is still pending. Shutdown must not overrun into the
@@ -83,8 +88,12 @@ public class OpenWebSocketSessions implements SmartLifecycle {
         // closeAll() sets the flag before it takes its snapshot, so a session added before the
         // snapshot is in it, and one added after sees the flag. Whoever removes it closes it.
         if (stopping && sessions.remove(session)) {
-            closedAfterStop.incrementAndGet();
-            close(session);
+            // Rare: new handshakes are refused with 503 once shutdown begins. Closed here, on the
+            // thread that set the session up, bounded by Tomcat's send timeout.
+            int late = closedAfterStop.incrementAndGet();
+            boolean sent = close(session);
+            LOG.info("WebSocket session {} connected during shutdown; {} with {} ({} so far)",
+                    session.getId(), sent ? "closed" : "could not close it", SHUTTING_DOWN.getCode(), late);
         }
     }
 
