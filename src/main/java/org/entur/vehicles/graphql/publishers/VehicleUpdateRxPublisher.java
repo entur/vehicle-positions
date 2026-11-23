@@ -31,9 +31,10 @@ public class VehicleUpdateRxPublisher {
 
     /**
      * Called from several Pub/Sub executor threads. A Reactor sink rejects overlapping emits with
-     * FAIL_NON_SERIALIZED, so emits must be serialised. The work under the lock is each
-     * subscription's filter and buffer; blocking WebSocket sends happen on the session's own
-     * thread (publishOn in Spring GraphQL), so a slow client cannot hold the lock.
+     * FAIL_NON_SERIALIZED, so emits must be serialised. The only work under the lock is offering
+     * the update to each subscription's queue ({@link SubscriberQueue}); filtering, buffering and
+     * WebSocket sends all run on other threads, so neither the number of clients nor a slow one
+     * can slow down ingest.
      */
     public synchronized void publishUpdate(VehicleUpdate vehicleUpdate) {
         Sinks.EmitResult result = sink.tryEmitNext(vehicleUpdate);
@@ -49,8 +50,8 @@ public class VehicleUpdateRxPublisher {
             initialdata.addAll(repository.getVehicles(null));
         }
 
-        return sink.asFlux()
-                .startWith(initialdata)
+        return SubscriberQueue.decouple(sink.asFlux(), initialdata,
+                        dropped -> metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, SubscriberQueue.OVERFLOW_REASON, 1))
                 .filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
                 .bufferTimeout(template.getBufferSize(), Duration.of(template.getBufferTimeMillis(), ChronoUnit.MILLIS))
                 .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, "backpressure", batch.size()));

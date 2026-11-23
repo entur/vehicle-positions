@@ -26,11 +26,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Updates are published from several Pub/Sub executor threads at once. Every published update
  * must reach a live subscriber. A Reactor sink rejects overlapping emits with
  * FAIL_NON_SERIALIZED, so emits that are not serialised are lost.
+ *
+ * <p>The burst fits in one subscription's queue: a tight loop publishes far faster than any
+ * subscription drains, and beyond {@link SubscriberQueue#CAPACITY} the overflow is dropped and
+ * counted by design (see VehicleUpdateRxPublisherMetricsTest), which is not what this test is about.
  */
 class RxPublisherConcurrencyTest {
 
     private static final int THREADS = 8;
-    private static final int UPDATES_PER_THREAD = 5_000;
+    private static final int UPDATES_PER_THREAD = SubscriberQueue.CAPACITY / THREADS;
     private static final int TOTAL = THREADS * UPDATES_PER_THREAD;
 
     private static final Codespace CODESPACE = Codespace.getCodespace("TST");
