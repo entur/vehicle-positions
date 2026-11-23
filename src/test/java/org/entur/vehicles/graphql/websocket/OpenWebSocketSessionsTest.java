@@ -6,15 +6,23 @@ import org.springframework.web.socket.WebSocketSession;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class OpenWebSocketSessionsTest {
+
+    private static final Duration NO_SPREAD = Duration.ZERO;
+    private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     private static WebSocketSession openSession(String id) {
         WebSocketSession session = mock(WebSocketSession.class);
@@ -25,7 +33,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void stopClosesEveryOpenSessionWithGoingAway() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(Duration.ZERO);
+        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
         WebSocketSession first = openSession("1");
         WebSocketSession second = openSession("2");
         sessions.opened(first);
@@ -40,7 +48,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void aFailedCloseDoesNotStopTheOthers() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(Duration.ZERO);
+        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
         WebSocketSession failing = openSession("1");
         WebSocketSession other = openSession("2");
         doThrow(new IOException("broken pipe")).when(failing).close(OpenWebSocketSessions.SHUTTING_DOWN);
@@ -53,8 +61,38 @@ class OpenWebSocketSessionsTest {
     }
 
     @Test
+    void aStuckCloseDoesNotHoldUpShutdownPastTheDeadline() throws Exception {
+        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, Duration.ofMillis(200));
+        CountDownLatch never = new CountDownLatch(1);
+        WebSocketSession stuck = openSession("stuck");
+        doAnswer(i -> { never.await(); return null; }).when(stuck).close(any());
+        WebSocketSession other = openSession("other");
+        sessions.opened(stuck);
+        sessions.opened(other);
+
+        try {
+            assertTimeoutPreemptively(Duration.ofSeconds(2), () -> sessions.stop());
+        } finally {
+            never.countDown();
+        }
+        verify(other).close(OpenWebSocketSessions.SHUTTING_DOWN);
+    }
+
+    @Test
+    void aSessionThatConnectsDuringShutdownIsClosedToo() throws Exception {
+        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        sessions.stop();
+
+        WebSocketSession late = openSession("late");
+        sessions.opened(late);
+
+        verify(late, timeout(1_000)).close(OpenWebSocketSessions.SHUTTING_DOWN);
+        assertThat(sessions.count()).isZero();
+    }
+
+    @Test
     void closedSessionsAreForgotten() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(Duration.ZERO);
+        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
         WebSocketSession session = openSession("1");
         sessions.opened(session);
 
@@ -62,26 +100,43 @@ class OpenWebSocketSessionsTest {
         sessions.stop();
 
         assertThat(sessions.count()).isZero();
-        verify(session, never()).close(OpenWebSocketSessions.SHUTTING_DOWN);
+        verify(session, never()).close(any());
     }
 
     @Test
-    void closesAreSpreadOverTheConfiguredTime() {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(Duration.ofMillis(400));
-        for (int i = 0; i < 4; i++) {
-            sessions.opened(openSession(String.valueOf(i)));
-        }
+    void sessionsAlreadyClosedAreNotClosedAgain() throws Exception {
+        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        WebSocketSession gone = openSession("gone");
+        sessions.opened(gone);
+        when(gone.isOpen()).thenReturn(false);
 
-        long started = System.nanoTime();
         sessions.stop();
-        long tookMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
 
-        // Three pauses of 100 ms between four closes
-        assertThat(tookMillis).isBetween(250L, 2_000L);
+        verify(gone, never()).close(any());
+    }
+
+    @Test
+    void sessionsAreClosedOnlyOnce() throws Exception {
+        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        WebSocketSession session = openSession("1");
+        sessions.opened(session);
+
+        sessions.stop();
+        sessions.stop();
+
+        verify(session).close(OpenWebSocketSessions.SHUTTING_DOWN);
+    }
+
+    @Test
+    void closesAreSpreadEvenlyOverTheWindow() {
+        assertThat(OpenWebSocketSessions.closeDelays(4, Duration.ofMillis(300)))
+                .containsExactly(Duration.ZERO, Duration.ofMillis(100), Duration.ofMillis(200), Duration.ofMillis(300));
+        assertThat(OpenWebSocketSessions.closeDelays(1, Duration.ofSeconds(5))).containsExactly(Duration.ZERO);
+        assertThat(OpenWebSocketSessions.closeDelays(0, Duration.ofSeconds(5))).isEmpty();
     }
 
     @Test
     void stopsFirstOnShutdown() {
-        assertThat(new OpenWebSocketSessions(Duration.ZERO).getPhase()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(new OpenWebSocketSessions(NO_SPREAD, TIMEOUT).getPhase()).isEqualTo(Integer.MAX_VALUE);
     }
 }
