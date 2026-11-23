@@ -23,14 +23,16 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>Without this, a stopping pod dropped its subscriptions without a close frame, and clients
  * saw an abnormal close (1006) or an I/O error. 1001 tells graphql-ws and similar clients to
  * reconnect at once; by the time SIGTERM arrives, after the preStop sleep, this pod is no longer
- * a Service endpoint, so they reconnect to another pod.
+ * a Service endpoint, so they reconnect to another pod. New handshakes are refused with 503 from
+ * the moment shutdown begins (see {@link #isAcceptingConnections()}).
  *
  * <p>Stops in the highest phase, so before the web server's graceful shutdown and before the
- * Pub/Sub subscribers are torn down. The closes are spread over {@code closeSpread} so that the
- * remaining pods do not take every reconnect - each one streaming a full initial snapshot - in
- * the same instant.
+ * Pub/Sub subscribers are torn down. The closes are spaced {@code closeSpacing} apart, at most
+ * {@code maxCloseSpread} in all, so that the remaining pods do not take every reconnect - each one
+ * streaming a full initial snapshot - in the same instant, while a pod with few clients is not
+ * held up for the full spread.
  *
- * <p>The whole close is bounded by {@code closeSpread + closeTimeout}: a close is a blocking
+ * <p>The whole close is bounded by the spread plus {@code closeTimeout}: a close is a blocking
  * write of a close frame, which can stall on a slow client, so closes run on a small pool and
  * stop() returns at the deadline whatever is still pending. Shutdown must not overrun into the
  * Pub/Sub teardown that follows it in the termination grace period.
@@ -42,27 +44,43 @@ public class OpenWebSocketSessions implements SmartLifecycle {
     static final CloseStatus SHUTTING_DOWN = CloseStatus.GOING_AWAY.withReason("Server shutting down");
 
     private static final int MAX_CLOSE_THREADS = 8;
+    /** Failed closes logged one by one at WARN; the rest are only counted */
+    private static final int MAX_LOGGED_FAILURES = 10;
 
     private final Set<WebSocketSession> sessions = ConcurrentHashMap.newKeySet();
-    private final Duration closeSpread;
+    private final Duration closeSpacing;
+    private final Duration maxCloseSpread;
     private final Duration closeTimeout;
     private final AtomicInteger closedAfterStop = new AtomicInteger();
+    private final AtomicInteger loggedFailures = new AtomicInteger();
     private volatile boolean running;
     private volatile boolean stopping;
 
-    public OpenWebSocketSessions(Duration closeSpread, Duration closeTimeout) {
-        this.closeSpread = closeSpread;
+    public OpenWebSocketSessions(Duration closeSpacing, Duration maxCloseSpread, Duration closeTimeout) {
+        this.closeSpacing = closeSpacing;
+        this.maxCloseSpread = maxCloseSpread;
         this.closeTimeout = closeTimeout;
     }
 
+    /** False from the moment shutdown begins: new handshakes are then refused with 503. */
+    boolean isAcceptingConnections() {
+        return !stopping;
+    }
+
     /**
-     * Registers a session. Once shutdown has begun, the session is closed with 1001 instead: it
-     * connected after closeAll() took its snapshot and would otherwise be cut off with 1006 when
-     * the web server stops.
+     * Registers a session. Once shutdown has begun, the session is closed with 1001 instead: it got
+     * past the handshake check just before shutdown began, after closeAll() took its snapshot,
+     * and would otherwise be cut off with 1006 when the web server stops.
      */
     void opened(WebSocketSession session) {
         sessions.add(session);
-        // stop() sets the flag before it takes its snapshot, so a session added before the
+        if (!session.isOpen()) {
+            // Closed during its own set-up, possibly before this call: closed() has already run
+            // and nothing would ever remove it again
+            sessions.remove(session);
+            return;
+        }
+        // closeAll() sets the flag before it takes its snapshot, so a session added before the
         // snapshot is in it, and one added after sees the flag. Whoever removes it closes it.
         if (stopping && sessions.remove(session)) {
             closedAfterStop.incrementAndGet();
@@ -80,6 +98,9 @@ public class OpenWebSocketSessions implements SmartLifecycle {
 
     @Override
     public void start() {
+        stopping = false;
+        closedAfterStop.set(0);
+        loggedFailures.set(0);
         running = true;
     }
 
@@ -113,7 +134,8 @@ public class OpenWebSocketSessions implements SmartLifecycle {
         }
 
         long started = System.nanoTime();
-        List<Duration> delays = closeDelays(open.size(), closeSpread);
+        Duration spread = spreadFor(open.size(), closeSpacing, maxCloseSpread);
+        List<Duration> delays = closeDelays(open.size(), spread);
         AtomicInteger failed = new AtomicInteger();
         CountDownLatch done = new CountDownLatch(open.size());
         ScheduledExecutorService closer = Executors.newScheduledThreadPool(
@@ -131,7 +153,7 @@ public class OpenWebSocketSessions implements SmartLifecycle {
                     }
                 }, delays.get(i).toNanos(), TimeUnit.NANOSECONDS);
             }
-            boolean finished = done.await(closeSpread.plus(closeTimeout).toNanos(), TimeUnit.NANOSECONDS);
+            boolean finished = done.await(spread.plus(closeTimeout).toNanos(), TimeUnit.NANOSECONDS);
             long pending = finished ? 0 : done.getCount();
             report(open.size(), failed.get(), pending, Duration.ofNanos(System.nanoTime() - started));
         } catch (InterruptedException e) {
@@ -140,6 +162,15 @@ public class OpenWebSocketSessions implements SmartLifecycle {
         } finally {
             closer.shutdownNow();
         }
+    }
+
+    /** {@code spacing} between consecutive closes, but never more than {@code max} in all. */
+    static Duration spreadFor(int count, Duration spacing, Duration max) {
+        if (count <= 1) {
+            return Duration.ZERO;
+        }
+        Duration spread = spacing.multipliedBy(count - 1);
+        return spread.compareTo(max) > 0 ? max : spread;
     }
 
     /**
@@ -168,13 +199,15 @@ public class OpenWebSocketSessions implements SmartLifecycle {
     }
 
     /** @return false if the close frame could not be sent */
-    private static boolean close(WebSocketSession session) {
+    private boolean close(WebSocketSession session) {
         try {
             session.close(SHUTTING_DOWN);
             return true;
         } catch (Exception e) {
-            // A concurrent send, or a client that already left
-            LOG.debug("Could not close WebSocket session {} cleanly: {}", session.getId(), e.toString());
+            // A concurrent send, or a client that already left. The client sees 1006 instead.
+            if (loggedFailures.incrementAndGet() <= MAX_LOGGED_FAILURES) {
+                LOG.warn("Could not close WebSocket session {} with {}: {}", session.getId(), SHUTTING_DOWN.getCode(), e.toString());
+            }
             return false;
         }
     }

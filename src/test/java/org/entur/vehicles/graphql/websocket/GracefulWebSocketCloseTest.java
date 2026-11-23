@@ -29,15 +29,20 @@ import static org.assertj.core.api.Assertions.assertThat;
  * A pod that shuts down used to drop its WebSocket subscriptions without a close frame: clients
  * saw an abnormal close (1006) or an I/O error and had to work out on their own that the stream
  * was gone. Shutdown must close each GraphQL WebSocket session with 1001 (going away), which
- * graphql-ws and similar clients treat as "reconnect now".
+ * graphql-ws and similar clients treat as "reconnect now" - including sessions that are being
+ * sent updates at that very moment.
+ *
+ * <p>If Spring Boot or Spring GraphQL changes how the GraphQL WebSocket endpoint is built, this
+ * is the test that fails: the application itself only logs an error and starts anyway.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 // src/test/resources/application.properties replaces the main one, which sets this
                 "spring.graphql.websocket.path=/subscriptions",
-                "entur.vehicle-positions.websocket.shutdown.close-spread=200ms",
-                "entur.vehicle-positions.websocket.shutdown.close-timeout=5s"})
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+                "entur.vehicle-positions.websocket.shutdown.close-spacing=50ms",
+                "entur.vehicle-positions.websocket.shutdown.close-spread=5s",
+                "entur.vehicle-positions.websocket.shutdown.close-timeout=3s"})
+@DirtiesContext // the test stops the context
 class GracefulWebSocketCloseTest {
 
     private static final String VEHICLES =
@@ -99,19 +104,7 @@ class GracefulWebSocketCloseTest {
     }
 
     @Test
-    void shutdownClosesAnIdleGraphQlWebSocketWithGoingAway() throws Exception {
-        Client client = new Client(false).connect();
-        client.ready.get(10, TimeUnit.SECONDS);
-
-        // What SIGTERM triggers: every SmartLifecycle bean stops, the web server last
-        context.stop();
-
-        assertThat(client.closed.get(10, TimeUnit.SECONDS).getCode()).isEqualTo(CloseStatus.GOING_AWAY.getCode());
-        assertThat(client.session.isOpen()).isFalse();
-    }
-
-    @Test
-    void shutdownClosesActiveSubscriptionsWithGoingAwayWhileUpdatesFlow() throws Exception {
+    void shutdownClosesIdleAndActiveGraphQlWebSocketsWithGoingAway() throws Exception {
         AtomicBoolean publishing = new AtomicBoolean(true);
         Thread publisher = Thread.ofPlatform().daemon().start(() -> {
             int i = 0;
@@ -120,24 +113,31 @@ class GracefulWebSocketCloseTest {
                 update.setCodespace(Codespace.getCodespace("TST"));
                 update.setVehicleId("vehicle-" + (i++ % 50));
                 vehiclePublisher.publishUpdate(update);
-                Thread.onSpinWait();
+                try {
+                    Thread.sleep(1); // about 1,000 updates/s, in line with prd
+                } catch (InterruptedException e) {
+                    return;
+                }
             }
         });
         try {
             List<Client> clients = new ArrayList<>();
-            for (int i = 0; i < 5; i++) {
+            clients.add(new Client(false).connect());
+            for (int i = 0; i < 4; i++) {
                 clients.add(new Client(true).connect());
             }
             for (Client client : clients) {
                 client.ready.get(10, TimeUnit.SECONDS);
             }
 
+            // What SIGTERM triggers: every SmartLifecycle bean stops, the web server last
             context.stop();
 
             for (Client client : clients) {
                 assertThat(client.closed.get(10, TimeUnit.SECONDS).getCode())
-                        .as("close code while vehicle updates were still being sent")
+                        .as("close code (vehicle updates were still being sent)")
                         .isEqualTo(CloseStatus.GOING_AWAY.getCode());
+                assertThat(client.session.isOpen()).isFalse();
             }
         } finally {
             publishing.set(false);

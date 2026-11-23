@@ -111,9 +111,11 @@ spec:
       serviceAccountName: application
       # Counts the preStop sleep (30s) too. At 30 the app got SIGTERM at the deadline and SIGKILL
       # ~2s later, mid-way through deleting its first Pub/Sub subscription; every stopped pod left
-      # all three behind, each collecting the full feed for 24h. The extra 30s covers Spring's
-      # shutdown and PubSubSubscriber.teardown(), whose steps are bounded to fit well inside it.
-      terminationGracePeriodSeconds: 60
+      # all three behind, each collecting the full feed for 24h. Worst case after SIGTERM, every
+      # step bounded: closing WebSocket sessions with 1001 (OpenWebSocketSessions: spread <= 5s +
+      # timeout 3s = 8s), then PubSubSubscriber.teardown() for VM, ET and SX ((3s + 5s) x 3 = 24s).
+      # 30 + 8 + 24 = 62s; 75 leaves room for the rest of Spring's shutdown.
+      terminationGracePeriodSeconds: 75
       topologySpreadConstraints:
         - maxSkew: 3
           topologyKey: "kubernetes.io/hostname"

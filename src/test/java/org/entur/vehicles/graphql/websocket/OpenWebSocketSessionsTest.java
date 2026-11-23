@@ -21,8 +21,17 @@ import static org.mockito.Mockito.when;
 
 class OpenWebSocketSessionsTest {
 
-    private static final Duration NO_SPREAD = Duration.ZERO;
+    private static final Duration NO_SPACING = Duration.ZERO;
+    private static final Duration MAX_SPREAD = Duration.ofSeconds(5);
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
+
+    private static OpenWebSocketSessions registry() {
+        return registry(TIMEOUT);
+    }
+
+    private static OpenWebSocketSessions registry(Duration timeout) {
+        return new OpenWebSocketSessions(NO_SPACING, MAX_SPREAD, timeout);
+    }
 
     private static WebSocketSession openSession(String id) {
         WebSocketSession session = mock(WebSocketSession.class);
@@ -33,7 +42,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void stopClosesEveryOpenSessionWithGoingAway() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        OpenWebSocketSessions sessions = registry();
         WebSocketSession first = openSession("1");
         WebSocketSession second = openSession("2");
         sessions.opened(first);
@@ -48,7 +57,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void aFailedCloseDoesNotStopTheOthers() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        OpenWebSocketSessions sessions = registry();
         WebSocketSession failing = openSession("1");
         WebSocketSession other = openSession("2");
         doThrow(new IOException("broken pipe")).when(failing).close(OpenWebSocketSessions.SHUTTING_DOWN);
@@ -62,7 +71,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void aStuckCloseDoesNotHoldUpShutdownPastTheDeadline() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, Duration.ofMillis(200));
+        OpenWebSocketSessions sessions = registry(Duration.ofMillis(200));
         CountDownLatch never = new CountDownLatch(1);
         WebSocketSession stuck = openSession("stuck");
         doAnswer(i -> { never.await(); return null; }).when(stuck).close(any());
@@ -80,7 +89,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void aSessionThatConnectsDuringShutdownIsClosedToo() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        OpenWebSocketSessions sessions = registry();
         sessions.stop();
 
         WebSocketSession late = openSession("late");
@@ -92,7 +101,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void closedSessionsAreForgotten() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        OpenWebSocketSessions sessions = registry();
         WebSocketSession session = openSession("1");
         sessions.opened(session);
 
@@ -105,7 +114,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void sessionsAlreadyClosedAreNotClosedAgain() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        OpenWebSocketSessions sessions = registry();
         WebSocketSession gone = openSession("gone");
         sessions.opened(gone);
         when(gone.isOpen()).thenReturn(false);
@@ -117,7 +126,7 @@ class OpenWebSocketSessionsTest {
 
     @Test
     void sessionsAreClosedOnlyOnce() throws Exception {
-        OpenWebSocketSessions sessions = new OpenWebSocketSessions(NO_SPREAD, TIMEOUT);
+        OpenWebSocketSessions sessions = registry();
         WebSocketSession session = openSession("1");
         sessions.opened(session);
 
@@ -136,7 +145,52 @@ class OpenWebSocketSessionsTest {
     }
 
     @Test
+    void theSpreadGrowsWithTheNumberOfSessionsUpToTheMaximum() {
+        Duration spacing = Duration.ofMillis(20);
+        assertThat(OpenWebSocketSessions.spreadFor(1, spacing, MAX_SPREAD)).isZero();
+        assertThat(OpenWebSocketSessions.spreadFor(2, spacing, MAX_SPREAD)).isEqualTo(Duration.ofMillis(20));
+        assertThat(OpenWebSocketSessions.spreadFor(51, spacing, MAX_SPREAD)).isEqualTo(Duration.ofSeconds(1));
+        assertThat(OpenWebSocketSessions.spreadFor(5_000, spacing, MAX_SPREAD)).isEqualTo(MAX_SPREAD);
+    }
+
+    @Test
+    void aSessionClosedDuringItsOwnSetUpIsNotKept() {
+        OpenWebSocketSessions sessions = registry();
+        WebSocketSession gone = openSession("gone");
+        when(gone.isOpen()).thenReturn(false);
+        sessions.closed(gone); // the close callback ran first
+
+        sessions.opened(gone);
+
+        assertThat(sessions.count()).isZero();
+    }
+
+    @Test
+    void newConnectionsAreRefusedOnceShutdownBegins() {
+        OpenWebSocketSessions sessions = registry();
+        assertThat(sessions.isAcceptingConnections()).isTrue();
+
+        sessions.stop();
+
+        assertThat(sessions.isAcceptingConnections()).isFalse();
+    }
+
+    @Test
+    void startingAgainAcceptsAndKeepsSessions() throws Exception {
+        OpenWebSocketSessions sessions = registry();
+        sessions.stop();
+
+        sessions.start();
+        WebSocketSession session = openSession("1");
+        sessions.opened(session);
+
+        assertThat(sessions.isAcceptingConnections()).isTrue();
+        assertThat(sessions.count()).isEqualTo(1);
+        verify(session, never()).close(any());
+    }
+
+    @Test
     void stopsFirstOnShutdown() {
-        assertThat(new OpenWebSocketSessions(NO_SPREAD, TIMEOUT).getPhase()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(registry().getPhase()).isEqualTo(Integer.MAX_VALUE);
     }
 }
