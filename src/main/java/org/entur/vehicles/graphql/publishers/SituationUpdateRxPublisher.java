@@ -19,6 +19,7 @@ public class SituationUpdateRxPublisher {
 
     private final Sinks.Many<SituationUpdate> sink = Sinks.many().multicast().directBestEffort();
     private final PrometheusMetricsService metricsService;
+    private final ActiveSubscriptions activeSubscriptions = new ActiveSubscriptions();
     private SituationRepository repository;
 
     public SituationUpdateRxPublisher(PrometheusMetricsService metricsService) {
@@ -52,14 +53,15 @@ public class SituationUpdateRxPublisher {
             initialdata.addAll(repository.getSituations(template));
         }
 
-        return SubscriberQueue.decouple(sink.asFlux(), initialdata,
+        return activeSubscriptions.track(SubscriberQueue.decouple(sink.asFlux(), initialdata,
                         dropped -> metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, SubscriberQueue.OVERFLOW_REASON, 1))
                 .filter(template::isMatch)
                 .bufferTimeout(template.getBufferSize(), Duration.of(template.getBufferTimeMillis(), ChronoUnit.MILLIS))
-                .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, "backpressure", batch.size()));
+                .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, "backpressure", batch.size())));
     }
 
+    /** Open subscriptions, including those still receiving their initial snapshot */
     public int currentSubscribers() {
-        return sink.currentSubscriberCount();
+        return activeSubscriptions.count();
     }
 }

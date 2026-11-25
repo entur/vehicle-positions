@@ -49,7 +49,7 @@ public class PubSubETSubscriber extends PubSubSubscriber {
   }
 
   static MessageReceiver messageReceiver(TimetableRepository timetableRepository, PrometheusMetricsService metricsService) {
-    return ReceivedMessages.timed(metricsService.ingestTimer(PrometheusMetricsService.TYPE_TIMETABLE), (pubsubMessage, ackReplyConsumer) -> {
+    return ReceivedMessages.timed(() -> metricsService.ingestTimer(PrometheusMetricsService.TYPE_TIMETABLE), (pubsubMessage, ackReplyConsumer) -> {
       Instant receivedAt = Instant.now();
       Instant publishedAt = ReceivedMessages.publishedAt(pubsubMessage);
       if (publishedAt != null) {

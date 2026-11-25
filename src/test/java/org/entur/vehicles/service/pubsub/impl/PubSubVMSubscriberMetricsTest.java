@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -184,6 +185,13 @@ class PubSubVMSubscriberMetricsTest {
         assertNotNull(ingest, "ingest timer not registered");
         assertEquals(1, ingest.count());
         assertTrue(ingest.totalTime(TimeUnit.NANOSECONDS) > 0);
+    }
+
+    @Test
+    void noIngestSeriesUntilTheFirstMessage() {
+        // A disabled subscriber never receives one, and registers no thread gauge either; a
+        // timer without its thread gauge would break the busy-fraction division on dashboards
+        assertNull(registry.find("app.vehicles.ingest.duration").timer());
     }
 
     @Test

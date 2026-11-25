@@ -20,6 +20,7 @@ public class VehicleUpdateRxPublisher {
 
     private final ShardedSink<VehicleUpdate> sink;
     private final PrometheusMetricsService metricsService;
+    private final ActiveSubscriptions activeSubscriptions = new ActiveSubscriptions();
     private VehicleRepository repository;
 
     public VehicleUpdateRxPublisher(PrometheusMetricsService metricsService) {
@@ -54,14 +55,15 @@ public class VehicleUpdateRxPublisher {
             initialdata.addAll(repository.getVehicles(null));
         }
 
-        return SubscriberQueue.decouple(sink.asFlux(), initialdata,
+        return activeSubscriptions.track(SubscriberQueue.decouple(sink.asFlux(), initialdata,
                         dropped -> metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, SubscriberQueue.OVERFLOW_REASON, 1))
                 .filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
                 .bufferTimeout(template.getBufferSize(), Duration.of(template.getBufferTimeMillis(), ChronoUnit.MILLIS))
-                .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, "backpressure", batch.size()));
+                .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, "backpressure", batch.size())));
     }
 
+    /** Open subscriptions, including those still receiving their initial snapshot */
     public int currentSubscribers() {
-        return sink.currentSubscriberCount();
+        return activeSubscriptions.count();
     }
 }

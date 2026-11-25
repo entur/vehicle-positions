@@ -4,15 +4,24 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.entur.vehicles.data.QueryFilter;
+import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.graphql.publishers.EstimatedTimetableUpdateRxPublisher;
 import org.entur.vehicles.graphql.publishers.SituationUpdateRxPublisher;
 import org.entur.vehicles.graphql.publishers.VehicleUpdateRxPublisher;
+import org.entur.vehicles.repository.VehicleRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import reactor.core.Disposable;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 /**
  * On 2026-11-25 one prd pod fell ten minutes behind on vehicle positions while the dashboard
@@ -65,6 +74,42 @@ class IngestSaturationMetricsTest {
 
         first.dispose();
         second.dispose();
+        assertThat(gauge("app.vehicles.subscriptions.active", "vehicle")).isZero();
+    }
+
+    @Test
+    void aSubscriptionStillReceivingItsSnapshotIsCounted() throws Exception {
+        // More than the subscription's queue holds, behind a filter stuck on the first one: the
+        // snapshot cannot finish, so the subscription has not reached the live sink yet - as
+        // when a slow client reconnects to a pod with tens of thousands of vehicles
+        List<VehicleUpdate> snapshot = new ArrayList<>();
+        for (int i = 0; i < 5_000; i++) {
+            snapshot.add(new VehicleUpdate());
+        }
+        VehicleRepository repository = Mockito.mock(VehicleRepository.class);
+        when(repository.getVehicles(null)).thenReturn(snapshot);
+        VehicleUpdateRxPublisher vehicles = new VehicleUpdateRxPublisher(metrics);
+        vehicles.setRepository(repository);
+
+        CountDownLatch inFilter = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        QueryFilter stuck = Mockito.mock(QueryFilter.class);
+        when(stuck.getBufferSize()).thenReturn(20);
+        when(stuck.getBufferTimeMillis()).thenReturn(50);
+        when(stuck.isMatch(any(VehicleUpdate.class))).thenAnswer(invocation -> {
+            inFilter.countDown();
+            release.await();
+            return true;
+        });
+
+        Disposable subscription = vehicles.getPublisher(stuck, "slow").subscribe();
+        try {
+            assertThat(inFilter.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(gauge("app.vehicles.subscriptions.active", "vehicle")).isEqualTo(1);
+        } finally {
+            release.countDown();
+            subscription.dispose();
+        }
         assertThat(gauge("app.vehicles.subscriptions.active", "vehicle")).isZero();
     }
 }

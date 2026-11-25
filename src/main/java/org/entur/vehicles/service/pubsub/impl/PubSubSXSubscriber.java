@@ -53,7 +53,7 @@ public class PubSubSXSubscriber extends PubSubSubscriber {
   }
 
   static MessageReceiver messageReceiver(SituationRepository situationRepository, PrometheusMetricsService metricsService) {
-    return ReceivedMessages.timed(metricsService.ingestTimer(PrometheusMetricsService.TYPE_SITUATION), (pubsubMessage, ackReplyConsumer) -> {
+    return ReceivedMessages.timed(() -> metricsService.ingestTimer(PrometheusMetricsService.TYPE_SITUATION), (pubsubMessage, ackReplyConsumer) -> {
       Instant publishedAt = ReceivedMessages.publishedAt(pubsubMessage);
       if (publishedAt != null) {
         metricsService.recordPubsubLatency(PrometheusMetricsService.TYPE_SITUATION, Duration.between(publishedAt, Instant.now()));

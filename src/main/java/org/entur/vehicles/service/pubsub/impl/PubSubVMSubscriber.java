@@ -49,7 +49,7 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
   }
 
   static MessageReceiver messageReceiver(VehicleRepository vehicleRepository, PrometheusMetricsService metricsService) {
-    return ReceivedMessages.timed(metricsService.ingestTimer(PrometheusMetricsService.TYPE_VEHICLE), (pubsubMessage, ackReplyConsumer) -> {
+    return ReceivedMessages.timed(() -> metricsService.ingestTimer(PrometheusMetricsService.TYPE_VEHICLE), (pubsubMessage, ackReplyConsumer) -> {
       Instant receivedAt = Instant.now();
       Instant publishedAt = ReceivedMessages.publishedAt(pubsubMessage);
       if (publishedAt != null) {
