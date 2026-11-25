@@ -63,8 +63,4 @@ public class VehicleUpdateRxPublisher {
     public int currentSubscribers() {
         return sink.currentSubscriberCount();
     }
-
-    int[] subscribersPerShard() {
-        return sink.subscribersPerShard();
-    }
 }

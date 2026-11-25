@@ -15,11 +15,15 @@ import java.util.function.Consumer;
  * subscriptions. Ingest then had a single lane, however many executor threads it had: in prd a
  * pod on a slower node fell ten minutes behind at the morning peak while its node had CPU to
  * spare, and adding pods cannot help, as each one ingests the whole feed. With shards, each
- * subscription lives in one shard, and each thread walks the shards from its own starting point,
- * so threads emit to different shards at the same time.
+ * subscription lives in one shard, and each emit walks all shards starting from the next one in
+ * turn, so concurrent emits mostly start, and stay, on different shards.
  *
  * <p>Each subscription still sees updates one at a time, in the order they were emitted to its
- * shard. Updates from different executor threads had no defined order before either.
+ * shard. Updates from different executor threads never had a defined order, but with one lock
+ * every subscription saw the same order. Now two updates emitted at the same time - such as two
+ * versions of one journey processed by two threads within about 100 µs - can reach subscriptions
+ * in different shards in different orders. The next update for that journey or vehicle corrects
+ * it.
  */
 final class ShardedSink<T> {
 
@@ -27,7 +31,10 @@ final class ShardedSink<T> {
     static final int DEFAULT_SHARDS = 8;
 
     private final Sinks.Many<T>[] shards;
-    private final AtomicInteger nextShard = new AtomicInteger();
+    /** The shard the next subscription's choice starts from */
+    private final AtomicInteger nextSubscriptionShard = new AtomicInteger();
+    /** The shard the next emit starts from */
+    private final AtomicInteger nextEmitShard = new AtomicInteger();
 
     @SuppressWarnings("unchecked")
     ShardedSink(int shardCount) {
@@ -40,17 +47,15 @@ final class ShardedSink<T> {
         }
     }
 
-    int shardCount() {
-        return shards.length;
-    }
-
     /**
      * Offers {@code value} to every subscription. Thread-safe.
      *
-     * @param onFailure called with each shard's failed result, other than "no subscribers"
+     * @param onFailure called at most once per emit, with the first shard's failed result other
+     *                  than "no subscribers", so a lost update is counted once
      */
     void emit(T value, Consumer<Sinks.EmitResult> onFailure) {
-        int start = (int) Math.floorMod(Thread.currentThread().threadId(), (long) shards.length);
+        int start = Math.floorMod(nextEmitShard.getAndIncrement(), shards.length);
+        Sinks.EmitResult failure = null;
         for (int n = 0; n < shards.length; n++) {
             Sinks.Many<T> shard = shards[(start + n) % shards.length];
             Sinks.EmitResult result;
@@ -58,9 +63,12 @@ final class ShardedSink<T> {
                 result = shard.tryEmitNext(value);
             }
             // No subscribers means nobody is listening, not a lost update
-            if (result.isFailure() && result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER) {
-                onFailure.accept(result);
+            if (failure == null && result.isFailure() && result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER) {
+                failure = result;
             }
+        }
+        if (failure != null) {
+            onFailure.accept(failure);
         }
     }
 
@@ -74,7 +82,7 @@ final class ShardedSink<T> {
     }
 
     private Sinks.Many<T> leastLoaded() {
-        int offset = Math.floorMod(nextShard.getAndIncrement(), shards.length);
+        int offset = Math.floorMod(nextSubscriptionShard.getAndIncrement(), shards.length);
         Sinks.Many<T> least = null;
         int leastCount = Integer.MAX_VALUE;
         for (int n = 0; n < shards.length; n++) {
@@ -96,6 +104,7 @@ final class ShardedSink<T> {
         return count;
     }
 
+    /** For tests */
     int[] subscribersPerShard() {
         int[] counts = new int[shards.length];
         for (int i = 0; i < shards.length; i++) {

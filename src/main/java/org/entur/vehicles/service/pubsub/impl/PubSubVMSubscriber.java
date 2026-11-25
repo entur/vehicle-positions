@@ -30,7 +30,7 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
                             @Value("${entur.vehicle-positions.gcp.topic.project.name}") String topicProjectName,
                             @Value("${entur.vehicle-positions.gcp.topic.name.vm}") String topicName,
                             @Value("${entur.vehicle-positions.pubsub.parallel.pullcount:1}") int parallelPullCount,
-                            @Value("${entur.vehicle-positions.pubsub.parallel.executorThreadCount:5}") int executorThreadCount,
+                            @Value("${entur.vehicle-positions.pubsub.parallel.executorThreadCount:8}") int executorThreadCount,
                             @Value("#{${entur.vehicle-positions.gcp.labels}}") Map<String, String> appLabels,
                             @Value("${entur.vehicle-positions.vm.enabled:true}") boolean enabled) {
     super(subscriptionProjectName,

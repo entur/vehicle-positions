@@ -2,21 +2,20 @@ package org.entur.vehicles.graphql.publishers;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.reactivestreams.Subscription;
 import reactor.core.Disposable;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * Ingest used to emit to WebSocket subscriptions under a single lock, which capped a pod's
@@ -119,8 +118,8 @@ class ShardedSinkTest {
         ShardedSink<Integer> sink = new ShardedSink<>(2);
         CountDownLatch inside = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        AtomicReference<Integer> receivedByOther = new AtomicReference<>();
-        // The first subscription blocks on 1 while holding its shard's lock
+        CountDownLatch otherReceived = new CountDownLatch(1);
+        // Subscribed first, so in shard 0: blocks on 1 while holding that shard's lock
         subscriptions.add(sink.asFlux().subscribe(v -> {
             if (v == 1) {
                 inside.countDown();
@@ -131,32 +130,55 @@ class ShardedSinkTest {
                 }
             }
         }));
+        // In shard 1
         subscriptions.add(sink.asFlux().subscribe(v -> {
             if (v == 2) {
-                receivedByOther.set(v);
+                otherReceived.countDown();
             }
         }));
-        int[] perShard = sink.subscribersPerShard();
-        assertThat(perShard).containsExactly(1, 1);
+        assertThat(sink.subscribersPerShard()).containsExactly(1, 1);
 
+        Thread stuck = null;
+        Thread other = null;
         try {
-            Thread stuck = Thread.ofPlatform().daemon().start(() -> sink.emit(1, r -> { }));
+            // The first emit starts at shard 0 and stays there, holding its lock
+            stuck = Thread.ofPlatform().daemon().start(() -> sink.emit(1, r -> { }));
             assertThat(inside.await(5, TimeUnit.SECONDS)).isTrue();
 
-            // Another thread whose walk starts at the other shard delivers there without waiting.
-            // Whether the stuck thread already passed that shard depends on its starting point,
-            // so look for a thread that starts at the shard the stuck one is not holding.
-            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
-                while (receivedByOther.get() == null) {
-                    Thread other = Thread.ofPlatform().daemon().start(() -> sink.emit(2, r -> { }));
-                    other.join(200);
-                }
-            });
-            assertThat(receivedByOther.get()).isEqualTo(2);
+            // The next emit starts at shard 1, so it is delivered there without waiting
+            other = Thread.ofPlatform().daemon().start(() -> sink.emit(2, r -> { }));
+            assertThat(otherReceived.await(5, TimeUnit.SECONDS))
+                    .as("shard 1 got the update while shard 0 was held").isTrue();
             assertThat(stuck.isAlive()).isTrue();
         } finally {
             release.countDown();
         }
+        stuck.join(5_000);
+        other.join(5_000);
+        assertThat(stuck.isAlive()).isFalse();
+        assertThat(other.isAlive()).isFalse();
+    }
+
+    @Test
+    void anUpdateNoShardCouldTakeIsReportedOnce() {
+        ShardedSink<Integer> sink = new ShardedSink<>(4);
+        // A subscription that never requests anything: directBestEffort cannot deliver to it,
+        // and a shard where no subscription can take the update fails with FAIL_OVERFLOW
+        for (int s = 0; s < 4; s++) {
+            BaseSubscriber<Integer> noDemand = new BaseSubscriber<>() {
+                @Override
+                protected void hookOnSubscribe(Subscription subscription) {
+                }
+            };
+            sink.asFlux().subscribe(noDemand);
+            subscriptions.add(noDemand);
+        }
+        assertThat(sink.subscribersPerShard()).containsExactly(1, 1, 1, 1);
+
+        List<Sinks.EmitResult> failures = new ArrayList<>();
+        sink.emit(1, failures::add);
+
+        assertThat(failures).containsExactly(Sinks.EmitResult.FAIL_OVERFLOW);
     }
 
     @Test
