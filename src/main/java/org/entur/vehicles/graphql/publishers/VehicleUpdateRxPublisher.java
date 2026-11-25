@@ -31,6 +31,7 @@ public class VehicleUpdateRxPublisher {
             @Value("${entur.vehicle-positions.publisher.shards:" + ShardedSink.DEFAULT_SHARDS + "}") int shards) {
         this.metricsService = metricsService;
         this.sink = new ShardedSink<>(shards);
+        metricsService.registerActiveSubscriptions(PrometheusMetricsService.TYPE_VEHICLE, this::currentSubscribers);
     }
 
     public void setRepository(VehicleRepository repository) {

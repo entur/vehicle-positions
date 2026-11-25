@@ -122,4 +122,13 @@ class PubSubSXSubscriberMetricsTest {
         assertNotNull(dropped, "decode_error counter not registered");
         assertEquals(1, dropped.count());
     }
+
+    @Test
+    void ingestTimeIsTaggedAsSituation() throws Exception {
+        receiver.receiveMessage(message(situation(), Instant.now()), new RecordingAck());
+
+        Timer ingest = registry.find("app.vehicles.ingest.duration").tag("dataType", "situation").timer();
+        assertNotNull(ingest, "ingest timer not tagged dataType=situation");
+        assertEquals(1, ingest.count());
+    }
 }

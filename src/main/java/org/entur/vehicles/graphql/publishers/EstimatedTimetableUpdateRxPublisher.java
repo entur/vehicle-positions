@@ -31,6 +31,7 @@ public class EstimatedTimetableUpdateRxPublisher {
             @Value("${entur.vehicle-positions.publisher.shards:" + ShardedSink.DEFAULT_SHARDS + "}") int shards) {
         this.metricsService = metricsService;
         this.sink = new ShardedSink<>(shards);
+        metricsService.registerActiveSubscriptions(PrometheusMetricsService.TYPE_TIMETABLE, this::currentSubscribers);
     }
 
     public void setRepository(TimetableRepository repository) {

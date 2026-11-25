@@ -47,10 +47,13 @@ public class PubSubSXSubscriber extends PubSubSubscriber {
             messageReceiver(situationRepository, metricsService),
             enabled
     );
+    if (enabled) {
+      metricsService.registerIngestThreads(PrometheusMetricsService.TYPE_SITUATION, executorThreadCount);
+    }
   }
 
   static MessageReceiver messageReceiver(SituationRepository situationRepository, PrometheusMetricsService metricsService) {
-    return (pubsubMessage, ackReplyConsumer) -> {
+    return ReceivedMessages.timed(metricsService.ingestTimer(PrometheusMetricsService.TYPE_SITUATION), (pubsubMessage, ackReplyConsumer) -> {
       Instant publishedAt = ReceivedMessages.publishedAt(pubsubMessage);
       if (publishedAt != null) {
         metricsService.recordPubsubLatency(PrometheusMetricsService.TYPE_SITUATION, Duration.between(publishedAt, Instant.now()));
@@ -70,6 +73,6 @@ public class PubSubSXSubscriber extends PubSubSubscriber {
 
       // Ack only after all work for the message is complete.
       ackReplyConsumer.ack();
-    };
+    });
   }
 }

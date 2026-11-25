@@ -23,6 +23,7 @@ public class SituationUpdateRxPublisher {
 
     public SituationUpdateRxPublisher(PrometheusMetricsService metricsService) {
         this.metricsService = metricsService;
+        metricsService.registerActiveSubscriptions(PrometheusMetricsService.TYPE_SITUATION, this::currentSubscribers);
     }
 
     public void setRepository(SituationRepository repository) {

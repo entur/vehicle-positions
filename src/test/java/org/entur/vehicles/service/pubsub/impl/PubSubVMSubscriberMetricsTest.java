@@ -175,4 +175,25 @@ class PubSubVMSubscriberMetricsTest {
         assertNotNull(missing, "missing counter not registered");
         assertEquals(1, missing.count());
     }
+
+    @Test
+    void everyMessageIsTimedFromReceiptToAck() throws Exception {
+        receiver.receiveMessage(message(vehicle(ZonedDateTime.now()), Instant.now()), new RecordingAck());
+
+        Timer ingest = registry.find("app.vehicles.ingest.duration").tag("dataType", "vehicle").timer();
+        assertNotNull(ingest, "ingest timer not registered");
+        assertEquals(1, ingest.count());
+        assertTrue(ingest.totalTime(TimeUnit.NANOSECONDS) > 0);
+    }
+
+    @Test
+    void aMessageThatFailsIsTimedToo() {
+        // A thread busy failing a message is as busy as one storing it
+        assertThrows(RuntimeException.class,
+                () -> receiver.receiveMessage(message("{not json", Instant.now()), new RecordingAck()));
+
+        Timer ingest = registry.find("app.vehicles.ingest.duration").tag("dataType", "vehicle").timer();
+        assertNotNull(ingest, "ingest timer not registered");
+        assertEquals(1, ingest.count());
+    }
 }
