@@ -24,7 +24,7 @@ data:
       
       # Number of pubsub-streams to open
       entur.vehicle-positions.pubsub.parallel.pullcount={{.Values.configMap.parallel.streamcount}}
-      # Number of executor-threads per stream
+      # Executor threads per subscriber (VM, ET and SX each have their own), shared by its streams
       entur.vehicle-positions.pubsub.parallel.executorThreadCount={{.Values.configMap.parallel.threadcount}}
 
       entur.default.gcp.credentials.enabled=true

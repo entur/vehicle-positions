@@ -25,7 +25,11 @@ configMap:
     sx: siri.situation_exchange
   parallel:
     streamcount: 1
-    threadcount: 5
+    # Executor threads for each of the VM, ET and SX subscribers. Every pod ingests the whole
+    # feed, so this - not the number of pods - sets how much one pod can take in. Emits to
+    # WebSocket subscriptions are spread over entur.vehicle-positions.publisher.shards (default
+    # 8) locks; more threads than shards gains little.
+    threadcount: 8
   plannedData:
     enabled: true
     url: https://storage.googleapis.com/marduk-production/outbound/netex/rb_norway-aggregated-netex.zip
