@@ -4,9 +4,10 @@ import org.entur.vehicles.data.QueryFilter;
 import org.entur.vehicles.data.VehicleUpdate;
 import org.entur.vehicles.metrics.PrometheusMetricsService;
 import org.entur.vehicles.repository.VehicleRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
@@ -17,12 +18,19 @@ import java.util.Locale;
 @Component
 public class VehicleUpdateRxPublisher {
 
-    private final Sinks.Many<VehicleUpdate> sink = Sinks.many().multicast().directBestEffort();
+    private final ShardedSink<VehicleUpdate> sink;
     private final PrometheusMetricsService metricsService;
     private VehicleRepository repository;
 
     public VehicleUpdateRxPublisher(PrometheusMetricsService metricsService) {
+        this(metricsService, ShardedSink.DEFAULT_SHARDS);
+    }
+
+    @Autowired
+    public VehicleUpdateRxPublisher(PrometheusMetricsService metricsService,
+            @Value("${entur.vehicle-positions.publisher.shards:" + ShardedSink.DEFAULT_SHARDS + "}") int shards) {
         this.metricsService = metricsService;
+        this.sink = new ShardedSink<>(shards);
     }
 
     public void setRepository(VehicleRepository repository) {
@@ -30,18 +38,13 @@ public class VehicleUpdateRxPublisher {
     }
 
     /**
-     * Called from several Pub/Sub executor threads. A Reactor sink rejects overlapping emits with
-     * FAIL_NON_SERIALIZED, so emits must be serialised. The only work under the lock is offering
-     * the update to each subscription's queue ({@link SubscriberQueue}); filtering, buffering and
-     * WebSocket sends all run on other threads, so neither the number of clients nor a slow one
-     * can slow down ingest.
+     * Called from several Pub/Sub executor threads at once; see {@link ShardedSink}. The only
+     * work here is offering the update to each subscription's queue ({@link SubscriberQueue});
+     * filtering, buffering and WebSocket sends all run on other threads.
      */
-    public synchronized void publishUpdate(VehicleUpdate vehicleUpdate) {
-        Sinks.EmitResult result = sink.tryEmitNext(vehicleUpdate);
-        // No subscribers means nobody is listening, not a lost update
-        if (result.isFailure() && result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER) {
-            metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, result.name().toLowerCase(Locale.ROOT), 1);
-        }
+    public void publishUpdate(VehicleUpdate vehicleUpdate) {
+        sink.emit(vehicleUpdate, result ->
+                metricsService.markDropped(PrometheusMetricsService.TYPE_VEHICLE, result.name().toLowerCase(Locale.ROOT), 1));
     }
 
     public Flux<List<VehicleUpdate>> getPublisher(QueryFilter template, String uuid) {
@@ -59,5 +62,9 @@ public class VehicleUpdateRxPublisher {
 
     public int currentSubscribers() {
         return sink.currentSubscriberCount();
+    }
+
+    int[] subscribersPerShard() {
+        return sink.subscribersPerShard();
     }
 }
