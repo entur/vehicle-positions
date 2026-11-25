@@ -80,8 +80,8 @@ class IngestSaturationMetricsTest {
     @Test
     void aSubscriptionStillReceivingItsSnapshotIsCounted() throws Exception {
         // More than the subscription's queue holds, behind a filter stuck on the first one: the
-        // snapshot cannot finish, so the subscription has not reached the live sink yet - as
-        // when a slow client reconnects to a pod with tens of thousands of vehicles
+        // snapshot cannot finish - as when a slow client reconnects to a pod with tens of
+        // thousands of vehicles
         List<VehicleUpdate> snapshot = new ArrayList<>();
         for (int i = 0; i < 5_000; i++) {
             snapshot.add(new VehicleUpdate());
