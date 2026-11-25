@@ -48,16 +48,16 @@ public class SituationUpdateRxPublisher {
 
     /** {@code template} is required - Subscription always supplies a filter. */
     public Flux<List<SituationUpdate>> getPublisher(SituationFilter template, String uuid) {
-        List<SituationUpdate> initialdata = new ArrayList<>();
-        if (repository != null) {
-            initialdata.addAll(repository.getSituations(template));
-        }
-
-        return activeSubscriptions.track(SubscriberQueue.decouple(sink.asFlux(), initialdata,
+        return activeSubscriptions.track(SubscriberQueue.decouple(sink.asFlux(), () -> initialData(template),
                         dropped -> metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, SubscriberQueue.OVERFLOW_REASON, 1))
                 .filter(template::isMatch)
                 .bufferTimeout(template.getBufferSize(), Duration.of(template.getBufferTimeMillis(), ChronoUnit.MILLIS))
                 .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_SITUATION, "backpressure", batch.size())));
+    }
+
+    /** What a new subscription starts with; read only once it receives live updates */
+    private List<SituationUpdate> initialData(SituationFilter template) {
+        return repository == null ? List.of() : new ArrayList<>(repository.getSituations(template));
     }
 
     /** Open subscriptions, including those still receiving their initial snapshot */

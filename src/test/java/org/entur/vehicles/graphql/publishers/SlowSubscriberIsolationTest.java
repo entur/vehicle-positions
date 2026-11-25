@@ -96,8 +96,9 @@ class SlowSubscriberIsolationTest {
             }
         }, "publishUpdate waited on a subscription's own work");
 
-        // The stuck subscription holds one update in its filter and CAPACITY in its queue
-        assertTrue(dropped("vehicle", "subscriber_queue_full") >= total - SubscriberQueue.CAPACITY - 1,
+        // The stuck subscription holds one update in its filter, and CAPACITY plus HANDOFF queued
+        assertTrue(dropped("vehicle", "subscriber_queue_full")
+                        >= total - SubscriberQueue.CAPACITY - SubscriberQueue.HANDOFF - 1,
                 "overflow of a stuck subscription must be counted as dropped");
     }
 

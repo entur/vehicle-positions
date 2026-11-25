@@ -50,16 +50,16 @@ public class EstimatedTimetableUpdateRxPublisher {
     }
 
     public Flux<List<EstimatedTimetableUpdate>> getPublisher(QueryFilter template, String uuid) {
-        List<EstimatedTimetableUpdate> initialdata = new ArrayList<>();
-        if (repository != null) {
-            initialdata.addAll(repository.getTimetables(null));
-        }
-
-        return activeSubscriptions.track(SubscriberQueue.decouple(sink.asFlux(), initialdata,
+        return activeSubscriptions.track(SubscriberQueue.decouple(sink.asFlux(), this::initialData,
                         dropped -> metricsService.markDropped(PrometheusMetricsService.TYPE_TIMETABLE, SubscriberQueue.OVERFLOW_REASON, 1))
                 .filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
                 .bufferTimeout(template.getBufferSize(), Duration.of(template.getBufferTimeMillis(), ChronoUnit.MILLIS))
                 .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_TIMETABLE, "backpressure", batch.size())));
+    }
+
+    /** What a new subscription starts with; read only once it receives live updates */
+    private List<EstimatedTimetableUpdate> initialData() {
+        return repository == null ? List.of() : new ArrayList<>(repository.getTimetables(null));
     }
 
     /** Open subscriptions, including those still receiving their initial snapshot */

@@ -8,10 +8,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Counts a publisher's open GraphQL subscriptions, from subscribe until cancel, completion or
  * error.
  *
- * <p>The sink's own subscriber count misses new subscriptions: a subscription reaches the sink
- * only once its initial snapshot has been sent ({@link SubscriberQueue}), which takes seconds
- * for a large snapshot and a slow client - so the sink undercounts most right after a reconnect
- * storm.
+ * <p>Counted here rather than from the sink's subscriber count, so the count does not depend on
+ * when {@link SubscriberQueue} subscribes to the sink. It used to do so only once the initial
+ * snapshot had been sent, and the sink's count then read low right after a reconnect storm.
  */
 final class ActiveSubscriptions {
 
