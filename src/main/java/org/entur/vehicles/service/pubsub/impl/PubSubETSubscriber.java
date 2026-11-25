@@ -43,10 +43,13 @@ public class PubSubETSubscriber extends PubSubSubscriber {
             messageReceiver(timetableRepository, metricsService),
             enabled
     );
+    if (enabled) {
+      metricsService.registerIngestThreads(PrometheusMetricsService.TYPE_TIMETABLE, executorThreadCount);
+    }
   }
 
   static MessageReceiver messageReceiver(TimetableRepository timetableRepository, PrometheusMetricsService metricsService) {
-    return (pubsubMessage, ackReplyConsumer) -> {
+    return ReceivedMessages.timed(() -> metricsService.ingestTimer(PrometheusMetricsService.TYPE_TIMETABLE), (pubsubMessage, ackReplyConsumer) -> {
       Instant receivedAt = Instant.now();
       Instant publishedAt = ReceivedMessages.publishedAt(pubsubMessage);
       if (publishedAt != null) {
@@ -73,6 +76,6 @@ public class PubSubETSubscriber extends PubSubSubscriber {
 
       // Ack only after all work for the message is complete.
       ackReplyConsumer.ack();
-    };
+    });
   }
 }

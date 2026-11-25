@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -174,5 +175,33 @@ class PubSubVMSubscriberMetricsTest {
                 .tags("dataType", "vehicle", "codespaceId", "TST").counter();
         assertNotNull(missing, "missing counter not registered");
         assertEquals(1, missing.count());
+    }
+
+    @Test
+    void everyMessageIsTimedFromReceiptToAck() throws Exception {
+        receiver.receiveMessage(message(vehicle(ZonedDateTime.now()), Instant.now()), new RecordingAck());
+
+        Timer ingest = registry.find("app.vehicles.ingest.duration").tag("dataType", "vehicle").timer();
+        assertNotNull(ingest, "ingest timer not registered");
+        assertEquals(1, ingest.count());
+        assertTrue(ingest.totalTime(TimeUnit.NANOSECONDS) > 0);
+    }
+
+    @Test
+    void noIngestSeriesUntilTheFirstMessage() {
+        // A disabled subscriber never receives one, and registers no thread gauge either; a
+        // timer without its thread gauge would break the busy-fraction division on dashboards
+        assertNull(registry.find("app.vehicles.ingest.duration").timer());
+    }
+
+    @Test
+    void aMessageThatFailsIsTimedToo() {
+        // A thread busy failing a message is as busy as one storing it
+        assertThrows(RuntimeException.class,
+                () -> receiver.receiveMessage(message("{not json", Instant.now()), new RecordingAck()));
+
+        Timer ingest = registry.find("app.vehicles.ingest.duration").tag("dataType", "vehicle").timer();
+        assertNotNull(ingest, "ingest timer not registered");
+        assertEquals(1, ingest.count());
     }
 }

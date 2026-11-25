@@ -15,6 +15,7 @@
 
 package org.entur.vehicles.metrics;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.ImmutableTag;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Timer;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import static org.entur.vehicles.graphql.interceptors.Constants.CLIENT_HEADER_KEY;
 
@@ -81,7 +83,14 @@ public class PrometheusMetricsService {
     private static final Duration[] PUBSUB_LATENCY_BUCKETS = {
             Duration.ofMillis(10), Duration.ofMillis(25), Duration.ofMillis(50), Duration.ofMillis(100),
             Duration.ofMillis(250), Duration.ofMillis(500), Duration.ofSeconds(1), Duration.ofMillis(2500),
-            Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(60)};
+            Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(60),
+            // A pod that falls behind lags by minutes, up to the subscription's 600 s retention
+            // before Pub/Sub expires messages; without these, any lag past 60 s looked like 60 s
+            Duration.ofSeconds(120), Duration.ofSeconds(300), Duration.ofSeconds(600)};
+
+    private static final String INGEST_DURATION_NAME = METRICS_PREFIX + "ingest.duration";
+    private static final String INGEST_THREADS_NAME = METRICS_PREFIX + "ingest.threads";
+    private static final String ACTIVE_SUBSCRIPTIONS_NAME = METRICS_PREFIX + "subscriptions.active";
 
     // Operator reporting plus Anshar processing: seconds to minutes
     private static final Duration[] SOURCE_LATENCY_BUCKETS = {
@@ -290,6 +299,40 @@ public class PrometheusMetricsService {
                         .serviceLevelObjectives(SOURCE_LATENCY_BUCKETS)
                         .register(prometheusMeterRegistry)
         ).record(latency);
+    }
+
+    /**
+     * Time one Pub/Sub executor thread spent on a message, from receipt to ack (or failure).
+     * {@code rate(..._sum) / app_vehicles_ingest_threads} is how busy a pod's ingest threads are:
+     * near 1 the pod cannot keep up, and its Pub/Sub backlog will grow. Every pod ingests the
+     * whole feed, so adding pods does not lower it.
+     */
+    public Timer ingestTimer(String type) {
+        return Timer.builder(INGEST_DURATION_NAME)
+                .description("Time a Pub/Sub executor thread spent on one message, from receipt to ack")
+                .tag(TYPE_TAG_NAME, type)
+                .register(prometheusMeterRegistry);
+    }
+
+    /** The number of Pub/Sub executor threads ingesting {@code type}; see {@link #ingestTimer} */
+    public void registerIngestThreads(String type, int threads) {
+        Gauge.builder(INGEST_THREADS_NAME, () -> threads)
+                .description("Pub/Sub executor threads ingesting this data type")
+                .tag(TYPE_TAG_NAME, type)
+                .strongReference(true)
+                .register(prometheusMeterRegistry);
+    }
+
+    /**
+     * Live GraphQL subscriptions of {@code type} on this pod. The cost of publishing each update
+     * grows with this, and clients stay on the pod they connected to, so pods can differ a lot.
+     */
+    public void registerActiveSubscriptions(String type, Supplier<Number> count) {
+        Gauge.builder(ACTIVE_SUBSCRIPTIONS_NAME, count)
+                .description("Live GraphQL subscriptions on this pod")
+                .tag(TYPE_TAG_NAME, type)
+                .strongReference(true)
+                .register(prometheusMeterRegistry);
     }
 
     /** Counts stored updates without a reported time, so their source latency cannot be measured */

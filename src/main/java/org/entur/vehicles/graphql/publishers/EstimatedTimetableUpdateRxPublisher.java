@@ -20,6 +20,7 @@ public class EstimatedTimetableUpdateRxPublisher {
 
     private final ShardedSink<EstimatedTimetableUpdate> sink;
     private final PrometheusMetricsService metricsService;
+    private final ActiveSubscriptions activeSubscriptions = new ActiveSubscriptions();
     private TimetableRepository repository;
 
     public EstimatedTimetableUpdateRxPublisher(PrometheusMetricsService metricsService) {
@@ -31,6 +32,7 @@ public class EstimatedTimetableUpdateRxPublisher {
             @Value("${entur.vehicle-positions.publisher.shards:" + ShardedSink.DEFAULT_SHARDS + "}") int shards) {
         this.metricsService = metricsService;
         this.sink = new ShardedSink<>(shards);
+        metricsService.registerActiveSubscriptions(PrometheusMetricsService.TYPE_TIMETABLE, this::currentSubscribers);
     }
 
     public void setRepository(TimetableRepository repository) {
@@ -53,14 +55,15 @@ public class EstimatedTimetableUpdateRxPublisher {
             initialdata.addAll(repository.getTimetables(null));
         }
 
-        return SubscriberQueue.decouple(sink.asFlux(), initialdata,
+        return activeSubscriptions.track(SubscriberQueue.decouple(sink.asFlux(), initialdata,
                         dropped -> metricsService.markDropped(PrometheusMetricsService.TYPE_TIMETABLE, SubscriberQueue.OVERFLOW_REASON, 1))
                 .filter(vehicleUpdate -> template == null || template.isMatch(vehicleUpdate))
                 .bufferTimeout(template.getBufferSize(), Duration.of(template.getBufferTimeMillis(), ChronoUnit.MILLIS))
-                .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_TIMETABLE, "backpressure", batch.size()));
+                .onBackpressureDrop(batch -> metricsService.markDropped(PrometheusMetricsService.TYPE_TIMETABLE, "backpressure", batch.size())));
     }
 
+    /** Open subscriptions, including those still receiving their initial snapshot */
     public int currentSubscribers() {
-        return sink.currentSubscriberCount();
+        return activeSubscriptions.count();
     }
 }

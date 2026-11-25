@@ -144,4 +144,13 @@ class PubSubETSubscriberMetricsTest {
         assertNotNull(dropped, "decode_error counter not registered");
         assertEquals(1, dropped.count());
     }
+
+    @Test
+    void ingestTimeIsTaggedAsTimetable() throws Exception {
+        receiver.receiveMessage(message(journey(ZonedDateTime.now()), Instant.now()), new RecordingAck());
+
+        Timer ingest = registry.find("app.vehicles.ingest.duration").tag("dataType", "timetable").timer();
+        assertNotNull(ingest, "ingest timer not tagged dataType=timetable");
+        assertEquals(1, ingest.count());
+    }
 }

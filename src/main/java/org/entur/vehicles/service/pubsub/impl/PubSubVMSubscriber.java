@@ -43,10 +43,13 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
             messageReceiver(vehicleRepository, metricsService),
             enabled
     );
+    if (enabled) {
+      metricsService.registerIngestThreads(PrometheusMetricsService.TYPE_VEHICLE, executorThreadCount);
+    }
   }
 
   static MessageReceiver messageReceiver(VehicleRepository vehicleRepository, PrometheusMetricsService metricsService) {
-    return (pubsubMessage, ackReplyConsumer) -> {
+    return ReceivedMessages.timed(() -> metricsService.ingestTimer(PrometheusMetricsService.TYPE_VEHICLE), (pubsubMessage, ackReplyConsumer) -> {
       Instant receivedAt = Instant.now();
       Instant publishedAt = ReceivedMessages.publishedAt(pubsubMessage);
       if (publishedAt != null) {
@@ -75,7 +78,7 @@ public class PubSubVMSubscriber extends PubSubSubscriber {
 
       // Ack only after all work for the message is complete.
       ackReplyConsumer.ack();
-    };
+    });
   }
 
   /** Same precedence as VehicleRepository's lastUpdated, minus the ingest-time fallback */
