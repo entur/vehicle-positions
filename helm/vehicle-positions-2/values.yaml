@@ -3,8 +3,12 @@ default_replicas: 4
 resources:
   memLimit: 8G
   cpuRequest: '3'
-  memRequest: 6G
-  xmx: 5G
+  # Heap plus about 1 GB for metaspace, thread stacks and direct buffers
+  memRequest: 7G
+  # On 2026-11-26 a pod's live heap reached 5 GB of 5 GiB at the morning peak and it spent
+  # 12 minutes in back-to-back full GCs, ten minutes behind on Pub/Sub. Most of it was a
+  # graphql-java leak per subscription event; this is headroom until that fix is deployed.
+  xmx: 6G
   # The NeTEx zip (280 MB) and the raw planned-data snapshot (about 250 MB) coexist briefly on disk.
   ephemeralRequest: 1Gi
 
