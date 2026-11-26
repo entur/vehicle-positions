@@ -20,6 +20,14 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- 25.x keeps data-loader state for every subscription event until the subscription
+			     ends (about 1 KB per event; 3.5 GB of a prd pod's heap on 2026-11-26). 26.1 releases
+			     it per event. Drop this once Spring Boot manages 26.1 or later. -->
+			<dependency>
+				<groupId>com.graphql-java</groupId>
+				<artifactId>graphql-java</artifactId>
+				<version>26.2</version>
+			</dependency>
 			<dependency>
 				<groupId>com.google.cloud</groupId>
 				<artifactId>libraries-bom</artifactId>
