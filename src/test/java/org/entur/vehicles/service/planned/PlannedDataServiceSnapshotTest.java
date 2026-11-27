@@ -137,6 +137,65 @@ public class PlannedDataServiceSnapshotTest {
         assertThat(storeDir).doesNotExist();
     }
 
+    @Test
+    public void aReloadOfTheSameExportIsSkipped() {
+        PlannedDataService service = service(SnapshotCache.disabled());
+        service.initialLoad();
+        PlannedDataset loaded = service.current();
+
+        service.scheduledReload();
+
+        assertThat(server.getCount()).withFailMessage("an unchanged export is never downloaded again").isEqualTo(1);
+        assertThat(service.current()).isSameAs(loaded);
+    }
+
+    @Test
+    public void aReloadOfTheSameExportIsSkippedAfterASnapshotLoad() {
+        PlannedDataService first = service(cache);
+        first.initialLoad();
+        cache.lastUpload().join();
+
+        PlannedDataService second = service(cache);
+        second.initialLoad();
+        PlannedDataset loaded = second.current();
+        int heads = server.headCount();
+
+        second.scheduledReload();
+
+        assertThat(server.headCount()).withFailMessage("one HEAD to compare, no snapshot lookup").isEqualTo(heads + 1);
+        assertThat(second.current()).isSameAs(loaded);
+    }
+
+    @Test
+    public void aReloadOfANewExportLoadsIt() {
+        PlannedDataService service = service(SnapshotCache.disabled());
+        service.initialLoad();
+        PlannedDataset loaded = service.current();
+        server.setEtag("\"etag-2\"");
+
+        service.scheduledReload();
+
+        assertThat(server.getCount()).isEqualTo(2);
+        assertThat(service.current()).isNotSameAs(loaded);
+
+        service.scheduledReload();
+
+        assertThat(server.getCount()).withFailMessage("the new ETag is remembered").isEqualTo(2);
+    }
+
+    @Test
+    public void aReloadWithoutAnEtagAlwaysLoads() {
+        server.setEtag(null);
+        PlannedDataService service = service(SnapshotCache.disabled());
+        service.initialLoad();
+        PlannedDataset loaded = service.current();
+
+        service.scheduledReload();
+
+        assertThat(server.getCount()).isEqualTo(2);
+        assertThat(service.current()).isNotSameAs(loaded);
+    }
+
     /** The bucket is a cache, never a dependency: a snapshot file we cannot even create is not fatal. */
     @Test
     public void aSnapshotFileThatCannotBeWrittenStillLoadsTheDataset() {
