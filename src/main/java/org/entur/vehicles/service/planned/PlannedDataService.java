@@ -26,8 +26,8 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Owns the current {@link PlannedDataset}. Loads it once at startup - blocking the Spring
  * context, and therefore readiness, until it is in place - and swaps in a fresh one from a
- * nightly reload. A failed startup load is fatal; a failed nightly reload keeps the
- * previous dataset.
+ * daily reload. A failed startup load is fatal; a failed reload keeps the previous dataset.
+ * The reload is skipped when the export's ETag matches the one already loaded.
  * <p>
  * Each load tries the snapshot named by the export's ETag before parsing; a parse that
  * completes without skipping anything is written to a new snapshot, from the builder, and
@@ -51,6 +51,8 @@ public class PlannedDataService {
     private final ExportDownloader downloader;
     private final SnapshotCache snapshots;
     private final AtomicReference<PlannedDataset> current = new AtomicReference<>(PlannedDataset.EMPTY);
+    /** ETag of the export behind {@link #current}, or null if unknown; loads run on one thread at a time. */
+    private volatile String loadedEtag;
 
     @Autowired
     public PlannedDataService(@Value("${vehicle.planned.data.enabled:false}") boolean enabled,
@@ -87,9 +89,16 @@ public class PlannedDataService {
         }
     }
 
-    @Scheduled(cron = "${vehicle.planned.data.reload.cron:0 0 8 * * *}", zone = "Europe/Oslo")
+    @Scheduled(cron = "${vehicle.planned.data.reload.cron:0 0 10 * * *}", zone = "Europe/Oslo")
     void scheduledReload() {
         if (!enabled) {
+            return;
+        }
+        // Reloading the export already in place only doubles the dataset in memory and spends
+        // CPU; every pod does it at once, which is enough to make the HPA add a pod.
+        String loaded = loadedEtag;
+        if (loaded != null && downloader.head(url).filter(loaded::equals).isPresent()) {
+            LOG.info("Planned data export unchanged (etag={}) - skipping the reload", loaded);
             return;
         }
         try {
@@ -108,10 +117,13 @@ public class PlannedDataService {
             String source = null;
             SnapshotKey key = null;
             boolean unreadable = false;
+            // The ETag of the export this load installs, as the server sent it
+            Optional<String> exportEtag = Optional.empty();
 
             // 1. Snapshot first: the export's ETag names the object that holds exactly its records.
             if (snapshots.enabled()) {
-                Optional<SnapshotKey> candidate = downloader.head(url)
+                Optional<String> headEtag = downloader.head(url);
+                Optional<SnapshotKey> candidate = headEtag
                         .flatMap(etag -> SnapshotKey.of(PlannedDataSnapshot.DATASET, PlannedDataSnapshot.FORMAT_VERSION, etag));
                 if (candidate.isEmpty()) {
                     LOG.info("No ETag for {} - loading the export without a snapshot", url);
@@ -133,6 +145,7 @@ public class PlannedDataService {
                     if (replayed) {
                         key = candidate.get();
                         source = "snapshot";
+                        exportEtag = headEtag;
                     }
                 }
             }
@@ -149,6 +162,7 @@ public class PlannedDataService {
                     throw new PlannedDataLoadException("Could not download " + url, e);
                 }
                 LOG.info("Download of {} took {} ms", url, System.currentTimeMillis() - downloadStart);
+                exportEtag = etag;
                 Optional<SnapshotKey> uploadKey = snapshots.enabled()
                         ? etag.flatMap(e -> SnapshotKey.of(PlannedDataSnapshot.DATASET, PlannedDataSnapshot.FORMAT_VERSION, e))
                         : Optional.empty();
@@ -192,6 +206,7 @@ public class PlannedDataService {
                         + " - rejecting as a truncated export");
             }
             current.set(fresh);
+            loadedEtag = exportEtag.orElse(null);
             long duration = System.currentTimeMillis() - start;
             if (metrics != null) {
                 metrics.markPlannedDataLoaded(duration, fresh.stats());

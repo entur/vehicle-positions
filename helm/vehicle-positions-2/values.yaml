@@ -37,8 +37,10 @@ configMap:
   plannedData:
     enabled: true
     url: https://storage.googleapis.com/marduk-production/outbound/netex/rb_norway-aggregated-netex.zip
-    # Europe/Oslo. Marduk's export lands around 07:30 UTC; confirm before moving this earlier.
-    reloadCron: "0 0 8 * * *"
+    # Europe/Oslo. Marduk's export lands around 07:15-07:30 UTC (08:15 Oslo in winter, 09:15 in
+    # summer), so an earlier reload only finds yesterday's file. 10:00 is after that and after
+    # the morning peak, when the reload's CPU spike made the HPA add a pod.
+    reloadCron: "0 0 10 * * *"
     # A fresh load with fewer service journeys than this is rejected outright, even on the first load.
     minServiceJourneys: 50000
   # Per-export snapshots of the planned data and NSR datasets, so a starting pod skips the
